@@ -13,8 +13,8 @@ from utils import utilFunctions
 
 configs = {
 	'script_path': os.path.abspath(os.getcwd()), 
-    'top_dir': os.path.abspath('./experiments/'),
-    'b_dir': os.path.abspath('./klee/build/'),
+    'top_dir': os.path.abspath('../experiments/'),
+    'b_dir': os.path.abspath('../klee/build/'),
 }
 
 def load_pgm_config(config_file):
@@ -23,9 +23,10 @@ def load_pgm_config(config_file):
     
     return parsed
 
-def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name):
+def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name, onlyReplay):
     using_core = str(int(num_core))
     replay_core = using_core
+
     final_err_name = log_name + str(using_core) + ".err.log"
 
     experiment_path = configs["top_dir"] + "/#" + str(ith_trial) + "experiment"
@@ -50,7 +51,7 @@ def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name):
 
     iterN = 1
     for iteration_dir in iteration_dirs:
-        find_th = iteration_dir.split("__")[-1]
+        find_th = iteration_dir.split("_")[-1]
         tc_path = "/".join([experiment_path, iteration_dir, benchmark, using_core, pconfig["exec_dir"], "klee-out-0"])
 
         final_log_name = log_name + str(using_core) + ".coverage"
@@ -65,15 +66,15 @@ def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name):
             ef.write(each2)
             ef.write(b"\n")
     
-def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name, err_set, tc_out_path, iterN):
+def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name, err_set, tc_path, iterN):
     gcov_location="/".join([configs['script_path'], pconfig['gcov_path'] + replay_core, pconfig['gcov_dir']])
     os.chdir(gcov_location)
 
-    if not os.path.exists(tc_out_path):
+    if not os.path.exists(tc_path):
         return
         
-    ktest_files = [x for x in os.listdir(tc_out_path) if "ktest" in x]
-    err_files = [x for x in os.listdir(tc_out_path) if "err" in x]
+    ktest_files = [x for x in os.listdir(tc_path) if "ktest" in x]
+    err_files = [x for x in os.listdir(tc_path) if "err" in x]
     
     if len(ktest_files) == 0:
         return 
@@ -85,9 +86,9 @@ def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name,
     for tc in ktest_files:
         onlytc = tc.split("/")[-1].split(".")[0]
         if benchmark == "sqlite":
-            run_cmd = [configs['b_dir'] + "/bin/klee-replay", "./sqlite3", tc_out_path + "/" + tc] 
+            run_cmd = [configs['b_dir'] + "/bin/klee-replay", "./sqlite3", tc_path + "/" + tc] 
         else:
-            run_cmd = [configs['b_dir'] + "/bin/klee-replay", "./" + benchmark, tc_out_path + "/" + tc] 
+            run_cmd = [configs['b_dir'] + "/bin/klee-replay", "./" + benchmark, tc_path + "/" + tc] 
 
         proc = subprocess.Popen(run_cmd, preexec_fn=os.setsid, stdout=PIPE, stderr=PIPE) 
         my_timer = Timer(0.1, utilFunctions.Kill_Process, [proc])
@@ -104,7 +105,7 @@ def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name,
                     for each_err in err_files:
                         each = each_err.split(".")[0]
                         if onlytc == each:
-                            errLog = open(tc_out_path + "/" + each_err, 'r')
+                            errLog = open(tc_path + "/" + each_err, 'r')
                             lines = errLog.readlines()
 
                             msg = "".join(lines[0].split(":")[1:]).split("\n")[0]
@@ -121,9 +122,9 @@ def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name,
         finally:
             proc.kill()
             my_timer.cancel()
-        
-        gcov_file = "cov_result" + "_" + str(tc_idx) + ".coverage"
-        gcov_file = "./cov_results/" + gcov_file
+
+        gcov_file="cov_result" + "_" + str(tc_idx) + ".coverage"
+        gcov_file="./cov_results/" + gcov_file
 
         gcov_cmd=" ".join(["gcov", "-b", pconfig['gcda_file'], "1> " + gcov_file, "2>/dev/null"])
         os.system(gcov_cmd)
@@ -133,10 +134,11 @@ def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name,
         tc_idx += 1
 
     with open(configs["script_path"] + f"/{final_log_name}", "a") as tf:
-        tf.write(f"#{iterN} iteration\t\tCoverage\n")
+        tf.write(f"#{iterN}iteration\tCoverage\n")
         for test_cov in coverage_list:
             tf.write(str(test_cov[0]) + "\t" + str(test_cov[1]) + "\n")
         tf.write("\n")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -144,7 +146,7 @@ if __name__ == "__main__":
     parser.add_argument("ith_trial")
     parser.add_argument("used_core")
     parser.add_argument("log_name")
-    
+
     args = parser.parse_args()
     pconfig = load_pgm_config(args.pgm_config)
     benchmark = pconfig["pgm_name"]
@@ -154,3 +156,4 @@ if __name__ == "__main__":
 
     configs["top_dir"] = os.path.abspath("./experiments_exp_" + benchmark + "/")
     run_klee_replay(pconfig, benchmark, ith_trial, used_core, log_name)
+

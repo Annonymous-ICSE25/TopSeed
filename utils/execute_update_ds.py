@@ -13,7 +13,7 @@ configs = {
     'b_dir': os.path.abspath('./klee/build/'),
 }
 
-def klee_replay(n_features, i, pconfig, benchmark, used_core, testcases, 
+def update(n_features, i, pconfig, benchmark, used_core, testcases, 
                 untilCovered, group, groupFeature, branchFreq,
                 queryInfo, weight, weightdata, usedSeeds, seed, 
                 policyInfo, policy, reused):
@@ -193,7 +193,7 @@ def modify(n_features, pconfig, benchmark, i, ith_trial, used_core, weight, ds_b
     testcases = [klee_out_dir + "/" + x for x in os.listdir(klee_out_dir) if "ktest" in x]
 
     ########################### Updating Clsuters ###########################
-    ds_bucket['groupScore'] = klee_replay(n_features, i, pconfig, benchmark, used_core, testcases, 
+    ds_bucket['groupScore'] = update(n_features, i, pconfig, benchmark, used_core, testcases, 
                                 untilCovered, group, groupFeature, branchFreq,
                                 queryInfo, weight, weightdata, usedSeeds, seed, 
                                 policyInfo, policy, reused)
