@@ -1,3 +1,0 @@
-localename-table.o: ../../gnulib-tests/localename-table.c ../lib/config.h
-
-../lib/config.h:

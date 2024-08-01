@@ -5,14 +5,14 @@ cur_path = os.path.abspath(os.getcwd())
 num_cores = 50
 
 bmks = [
-    # "gawk-5.1.0",
-    # "grep-3.6",
-    # "diffutils-3.7",
+    "gawk-5.1.0",
+    "grep-3.6",
+    "diffutils-3.7",
     "patch-2.7.6",
-    # "trueprint-5.4",
-    # "combine-0.4.0",
-    # "coreutils-8.31",
-    # "gcal-4.1"
+    "trueprint-5.4",
+    "combine-0.4.0",
+    "coreutils-8.31",
+    "gcal-4.1"
 ]
 
 bmks_url = {

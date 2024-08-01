@@ -1,8 +1,0 @@
-diffs.o: ../../src/diffs.c ../config.h ../../src/trueprint.h \
-  ../../src/diffs.h
-
-../config.h:
-
-../../src/trueprint.h:
-
-../../src/diffs.h:

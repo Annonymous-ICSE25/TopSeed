@@ -1,6 +1,0 @@
-sockets.o: ../../gnulib-tests/sockets.c ../lib/config.h \
-  ../../gnulib-tests/sockets.h
-
-../lib/config.h:
-
-../../gnulib-tests/sockets.h:
