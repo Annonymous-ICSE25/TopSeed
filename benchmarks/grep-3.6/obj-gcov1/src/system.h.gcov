@@ -1,0 +1,147 @@
+        -:    0:Source:../../src/system.h
+        -:    0:Programs:50
+        -:    1:/* Portability cruft.  Include after config.h and sys/types.h.
+        -:    2:   Copyright 1996, 1998-2000, 2007, 2009-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software; you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3, or (at your option)
+        -:    7:   any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program; if not, write to the Free Software
+        -:   16:   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+        -:   17:   02110-1301, USA.  */
+        -:   18:
+        -:   19:#ifndef GREP_SYSTEM_H
+        -:   20:#define GREP_SYSTEM_H 1
+        -:   21:
+        -:   22:#include <fcntl.h>
+        -:   23:#include <unistd.h>
+        -:   24:#include <errno.h>
+        -:   25:
+        -:   26:#include "configmake.h"
+        -:   27:#include "dirname.h"
+        -:   28:#include "ignore-value.h"
+        -:   29:#include "minmax.h"
+        -:   30:#include "same-inode.h"
+        -:   31:
+        -:   32:#include <stdlib.h>
+        -:   33:#include <stddef.h>
+        -:   34:#include <limits.h>
+        -:   35:#include <string.h>
+        -:   36:#include <ctype.h>
+        -:   37:
+        -:   38:enum { EXIT_TROUBLE = 2 };
+        -:   39:enum { NCHAR = UCHAR_MAX + 1 };
+        -:   40:
+        -:   41:#include <gettext.h>
+        -:   42:#define N_(String) gettext_noop(String)
+        -:   43:#define _(String) gettext(String)
+        -:   44:
+        -:   45:#include <locale.h>
+        -:   46:
+        -:   47:#ifndef initialize_main
+        -:   48:# define initialize_main(argcp, argvp)
+        -:   49:#endif
+        -:   50:
+        -:   51:#include "unlocked-io.h"
+        -:   52:
+        -:   53:_GL_INLINE_HEADER_BEGIN
+        -:   54:#ifndef SYSTEM_INLINE
+        -:   55:# define SYSTEM_INLINE _GL_INLINE
+        -:   56:#endif
+        -:   57:
+        -:   58:#define STREQ(a, b) (strcmp (a, b) == 0)
+        -:   59:
+        -:   60:/* Convert a possibly-signed character to an unsigned character.  This is
+        -:   61:   a bit safer than casting to unsigned char, since it catches some type
+        -:   62:   errors that the cast doesn't.  */
+        -:   63:SYSTEM_INLINE unsigned char
+function to_uchar called 44 returned 100% blocks executed 100%
+       44:   64:to_uchar (char ch)
+        -:   65:{
+       44:   66:  return ch;
+        -:   67:}
+        -:   68:
+        -:   69:_GL_INLINE_HEADER_END
+        -:   70:
+        -:   71:#ifndef __has_feature
+        -:   72:# define __has_feature(F) false
+        -:   73:#endif
+        -:   74:
+        -:   75:#if defined __SANITIZE_ADDRESS__ || __has_feature (address_sanitizer)
+        -:   76:# define HAVE_ASAN 1
+        -:   77:#else
+        -:   78:# define HAVE_ASAN 0
+        -:   79:#endif
+        -:   80:
+        -:   81:#if HAVE_ASAN
+        -:   82:
+        -:   83:/* Mark memory region [addr, addr+size) as unaddressable.
+        -:   84:   This memory must be previously allocated by the user program.  Accessing
+        -:   85:   addresses in this region from instrumented code is forbidden until
+        -:   86:   this region is unpoisoned.  This function is not guaranteed to poison
+        -:   87:   the whole region - it may poison only a subregion of [addr, addr+size)
+        -:   88:   due to ASan alignment restrictions.
+        -:   89:   Method is NOT thread-safe in the sense that no two threads can
+        -:   90:   (un)poison memory in the same memory region simultaneously.  */
+        -:   91:void __asan_poison_memory_region (void const volatile *addr, size_t size);
+        -:   92:
+        -:   93:/* Mark memory region [addr, addr+size) as addressable.
+        -:   94:   This memory must be previously allocated by the user program.  Accessing
+        -:   95:   addresses in this region is allowed until this region is poisoned again.
+        -:   96:   This function may unpoison a superregion of [addr, addr+size) due to
+        -:   97:   ASan alignment restrictions.
+        -:   98:   Method is NOT thread-safe in the sense that no two threads can
+        -:   99:   (un)poison memory in the same memory region simultaneously.  */
+        -:  100:void __asan_unpoison_memory_region (void const volatile *addr, size_t size);
+        -:  101:
+        -:  102:#else
+        -:  103:
+        -:  104:static _GL_UNUSED void
+function __asan_poison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_poison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_poison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_poison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_poison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_poison_memory_region called 0 returned 0% blocks executed 0%
+    #####:  105:__asan_poison_memory_region (void const volatile *addr, size_t size) { }
+        -:  106:static _GL_UNUSED void
+function __asan_unpoison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_unpoison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_unpoison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_unpoison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_unpoison_memory_region called 0 returned 0% blocks executed 0%
+function __asan_unpoison_memory_region called 0 returned 0% blocks executed 0%
+    #####:  107:__asan_unpoison_memory_region (void const volatile *addr, size_t size) { }
+        -:  108:#endif
+        -:  109:
+        -:  110:#ifndef FALLTHROUGH
+        -:  111:# if __GNUC__ < 7
+        -:  112:#  define FALLTHROUGH ((void) 0)
+        -:  113:# else
+        -:  114:#  define FALLTHROUGH __attribute__ ((__fallthrough__))
+        -:  115:# endif
+        -:  116:#endif
+        -:  117:
+        -:  118:/* When we deliberately use duplicate branches, use this macro to
+        -:  119:   disable gcc's -Wduplicated-branches in the containing expression.  */
+        -:  120:#if 7 <= __GNUC__
+        -:  121:# define IGNORE_DUPLICATE_BRANCH_WARNING(exp)				\
+        -:  122:  ({									\
+        -:  123:    _Pragma ("GCC diagnostic push")					\
+        -:  124:    _Pragma ("GCC diagnostic ignored \"-Wduplicated-branches\"")	\
+        -:  125:    exp;								\
+        -:  126:    _Pragma ("GCC diagnostic pop")					\
+        -:  127:  })
+        -:  128:#else
+        -:  129:# define IGNORE_DUPLICATE_BRANCH_WARNING(exp) exp
+        -:  130:#endif
+        -:  131:
+        -:  132:#endif

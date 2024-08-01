@@ -1,0 +1,2797 @@
+        -:    0:Source:../../lib/fts.c
+        -:    0:Programs:50
+        -:    1:/* Traverse a file hierarchy.
+        -:    2:
+        -:    3:   Copyright (C) 2004-2020 Free Software Foundation, Inc.
+        -:    4:
+        -:    5:   This program is free software: you can redistribute it and/or modify
+        -:    6:   it under the terms of the GNU General Public License as published by
+        -:    7:   the Free Software Foundation; either version 3 of the License, or
+        -:    8:   (at your option) any later version.
+        -:    9:
+        -:   10:   This program is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   13:   GNU General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU General Public License
+        -:   16:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   17:
+        -:   18:/*-
+        -:   19: * Copyright (c) 1990, 1993, 1994
+        -:   20: *      The Regents of the University of California.  All rights reserved.
+        -:   21: *
+        -:   22: * Redistribution and use in source and binary forms, with or without
+        -:   23: * modification, are permitted provided that the following conditions
+        -:   24: * are met:
+        -:   25: * 1. Redistributions of source code must retain the above copyright
+        -:   26: *    notice, this list of conditions and the following disclaimer.
+        -:   27: * 2. Redistributions in binary form must reproduce the above copyright
+        -:   28: *    notice, this list of conditions and the following disclaimer in the
+        -:   29: *    documentation and/or other materials provided with the distribution.
+        -:   30: * 4. Neither the name of the University nor the names of its contributors
+        -:   31: *    may be used to endorse or promote products derived from this software
+        -:   32: *    without specific prior written permission.
+        -:   33: *
+        -:   34: * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS "AS IS" AND
+        -:   35: * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+        -:   36: * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+        -:   37: * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+        -:   38: * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+        -:   39: * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+        -:   40: * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+        -:   41: * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+        -:   42: * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+        -:   43: * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+        -:   44: * SUCH DAMAGE.
+        -:   45: */
+        -:   46:
+        -:   47:#include <config.h>
+        -:   48:
+        -:   49:#if defined LIBC_SCCS && !defined GCC_LINT && !defined lint
+        -:   50:static char sccsid[] = "@(#)fts.c       8.6 (Berkeley) 8/14/94";
+        -:   51:#endif
+        -:   52:
+        -:   53:#include "fts_.h"
+        -:   54:
+        -:   55:#if HAVE_SYS_PARAM_H || defined _LIBC
+        -:   56:# include <sys/param.h>
+        -:   57:#endif
+        -:   58:#ifdef _LIBC
+        -:   59:# include <include/sys/stat.h>
+        -:   60:#else
+        -:   61:# include <sys/stat.h>
+        -:   62:#endif
+        -:   63:#include <fcntl.h>
+        -:   64:#include <errno.h>
+        -:   65:#include <stdalign.h>
+        -:   66:#include <stdbool.h>
+        -:   67:#include <stddef.h>
+        -:   68:#include <stdlib.h>
+        -:   69:#include <string.h>
+        -:   70:#include <unistd.h>
+        -:   71:
+        -:   72:#if ! _LIBC
+        -:   73:# include "attribute.h"
+        -:   74:# include "fcntl--.h"
+        -:   75:# include "flexmember.h"
+        -:   76:# include "openat.h"
+        -:   77:# include "opendirat.h"
+        -:   78:# include "same-inode.h"
+        -:   79:#endif
+        -:   80:
+        -:   81:#include <dirent.h>
+        -:   82:#ifndef _D_EXACT_NAMLEN
+        -:   83:# define _D_EXACT_NAMLEN(dirent) strlen ((dirent)->d_name)
+        -:   84:#endif
+        -:   85:
+        -:   86:#if HAVE_STRUCT_DIRENT_D_TYPE
+        -:   87:/* True if the type of the directory entry D is known.  */
+        -:   88:# define DT_IS_KNOWN(d) ((d)->d_type != DT_UNKNOWN)
+        -:   89:/* True if the type of the directory entry D must be T.  */
+        -:   90:# define DT_MUST_BE(d, t) ((d)->d_type == (t))
+        -:   91:# define D_TYPE(d) ((d)->d_type)
+        -:   92:#else
+        -:   93:# define DT_IS_KNOWN(d) false
+        -:   94:# define DT_MUST_BE(d, t) false
+        -:   95:# define D_TYPE(d) DT_UNKNOWN
+        -:   96:
+        -:   97:# undef DT_UNKNOWN
+        -:   98:# define DT_UNKNOWN 0
+        -:   99:
+        -:  100:/* Any nonzero values will do here, so long as they're distinct.
+        -:  101:   Undef any existing macros out of the way.  */
+        -:  102:# undef DT_BLK
+        -:  103:# undef DT_CHR
+        -:  104:# undef DT_DIR
+        -:  105:# undef DT_FIFO
+        -:  106:# undef DT_LNK
+        -:  107:# undef DT_REG
+        -:  108:# undef DT_SOCK
+        -:  109:# define DT_BLK 1
+        -:  110:# define DT_CHR 2
+        -:  111:# define DT_DIR 3
+        -:  112:# define DT_FIFO 4
+        -:  113:# define DT_LNK 5
+        -:  114:# define DT_REG 6
+        -:  115:# define DT_SOCK 7
+        -:  116:#endif
+        -:  117:
+        -:  118:#ifndef S_IFLNK
+        -:  119:# define S_IFLNK 0
+        -:  120:#endif
+        -:  121:#ifndef S_IFSOCK
+        -:  122:# define S_IFSOCK 0
+        -:  123:#endif
+        -:  124:
+        -:  125:enum
+        -:  126:{
+        -:  127:  NOT_AN_INODE_NUMBER = 0
+        -:  128:};
+        -:  129:
+        -:  130:#ifdef D_INO_IN_DIRENT
+        -:  131:# define D_INO(dp) (dp)->d_ino
+        -:  132:#else
+        -:  133:/* Some systems don't have inodes, so fake them to avoid lots of ifdefs.  */
+        -:  134:# define D_INO(dp) NOT_AN_INODE_NUMBER
+        -:  135:#endif
+        -:  136:
+        -:  137:/* If possible (see max_entries, below), read no more than this many directory
+        -:  138:   entries at a time.  Without this limit (i.e., when using non-NULL
+        -:  139:   fts_compar), processing a directory with 4,000,000 entries requires ~1GiB
+        -:  140:   of memory, and handling 64M entries would require 16GiB of memory.  */
+        -:  141:#ifndef FTS_MAX_READDIR_ENTRIES
+        -:  142:# define FTS_MAX_READDIR_ENTRIES 100000
+        -:  143:#endif
+        -:  144:
+        -:  145:/* If there are more than this many entries in a directory,
+        -:  146:   and the conditions mentioned below are satisfied, then sort
+        -:  147:   the entries on inode number before any further processing.  */
+        -:  148:#ifndef FTS_INODE_SORT_DIR_ENTRIES_THRESHOLD
+        -:  149:# define FTS_INODE_SORT_DIR_ENTRIES_THRESHOLD 10000
+        -:  150:#endif
+        -:  151:
+        -:  152:enum
+        -:  153:{
+        -:  154:  _FTS_INODE_SORT_DIR_ENTRIES_THRESHOLD = FTS_INODE_SORT_DIR_ENTRIES_THRESHOLD
+        -:  155:};
+        -:  156:
+        -:  157:enum Fts_stat
+        -:  158:{
+        -:  159:  FTS_NO_STAT_REQUIRED = 1,
+        -:  160:  FTS_STAT_REQUIRED = 2
+        -:  161:};
+        -:  162:
+        -:  163:#ifdef _LIBC
+        -:  164:# undef close
+        -:  165:# define close __close
+        -:  166:# undef closedir
+        -:  167:# define closedir __closedir
+        -:  168:# undef fchdir
+        -:  169:# define fchdir __fchdir
+        -:  170:# undef open
+        -:  171:# define open __open
+        -:  172:# undef readdir
+        -:  173:# define readdir __readdir
+        -:  174:#else
+        -:  175:# undef internal_function
+        -:  176:# define internal_function /* empty */
+        -:  177:#endif
+        -:  178:
+        -:  179:#ifndef __set_errno
+        -:  180:# define __set_errno(Val) errno = (Val)
+        -:  181:#endif
+        -:  182:
+        -:  183:/* If this host provides the openat function, then we can avoid
+        -:  184:   attempting to open "." in some initialization code below.  */
+        -:  185:#ifdef HAVE_OPENAT
+        -:  186:# define HAVE_OPENAT_SUPPORT 1
+        -:  187:#else
+        -:  188:# define HAVE_OPENAT_SUPPORT 0
+        -:  189:#endif
+        -:  190:
+        -:  191:#ifdef NDEBUG
+        -:  192:# define fts_assert(expr) ((void) (0 && (expr)))
+        -:  193:#else
+        -:  194:# define fts_assert(expr)       \
+        -:  195:    do                          \
+        -:  196:      {                         \
+        -:  197:        if (!(expr))            \
+        -:  198:          abort ();             \
+        -:  199:      }                         \
+        -:  200:    while (false)
+        -:  201:#endif
+        -:  202:
+        -:  203:#ifndef FALLTHROUGH
+        -:  204:# if (__GNUC__ >= 7) || (__clang_major__ >= 10)
+        -:  205:#  define FALLTHROUGH __attribute__ ((__fallthrough__))
+        -:  206:# else
+        -:  207:#  define FALLTHROUGH ((void) 0)
+        -:  208:# endif
+        -:  209:#endif
+        -:  210:
+        -:  211:static FTSENT   *fts_alloc (FTS *, const char *, size_t) internal_function;
+        -:  212:static FTSENT   *fts_build (FTS *, int) internal_function;
+        -:  213:static void      fts_lfree (FTSENT *) internal_function;
+        -:  214:static void      fts_load (FTS *, FTSENT *) internal_function;
+        -:  215:static size_t    fts_maxarglen (char * const *) internal_function;
+        -:  216:static void      fts_padjust (FTS *, FTSENT *) internal_function;
+        -:  217:static bool      fts_palloc (FTS *, size_t) internal_function;
+        -:  218:static FTSENT   *fts_sort (FTS *, FTSENT *, size_t) internal_function;
+        -:  219:static unsigned short int fts_stat (FTS *, FTSENT *, bool) internal_function;
+        -:  220:static int      fts_safe_changedir (FTS *, FTSENT *, int, const char *)
+        -:  221:     internal_function;
+        -:  222:
+        -:  223:#include "fts-cycle.c"
+        -:  224:
+        -:  225:#ifndef MAX
+        -:  226:# define MAX(a,b) ((a) > (b) ? (a) : (b))
+        -:  227:#endif
+        -:  228:
+        -:  229:#ifndef SIZE_MAX
+        -:  230:# define SIZE_MAX ((size_t) -1)
+        -:  231:#endif
+        -:  232:
+        -:  233:#define ISDOT(a)        (a[0] == '.' && (!a[1] || (a[1] == '.' && !a[2])))
+        -:  234:#define STREQ(a, b)     (strcmp (a, b) == 0)
+        -:  235:
+        -:  236:#define CLR(opt)        (sp->fts_options &= ~(opt))
+        -:  237:#define ISSET(opt)      (sp->fts_options & (opt))
+        -:  238:#define SET(opt)        (sp->fts_options |= (opt))
+        -:  239:
+        -:  240:/* FIXME: FTS_NOCHDIR is now misnamed.
+        -:  241:   Call it FTS_USE_FULL_RELATIVE_FILE_NAMES instead. */
+        -:  242:#define FCHDIR(sp, fd)                                  \
+        -:  243:  (!ISSET(FTS_NOCHDIR) && (ISSET(FTS_CWDFD)             \
+        -:  244:                           ? (cwd_advance_fd ((sp), (fd), true), 0) \
+        -:  245:                           : fchdir (fd)))
+        -:  246:
+        -:  247:
+        -:  248:/* fts_build flags */
+        -:  249:/* FIXME: make this an enum */
+        -:  250:#define BCHILD          1               /* fts_children */
+        -:  251:#define BNAMES          2               /* fts_children, names only */
+        -:  252:#define BREAD           3               /* fts_read */
+        -:  253:
+        -:  254:#if FTS_DEBUG
+        -:  255:# include <inttypes.h>
+        -:  256:# include <stdint.h>
+        -:  257:# include <stdio.h>
+        -:  258:# include "getcwdat.h"
+        -:  259:bool fts_debug = false;
+        -:  260:# define Dprintf(x) do { if (fts_debug) printf x; } while (false)
+        -:  261:#else
+        -:  262:# define Dprintf(x)
+        -:  263:# define fd_ring_check(x)
+        -:  264:# define fd_ring_print(a, b, c)
+        -:  265:#endif
+        -:  266:
+        -:  267:#define LEAVE_DIR(Fts, Ent, Tag)                                \
+        -:  268:  do                                                            \
+        -:  269:    {                                                           \
+        -:  270:      Dprintf (("  %s-leaving: %s\n", Tag, (Ent)->fts_path));   \
+        -:  271:      leave_dir (Fts, Ent);                                     \
+        -:  272:      fd_ring_check (Fts);                                      \
+        -:  273:    }                                                           \
+        -:  274:  while (false)
+        -:  275:
+        -:  276:static void
+function fd_ring_clear called 0 returned 0% blocks executed 0%
+    #####:  277:fd_ring_clear (I_ring *fd_ring)
+        -:  278:{
+    #####:  279:  while ( ! i_ring_empty (fd_ring))
+branch  0 never executed
+branch  1 never executed
+        -:  280:    {
+    #####:  281:      int fd = i_ring_pop (fd_ring);
+call    0 never executed
+    #####:  282:      if (0 <= fd)
+branch  0 never executed
+branch  1 never executed
+    #####:  283:        close (fd);
+call    0 never executed
+        -:  284:    }
+    #####:  285:}
+        -:  286:
+        -:  287:/* Overload the fts_statp->st_size member (otherwise unused, when
+        -:  288:   fts_info is FTS_NSOK) to indicate whether fts_read should stat
+        -:  289:   this entry or not.  */
+        -:  290:static void
+function fts_set_stat_required called 0 returned 0% blocks executed 0%
+    #####:  291:fts_set_stat_required (FTSENT *p, bool required)
+        -:  292:{
+    #####:  293:  fts_assert (p->fts_info == FTS_NSOK);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  294:  p->fts_statp->st_size = (required
+        -:  295:                           ? FTS_STAT_REQUIRED
+    #####:  296:                           : FTS_NO_STAT_REQUIRED);
+branch  0 never executed
+branch  1 never executed
+    #####:  297:}
+        -:  298:
+        -:  299:/* Virtual fchdir.  Advance SP's working directory file descriptor,
+        -:  300:   SP->fts_cwd_fd, to FD, and push the previous value onto the fd_ring.
+        -:  301:   CHDIR_DOWN_ONE is true if FD corresponds to an entry in the directory
+        -:  302:   open on sp->fts_cwd_fd; i.e., to move the working directory one level
+        -:  303:   down.  */
+        -:  304:static void
+        -:  305:internal_function
+function cwd_advance_fd called 0 returned 0% blocks executed 0%
+    #####:  306:cwd_advance_fd (FTS *sp, int fd, bool chdir_down_one)
+        -:  307:{
+    #####:  308:  int old = sp->fts_cwd_fd;
+    #####:  309:  fts_assert (old != fd || old == AT_FDCWD);
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+call    4 never executed
+        -:  310:
+    #####:  311:  if (chdir_down_one)
+branch  0 never executed
+branch  1 never executed
+        -:  312:    {
+        -:  313:      /* Push "old" onto the ring.
+        -:  314:         If the displaced file descriptor is non-negative, close it.  */
+    #####:  315:      int prev_fd_in_slot = i_ring_push (&sp->fts_fd_ring, old);
+call    0 never executed
+        -:  316:      fd_ring_print (sp, stderr, "post-push");
+    #####:  317:      if (0 <= prev_fd_in_slot)
+branch  0 never executed
+branch  1 never executed
+    #####:  318:        close (prev_fd_in_slot); /* ignore any close failure */
+call    0 never executed
+        -:  319:    }
+    #####:  320:  else if ( ! ISSET (FTS_NOCHDIR))
+branch  0 never executed
+branch  1 never executed
+        -:  321:    {
+    #####:  322:      if (0 <= old)
+branch  0 never executed
+branch  1 never executed
+    #####:  323:        close (old); /* ignore any close failure */
+call    0 never executed
+        -:  324:    }
+        -:  325:
+    #####:  326:  sp->fts_cwd_fd = fd;
+    #####:  327:}
+        -:  328:
+        -:  329:/* Restore the initial, pre-traversal, "working directory".
+        -:  330:   In FTS_CWDFD mode, we merely call cwd_advance_fd, otherwise,
+        -:  331:   we may actually change the working directory.
+        -:  332:   Return 0 upon success. Upon failure, set errno and return nonzero.  */
+        -:  333:static int
+function restore_initial_cwd called 0 returned 0% blocks executed 0%
+    #####:  334:restore_initial_cwd (FTS *sp)
+        -:  335:{
+    #####:  336:  int fail = FCHDIR (sp, ISSET (FTS_CWDFD) ? AT_FDCWD : sp->fts_rfd);
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+call    6 never executed
+branch  7 never executed
+branch  8 never executed
+call    9 never executed
+branch 10 never executed
+branch 11 never executed
+    #####:  337:  fd_ring_clear (&(sp->fts_fd_ring));
+call    0 never executed
+    #####:  338:  return fail;
+        -:  339:}
+        -:  340:
+        -:  341:/* Open the directory DIR if possible, and return a file
+        -:  342:   descriptor.  Return -1 and set errno on failure.  It doesn't matter
+        -:  343:   whether the file descriptor has read or write access.  */
+        -:  344:
+        -:  345:static int
+        -:  346:internal_function
+function diropen called 0 returned 0% blocks executed 0%
+    #####:  347:diropen (FTS const *sp, char const *dir)
+        -:  348:{
+    #####:  349:  int open_flags = (O_SEARCH | O_CLOEXEC | O_DIRECTORY | O_NOCTTY | O_NONBLOCK
+    #####:  350:                    | (ISSET (FTS_PHYSICAL) ? O_NOFOLLOW : 0));
+        -:  351:
+    #####:  352:  int fd = (ISSET (FTS_CWDFD)
+    #####:  353:            ? openat (sp->fts_cwd_fd, dir, open_flags)
+    #####:  354:            : open (dir, open_flags));
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+    #####:  355:  return fd;
+        -:  356:}
+        -:  357:
+        -:  358:FTS *
+function rpl_fts_open called 0 returned 0% blocks executed 0%
+    #####:  359:fts_open (char * const *argv,
+        -:  360:          register int options,
+        -:  361:          int (*compar) (FTSENT const **, FTSENT const **))
+        -:  362:{
+        -:  363:        register FTS *sp;
+        -:  364:        register FTSENT *p, *root;
+        -:  365:        register size_t nitems;
+    #####:  366:        FTSENT *parent = NULL;
+    #####:  367:        FTSENT *tmp = NULL;     /* pacify gcc */
+        -:  368:        bool defer_stat;
+        -:  369:
+        -:  370:        /* Options check. */
+    #####:  371:        if (options & ~FTS_OPTIONMASK) {
+branch  0 never executed
+branch  1 never executed
+    #####:  372:                __set_errno (EINVAL);
+    #####:  373:                return (NULL);
+        -:  374:        }
+    #####:  375:        if ((options & FTS_NOCHDIR) && (options & FTS_CWDFD)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  376:                __set_errno (EINVAL);
+    #####:  377:                return (NULL);
+        -:  378:        }
+    #####:  379:        if ( ! (options & (FTS_LOGICAL | FTS_PHYSICAL))) {
+branch  0 never executed
+branch  1 never executed
+    #####:  380:                __set_errno (EINVAL);
+    #####:  381:                return (NULL);
+        -:  382:        }
+        -:  383:
+        -:  384:        /* Allocate/initialize the stream */
+    #####:  385:        sp = calloc (1, sizeof *sp);
+    #####:  386:        if (sp == NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  387:                return (NULL);
+    #####:  388:        sp->fts_compar = compar;
+    #####:  389:        sp->fts_options = options;
+        -:  390:
+        -:  391:        /* Logical walks turn on NOCHDIR; symbolic links are too hard. */
+    #####:  392:        if (ISSET(FTS_LOGICAL)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  393:                SET(FTS_NOCHDIR);
+    #####:  394:                CLR(FTS_CWDFD);
+        -:  395:        }
+        -:  396:
+        -:  397:        /* Initialize fts_cwd_fd.  */
+    #####:  398:        sp->fts_cwd_fd = AT_FDCWD;
+        -:  399:        if ( ISSET(FTS_CWDFD) && ! HAVE_OPENAT_SUPPORT)
+        -:  400:          {
+        -:  401:            /* While it isn't technically necessary to open "." this
+        -:  402:               early, doing it here saves us the trouble of ensuring
+        -:  403:               later (where it'd be messier) that "." can in fact
+        -:  404:               be opened.  If not, revert to FTS_NOCHDIR mode.  */
+        -:  405:            int fd = open (".", O_SEARCH | O_CLOEXEC);
+        -:  406:            if (fd < 0)
+        -:  407:              {
+        -:  408:                /* Even if "." is unreadable, don't revert to FTS_NOCHDIR mode
+        -:  409:                   on systems like Linux+PROC_FS, where our openat emulation
+        -:  410:                   is good enough.  Note: on a system that emulates
+        -:  411:                   openat via /proc, this technique can still fail, but
+        -:  412:                   only in extreme conditions, e.g., when the working
+        -:  413:                   directory cannot be saved (i.e. save_cwd fails) --
+        -:  414:                   and that happens on Linux only when "." is unreadable
+        -:  415:                   and the CWD would be longer than PATH_MAX.
+        -:  416:                   FIXME: once Linux kernel openat support is well established,
+        -:  417:                   replace the above open call and this entire if/else block
+        -:  418:                   with the body of the if-block below.  */
+        -:  419:                if ( openat_needs_fchdir ())
+        -:  420:                  {
+        -:  421:                    SET(FTS_NOCHDIR);
+        -:  422:                    CLR(FTS_CWDFD);
+        -:  423:                  }
+        -:  424:              }
+        -:  425:            else
+        -:  426:              {
+        -:  427:                close (fd);
+        -:  428:              }
+        -:  429:          }
+        -:  430:
+        -:  431:        /*
+        -:  432:         * Start out with 1K of file name space, and enough, in any case,
+        -:  433:         * to hold the user's file names.
+        -:  434:         */
+        -:  435:#ifndef MAXPATHLEN
+        -:  436:# define MAXPATHLEN 1024
+        -:  437:#endif
+        -:  438:        {
+    #####:  439:          size_t maxarglen = fts_maxarglen(argv);
+    #####:  440:          if (! fts_palloc(sp, MAX(maxarglen, MAXPATHLEN)))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  441:                  goto mem1;
+        -:  442:        }
+        -:  443:
+        -:  444:        /* Allocate/initialize root's parent. */
+    #####:  445:        if (*argv != NULL) {
+branch  0 never executed
+branch  1 never executed
+    #####:  446:                if ((parent = fts_alloc(sp, "", 0)) == NULL)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  447:                        goto mem2;
+    #####:  448:                parent->fts_level = FTS_ROOTPARENTLEVEL;
+        -:  449:          }
+        -:  450:
+        -:  451:        /* The classic fts implementation would call fts_stat with
+        -:  452:           a new entry for each iteration of the loop below.
+        -:  453:           If the comparison function is not specified or if the
+        -:  454:           FTS_DEFER_STAT option is in effect, don't stat any entry
+        -:  455:           in this loop.  This is an attempt to minimize the interval
+        -:  456:           between the initial stat/lstat/fstatat and the point at which
+        -:  457:           a directory argument is first opened.  This matters for any
+        -:  458:           directory command line argument that resides on a file system
+        -:  459:           without genuine i-nodes.  If you specify FTS_DEFER_STAT along
+        -:  460:           with a comparison function, that function must not access any
+        -:  461:           data via the fts_statp pointer.  */
+    #####:  462:        defer_stat = (compar == NULL || ISSET(FTS_DEFER_STAT));
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  463:
+        -:  464:        /* Allocate/initialize root(s). */
+    #####:  465:        for (root = NULL, nitems = 0; *argv != NULL; ++argv, ++nitems) {
+branch  0 never executed
+branch  1 never executed
+        -:  466:                /* *Do* allow zero-length file names. */
+    #####:  467:                size_t len = strlen(*argv);
+        -:  468:
+    #####:  469:                if ( ! (options & FTS_VERBATIM))
+branch  0 never executed
+branch  1 never executed
+        -:  470:                  {
+        -:  471:                    /* If there are two or more trailing slashes, trim all but one,
+        -:  472:                       but don't change "//" to "/", and do map "///" to "/".  */
+    #####:  473:                    char const *v = *argv;
+    #####:  474:                    if (2 < len && v[len - 1] == '/')
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  475:                      while (1 < len && v[len - 2] == '/')
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  476:                        --len;
+        -:  477:                  }
+        -:  478:
+    #####:  479:                if ((p = fts_alloc(sp, *argv, len)) == NULL)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  480:                        goto mem3;
+    #####:  481:                p->fts_level = FTS_ROOTLEVEL;
+    #####:  482:                p->fts_parent = parent;
+    #####:  483:                p->fts_accpath = p->fts_name;
+        -:  484:                /* Even when defer_stat is true, be sure to stat the first
+        -:  485:                   command line argument, since fts_read (at least with
+        -:  486:                   FTS_XDEV) requires that.  */
+    #####:  487:                if (defer_stat && root != NULL) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  488:                        p->fts_info = FTS_NSOK;
+    #####:  489:                        fts_set_stat_required(p, true);
+call    0 never executed
+        -:  490:                } else {
+    #####:  491:                        p->fts_info = fts_stat(sp, p, false);
+call    0 never executed
+        -:  492:                }
+        -:  493:
+        -:  494:                /*
+        -:  495:                 * If comparison routine supplied, traverse in sorted
+        -:  496:                 * order; otherwise traverse in the order specified.
+        -:  497:                 */
+    #####:  498:                if (compar) {
+branch  0 never executed
+branch  1 never executed
+    #####:  499:                        p->fts_link = root;
+    #####:  500:                        root = p;
+        -:  501:                } else {
+    #####:  502:                        p->fts_link = NULL;
+    #####:  503:                        if (root == NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  504:                                tmp = root = p;
+        -:  505:                        else {
+    #####:  506:                                tmp->fts_link = p;
+    #####:  507:                                tmp = p;
+        -:  508:                        }
+        -:  509:                }
+        -:  510:        }
+    #####:  511:        if (compar && nitems > 1)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  512:                root = fts_sort(sp, root, nitems);
+call    0 never executed
+        -:  513:
+        -:  514:        /*
+        -:  515:         * Allocate a dummy pointer and make fts_read think that we've just
+        -:  516:         * finished the node before the root(s); set p->fts_info to FTS_INIT
+        -:  517:         * so that everything about the "current" node is ignored.
+        -:  518:         */
+    #####:  519:        if ((sp->fts_cur = fts_alloc(sp, "", 0)) == NULL)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  520:                goto mem3;
+    #####:  521:        sp->fts_cur->fts_link = root;
+    #####:  522:        sp->fts_cur->fts_info = FTS_INIT;
+    #####:  523:        sp->fts_cur->fts_level = 1;
+    #####:  524:        if (! setup_dir (sp))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  525:                goto mem3;
+        -:  526:
+        -:  527:        /*
+        -:  528:         * If using chdir(2), grab a file descriptor pointing to dot to ensure
+        -:  529:         * that we can get back here; this could be avoided for some file names,
+        -:  530:         * but almost certainly not worth the effort.  Slashes, symbolic links,
+        -:  531:         * and ".." are all fairly nasty problems.  Note, if we can't get the
+        -:  532:         * descriptor we run anyway, just more slowly.
+        -:  533:         */
+    #####:  534:        if (!ISSET(FTS_NOCHDIR) && !ISSET(FTS_CWDFD)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  535:            && (sp->fts_rfd = diropen (sp, ".")) < 0)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  536:                SET(FTS_NOCHDIR);
+        -:  537:
+    #####:  538:        i_ring_init (&sp->fts_fd_ring, -1);
+call    0 never executed
+    #####:  539:        return (sp);
+        -:  540:
+    #####:  541:mem3:   fts_lfree(root);
+call    0 never executed
+    #####:  542:        free(parent);
+    #####:  543:mem2:   free(sp->fts_path);
+    #####:  544:mem1:   free(sp);
+    #####:  545:        return (NULL);
+        -:  546:}
+        -:  547:
+        -:  548:static void
+        -:  549:internal_function
+function fts_load called 0 returned 0% blocks executed 0%
+    #####:  550:fts_load (FTS *sp, register FTSENT *p)
+        -:  551:{
+        -:  552:        register size_t len;
+        -:  553:        register char *cp;
+        -:  554:
+        -:  555:        /*
+        -:  556:         * Load the stream structure for the next traversal.  Since we don't
+        -:  557:         * actually enter the directory until after the preorder visit, set
+        -:  558:         * the fts_accpath field specially so the chdir gets done to the right
+        -:  559:         * place and the user can access the first node.  From fts_open it's
+        -:  560:         * known that the file name will fit.
+        -:  561:         */
+    #####:  562:        len = p->fts_pathlen = p->fts_namelen;
+    #####:  563:        memmove(sp->fts_path, p->fts_name, len + 1);
+    #####:  564:        if ((cp = strrchr(p->fts_name, '/')) && (cp != p->fts_name || cp[1])) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  565:                len = strlen(++cp);
+    #####:  566:                memmove(p->fts_name, cp, len + 1);
+    #####:  567:                p->fts_namelen = len;
+        -:  568:        }
+    #####:  569:        p->fts_accpath = p->fts_path = sp->fts_path;
+    #####:  570:}
+        -:  571:
+        -:  572:int
+function rpl_fts_close called 0 returned 0% blocks executed 0%
+    #####:  573:fts_close (FTS *sp)
+        -:  574:{
+        -:  575:        register FTSENT *freep, *p;
+    #####:  576:        int saved_errno = 0;
+        -:  577:
+        -:  578:        /*
+        -:  579:         * This still works if we haven't read anything -- the dummy structure
+        -:  580:         * points to the root list, so we step through to the end of the root
+        -:  581:         * list which has a valid parent pointer.
+        -:  582:         */
+    #####:  583:        if (sp->fts_cur) {
+branch  0 never executed
+branch  1 never executed
+    #####:  584:                for (p = sp->fts_cur; p->fts_level >= FTS_ROOTLEVEL;) {
+branch  0 never executed
+branch  1 never executed
+    #####:  585:                        freep = p;
+    #####:  586:                        p = p->fts_link != NULL ? p->fts_link : p->fts_parent;
+branch  0 never executed
+branch  1 never executed
+    #####:  587:                        free(freep);
+        -:  588:                }
+    #####:  589:                free(p);
+        -:  590:        }
+        -:  591:
+        -:  592:        /* Free up child linked list, sort array, file name buffer. */
+    #####:  593:        if (sp->fts_child)
+branch  0 never executed
+branch  1 never executed
+    #####:  594:                fts_lfree(sp->fts_child);
+call    0 never executed
+    #####:  595:        free(sp->fts_array);
+    #####:  596:        free(sp->fts_path);
+        -:  597:
+    #####:  598:        if (ISSET(FTS_CWDFD))
+branch  0 never executed
+branch  1 never executed
+        -:  599:          {
+    #####:  600:            if (0 <= sp->fts_cwd_fd)
+branch  0 never executed
+branch  1 never executed
+    #####:  601:              if (close (sp->fts_cwd_fd))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  602:                saved_errno = errno;
+        -:  603:          }
+    #####:  604:        else if (!ISSET(FTS_NOCHDIR))
+branch  0 never executed
+branch  1 never executed
+        -:  605:          {
+        -:  606:            /* Return to original directory, save errno if necessary. */
+    #####:  607:            if (fchdir(sp->fts_rfd))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  608:              saved_errno = errno;
+        -:  609:
+        -:  610:            /* If close fails, record errno only if saved_errno is zero,
+        -:  611:               so that we report the probably-more-meaningful fchdir errno.  */
+    #####:  612:            if (close (sp->fts_rfd))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  613:              if (saved_errno == 0)
+branch  0 never executed
+branch  1 never executed
+    #####:  614:                saved_errno = errno;
+        -:  615:          }
+        -:  616:
+    #####:  617:        fd_ring_clear (&sp->fts_fd_ring);
+call    0 never executed
+        -:  618:
+    #####:  619:        if (sp->fts_leaf_optimization_works_ht)
+branch  0 never executed
+branch  1 never executed
+    #####:  620:          hash_free (sp->fts_leaf_optimization_works_ht);
+call    0 never executed
+        -:  621:
+    #####:  622:        free_dir (sp);
+call    0 never executed
+        -:  623:
+        -:  624:        /* Free up the stream pointer. */
+    #####:  625:        free(sp);
+        -:  626:
+        -:  627:        /* Set errno and return. */
+    #####:  628:        if (saved_errno) {
+branch  0 never executed
+branch  1 never executed
+    #####:  629:                __set_errno (saved_errno);
+    #####:  630:                return (-1);
+        -:  631:        }
+        -:  632:
+    #####:  633:        return (0);
+        -:  634:}
+        -:  635:
+        -:  636:/* Minimum link count of a traditional Unix directory.  When leaf
+        -:  637:   optimization is OK and a directory's st_nlink == MIN_DIR_NLINK,
+        -:  638:   then the directory has no subdirectories.  */
+        -:  639:enum { MIN_DIR_NLINK = 2 };
+        -:  640:
+        -:  641:/* Whether leaf optimization is OK for a directory.  */
+        -:  642:enum leaf_optimization
+        -:  643:  {
+        -:  644:    /* st_nlink is not reliable for this directory's subdirectories.  */
+        -:  645:    NO_LEAF_OPTIMIZATION,
+        -:  646:
+        -:  647:    /* st_nlink == 2 means the directory lacks subdirectories.  */
+        -:  648:    OK_LEAF_OPTIMIZATION
+        -:  649:  };
+        -:  650:
+        -:  651:#if (defined __linux__ || defined __ANDROID__) \
+        -:  652:  && HAVE_SYS_VFS_H && HAVE_FSTATFS && HAVE_STRUCT_STATFS_F_TYPE
+        -:  653:
+        -:  654:# include <sys/vfs.h>
+        -:  655:
+        -:  656:/* Linux-specific constants from coreutils' src/fs.h */
+        -:  657:# define S_MAGIC_AFS 0x5346414F
+        -:  658:# define S_MAGIC_CIFS 0xFF534D42
+        -:  659:# define S_MAGIC_NFS 0x6969
+        -:  660:# define S_MAGIC_PROC 0x9FA0
+        -:  661:# define S_MAGIC_TMPFS 0x1021994
+        -:  662:
+        -:  663:# ifdef HAVE___FSWORD_T
+        -:  664:typedef __fsword_t fsword;
+        -:  665:# else
+        -:  666:typedef long int fsword;
+        -:  667:# endif
+        -:  668:
+        -:  669:/* Map a stat.st_dev number to a file system type number f_ftype.  */
+        -:  670:struct dev_type
+        -:  671:{
+        -:  672:  dev_t st_dev;
+        -:  673:  fsword f_type;
+        -:  674:};
+        -:  675:
+        -:  676:/* Use a tiny initial size.  If a traversal encounters more than
+        -:  677:   a few devices, the cost of growing/rehashing this table will be
+        -:  678:   rendered negligible by the number of inodes processed.  */
+        -:  679:enum { DEV_TYPE_HT_INITIAL_SIZE = 13 };
+        -:  680:
+        -:  681:static size_t
+function dev_type_hash called 0 returned 0% blocks executed 0%
+    #####:  682:dev_type_hash (void const *x, size_t table_size)
+        -:  683:{
+    #####:  684:  struct dev_type const *ax = x;
+    #####:  685:  uintmax_t dev = ax->st_dev;
+    #####:  686:  return dev % table_size;
+        -:  687:}
+        -:  688:
+        -:  689:static bool
+function dev_type_compare called 0 returned 0% blocks executed 0%
+    #####:  690:dev_type_compare (void const *x, void const *y)
+        -:  691:{
+    #####:  692:  struct dev_type const *ax = x;
+    #####:  693:  struct dev_type const *ay = y;
+    #####:  694:  return ax->st_dev == ay->st_dev;
+        -:  695:}
+        -:  696:
+        -:  697:/* Return the file system type of P with file descriptor FD, or 0 if not known.
+        -:  698:   If FD is negative, P's file descriptor is unavailable.
+        -:  699:   Try to cache known values.  */
+        -:  700:
+        -:  701:static fsword
+function filesystem_type called 0 returned 0% blocks executed 0%
+    #####:  702:filesystem_type (FTSENT const *p, int fd)
+        -:  703:{
+    #####:  704:  FTS *sp = p->fts_fts;
+    #####:  705:  Hash_table *h = sp->fts_leaf_optimization_works_ht;
+        -:  706:  struct dev_type *ent;
+        -:  707:  struct statfs fs_buf;
+        -:  708:
+        -:  709:  /* If we're not in CWDFD mode, don't bother with this optimization,
+        -:  710:     since the caller is not serious about performance.  */
+    #####:  711:  if (!ISSET (FTS_CWDFD))
+branch  0 never executed
+branch  1 never executed
+    #####:  712:    return 0;
+        -:  713:
+    #####:  714:  if (! h)
+branch  0 never executed
+branch  1 never executed
+    #####:  715:    h = sp->fts_leaf_optimization_works_ht
+    #####:  716:      = hash_initialize (DEV_TYPE_HT_INITIAL_SIZE, NULL, dev_type_hash,
+call    0 never executed
+        -:  717:                         dev_type_compare, free);
+    #####:  718:  if (h)
+branch  0 never executed
+branch  1 never executed
+        -:  719:    {
+        -:  720:      struct dev_type tmp;
+    #####:  721:      tmp.st_dev = p->fts_statp->st_dev;
+    #####:  722:      ent = hash_lookup (h, &tmp);
+call    0 never executed
+    #####:  723:      if (ent)
+branch  0 never executed
+branch  1 never executed
+    #####:  724:        return ent->f_type;
+        -:  725:    }
+        -:  726:
+        -:  727:  /* Look-up failed.  Query directly and cache the result.  */
+    #####:  728:  if (fd < 0 || fstatfs (fd, &fs_buf) != 0)
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  729:    return 0;
+        -:  730:
+    #####:  731:  if (h)
+branch  0 never executed
+branch  1 never executed
+        -:  732:    {
+    #####:  733:      struct dev_type *t2 = malloc (sizeof *t2);
+    #####:  734:      if (t2)
+branch  0 never executed
+branch  1 never executed
+        -:  735:        {
+    #####:  736:          t2->st_dev = p->fts_statp->st_dev;
+    #####:  737:          t2->f_type = fs_buf.f_type;
+        -:  738:
+    #####:  739:          ent = hash_insert (h, t2);
+call    0 never executed
+    #####:  740:          if (ent)
+branch  0 never executed
+branch  1 never executed
+    #####:  741:            fts_assert (ent == t2);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  742:          else
+    #####:  743:            free (t2);
+        -:  744:        }
+        -:  745:    }
+        -:  746:
+    #####:  747:  return fs_buf.f_type;
+        -:  748:}
+        -:  749:
+        -:  750:/* Return true if sorting dirents on inode numbers is known to improve
+        -:  751:   traversal performance for the directory P with descriptor DIR_FD.
+        -:  752:   Return false otherwise.  When in doubt, return true.
+        -:  753:   DIR_FD is negative if unavailable.  */
+        -:  754:static bool
+function dirent_inode_sort_may_be_useful called 0 returned 0% blocks executed 0%
+    #####:  755:dirent_inode_sort_may_be_useful (FTSENT const *p, int dir_fd)
+        -:  756:{
+        -:  757:  /* Skip the sort only if we can determine efficiently
+        -:  758:     that skipping it is the right thing to do.
+        -:  759:     The cost of performing an unnecessary sort is negligible,
+        -:  760:     while the cost of *not* performing it can be O(N^2) with
+        -:  761:     a very large constant.  */
+        -:  762:
+    #####:  763:  switch (filesystem_type (p, dir_fd))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  764:    {
+    #####:  765:    case S_MAGIC_CIFS:
+        -:  766:    case S_MAGIC_NFS:
+        -:  767:    case S_MAGIC_TMPFS:
+        -:  768:      /* On a file system of any of these types, sorting
+        -:  769:         is unnecessary, and hence wasteful.  */
+    #####:  770:      return false;
+        -:  771:
+    #####:  772:    default:
+    #####:  773:      return true;
+        -:  774:    }
+        -:  775:}
+        -:  776:
+        -:  777:/* Given an FTS entry P for a directory with descriptor DIR_FD,
+        -:  778:   return whether it is valid to apply leaf optimization.
+        -:  779:   The optimization is valid if a directory's st_nlink value equal
+        -:  780:   to MIN_DIR_NLINK means the directory has no subdirectories.
+        -:  781:   DIR_FD is negative if unavailable.  */
+        -:  782:static enum leaf_optimization
+function leaf_optimization called 0 returned 0% blocks executed 0%
+    #####:  783:leaf_optimization (FTSENT const *p, int dir_fd)
+        -:  784:{
+    #####:  785:  switch (filesystem_type (p, dir_fd))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  786:    {
+    #####:  787:    case 0:
+        -:  788:      /* Leaf optimization is unsafe if the file system type is unknown.  */
+        -:  789:      FALLTHROUGH;
+        -:  790:    case S_MAGIC_AFS:
+        -:  791:      /* Although AFS mount points are not counted in st_nlink, they
+        -:  792:         act like directories.  See <https://bugs.debian.org/143111>.  */
+        -:  793:      FALLTHROUGH;
+        -:  794:    case S_MAGIC_CIFS:
+        -:  795:      /* Leaf optimization causes 'find' to abort.  See
+        -:  796:         <https://lists.gnu.org/r/bug-gnulib/2018-04/msg00015.html>.  */
+        -:  797:      FALLTHROUGH;
+        -:  798:    case S_MAGIC_NFS:
+        -:  799:      /* NFS provides usable dirent.d_type but not necessarily for all entries
+        -:  800:         of large directories, so as per <https://bugzilla.redhat.com/1252549>
+        -:  801:         NFS should return true.  However st_nlink values are not accurate on
+        -:  802:         all implementations as per <https://bugzilla.redhat.com/1299169>.  */
+        -:  803:      FALLTHROUGH;
+        -:  804:    case S_MAGIC_PROC:
+        -:  805:      /* Per <https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=143111> /proc
+        -:  806:         may have bogus stat.st_nlink values.  */
+    #####:  807:      return NO_LEAF_OPTIMIZATION;
+        -:  808:
+    #####:  809:    default:
+    #####:  810:      return OK_LEAF_OPTIMIZATION;
+        -:  811:    }
+        -:  812:}
+        -:  813:
+        -:  814:#else
+        -:  815:static bool
+        -:  816:dirent_inode_sort_may_be_useful (FTSENT const *p _GL_UNUSED,
+        -:  817:                                 int dir_fd _GL_UNUSED)
+        -:  818:{
+        -:  819:  return true;
+        -:  820:}
+        -:  821:static enum leaf_optimization
+        -:  822:leaf_optimization (FTSENT const *p _GL_UNUSED, int dir_fd _GL_UNUSED)
+        -:  823:{
+        -:  824:  return NO_LEAF_OPTIMIZATION;
+        -:  825:}
+        -:  826:#endif
+        -:  827:
+        -:  828:/*
+        -:  829: * Special case of "/" at the end of the file name so that slashes aren't
+        -:  830: * appended which would cause file names to be written as "....//foo".
+        -:  831: */
+        -:  832:#define NAPPEND(p)                                                      \
+        -:  833:        (p->fts_path[p->fts_pathlen - 1] == '/'                         \
+        -:  834:            ? p->fts_pathlen - 1 : p->fts_pathlen)
+        -:  835:
+        -:  836:FTSENT *
+function rpl_fts_read called 0 returned 0% blocks executed 0%
+    #####:  837:fts_read (register FTS *sp)
+        -:  838:{
+        -:  839:        register FTSENT *p, *tmp;
+        -:  840:        register unsigned short int instr;
+        -:  841:        register char *t;
+        -:  842:
+        -:  843:        /* If finished or unrecoverable error, return NULL. */
+    #####:  844:        if (sp->fts_cur == NULL || ISSET(FTS_STOP))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  845:                return (NULL);
+        -:  846:
+        -:  847:        /* Set current node pointer. */
+    #####:  848:        p = sp->fts_cur;
+        -:  849:
+        -:  850:        /* Save and zero out user instructions. */
+    #####:  851:        instr = p->fts_instr;
+    #####:  852:        p->fts_instr = FTS_NOINSTR;
+        -:  853:
+        -:  854:        /* Any type of file may be re-visited; re-stat and re-turn. */
+    #####:  855:        if (instr == FTS_AGAIN) {
+branch  0 never executed
+branch  1 never executed
+    #####:  856:                p->fts_info = fts_stat(sp, p, false);
+call    0 never executed
+    #####:  857:                return (p);
+        -:  858:        }
+        -:  859:        Dprintf (("fts_read: p=%s\n",
+        -:  860:                  p->fts_info == FTS_INIT ? "" : p->fts_path));
+        -:  861:
+        -:  862:        /*
+        -:  863:         * Following a symlink -- SLNONE test allows application to see
+        -:  864:         * SLNONE and recover.  If indirecting through a symlink, have
+        -:  865:         * keep a pointer to current location.  If unable to get that
+        -:  866:         * pointer, follow fails.
+        -:  867:         */
+    #####:  868:        if (instr == FTS_FOLLOW &&
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  869:            (p->fts_info == FTS_SL || p->fts_info == FTS_SLNONE)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  870:                p->fts_info = fts_stat(sp, p, true);
+call    0 never executed
+    #####:  871:                if (p->fts_info == FTS_D && !ISSET(FTS_NOCHDIR)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  872:                        if ((p->fts_symfd = diropen (sp, ".")) < 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  873:                                p->fts_errno = errno;
+    #####:  874:                                p->fts_info = FTS_ERR;
+        -:  875:                        } else
+    #####:  876:                                p->fts_flags |= FTS_SYMFOLLOW;
+        -:  877:                }
+    #####:  878:                goto check_for_dir;
+        -:  879:        }
+        -:  880:
+        -:  881:        /* Directory in pre-order. */
+    #####:  882:        if (p->fts_info == FTS_D) {
+branch  0 never executed
+branch  1 never executed
+        -:  883:                /* If skipped or crossed mount point, do post-order visit. */
+    #####:  884:                if (instr == FTS_SKIP ||
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  885:                    (ISSET(FTS_XDEV) && p->fts_statp->st_dev != sp->fts_dev)) {
+branch  0 never executed
+branch  1 never executed
+    #####:  886:                        if (p->fts_flags & FTS_SYMFOLLOW)
+branch  0 never executed
+branch  1 never executed
+    #####:  887:                                (void)close(p->fts_symfd);
+call    0 never executed
+    #####:  888:                        if (sp->fts_child) {
+branch  0 never executed
+branch  1 never executed
+    #####:  889:                                fts_lfree(sp->fts_child);
+call    0 never executed
+    #####:  890:                                sp->fts_child = NULL;
+        -:  891:                        }
+    #####:  892:                        p->fts_info = FTS_DP;
+    #####:  893:                        LEAVE_DIR (sp, p, "1");
+call    0 never executed
+    #####:  894:                        return (p);
+        -:  895:                }
+        -:  896:
+        -:  897:                /* Rebuild if only read the names and now traversing. */
+    #####:  898:                if (sp->fts_child != NULL && ISSET(FTS_NAMEONLY)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  899:                        CLR(FTS_NAMEONLY);
+    #####:  900:                        fts_lfree(sp->fts_child);
+call    0 never executed
+    #####:  901:                        sp->fts_child = NULL;
+        -:  902:                }
+        -:  903:
+        -:  904:                /*
+        -:  905:                 * Cd to the subdirectory.
+        -:  906:                 *
+        -:  907:                 * If have already read and now fail to chdir, whack the list
+        -:  908:                 * to make the names come out right, and set the parent errno
+        -:  909:                 * so the application will eventually get an error condition.
+        -:  910:                 * Set the FTS_DONTCHDIR flag so that when we logically change
+        -:  911:                 * directories back to the parent we don't do a chdir.
+        -:  912:                 *
+        -:  913:                 * If haven't read do so.  If the read fails, fts_build sets
+        -:  914:                 * FTS_STOP or the fts_info field of the node.
+        -:  915:                 */
+    #####:  916:                if (sp->fts_child != NULL) {
+branch  0 never executed
+branch  1 never executed
+    #####:  917:                        if (fts_safe_changedir(sp, p, -1, p->fts_accpath)) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  918:                                p->fts_errno = errno;
+    #####:  919:                                p->fts_flags |= FTS_DONTCHDIR;
+    #####:  920:                                for (p = sp->fts_child; p != NULL;
+branch  0 never executed
+branch  1 never executed
+    #####:  921:                                     p = p->fts_link)
+    #####:  922:                                        p->fts_accpath =
+    #####:  923:                                            p->fts_parent->fts_accpath;
+        -:  924:                        }
+    #####:  925:                } else if ((sp->fts_child = fts_build(sp, BREAD)) == NULL) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  926:                        if (ISSET(FTS_STOP))
+branch  0 never executed
+branch  1 never executed
+    #####:  927:                                return (NULL);
+        -:  928:                        /* If fts_build's call to fts_safe_changedir failed
+        -:  929:                           because it was not able to fchdir into a
+        -:  930:                           subdirectory, tell the caller.  */
+    #####:  931:                        if (p->fts_errno && p->fts_info != FTS_DNR)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  932:                                p->fts_info = FTS_ERR;
+    #####:  933:                        LEAVE_DIR (sp, p, "2");
+call    0 never executed
+    #####:  934:                        return (p);
+        -:  935:                }
+    #####:  936:                p = sp->fts_child;
+    #####:  937:                sp->fts_child = NULL;
+    #####:  938:                goto name;
+        -:  939:        }
+        -:  940:
+        -:  941:        /* Move to the next node on this level. */
+    #####:  942:next:   tmp = p;
+        -:  943:
+        -:  944:        /* If we have so many directory entries that we're reading them
+        -:  945:           in batches, and we've reached the end of the current batch,
+        -:  946:           read in a new batch.  */
+    #####:  947:        if (p->fts_link == NULL && p->fts_parent->fts_dirp)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  948:          {
+    #####:  949:            p = tmp->fts_parent;
+    #####:  950:            sp->fts_cur = p;
+    #####:  951:            sp->fts_path[p->fts_pathlen] = '\0';
+        -:  952:
+    #####:  953:            if ((p = fts_build (sp, BREAD)) == NULL)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  954:              {
+    #####:  955:                if (ISSET(FTS_STOP))
+branch  0 never executed
+branch  1 never executed
+    #####:  956:                  return NULL;
+    #####:  957:                goto cd_dot_dot;
+        -:  958:              }
+        -:  959:
+    #####:  960:            free(tmp);
+    #####:  961:            goto name;
+        -:  962:          }
+        -:  963:
+    #####:  964:        if ((p = p->fts_link) != NULL) {
+branch  0 never executed
+branch  1 never executed
+    #####:  965:                sp->fts_cur = p;
+    #####:  966:                free(tmp);
+        -:  967:
+        -:  968:                /*
+        -:  969:                 * If reached the top, return to the original directory (or
+        -:  970:                 * the root of the tree), and load the file names for the next
+        -:  971:                 * root.
+        -:  972:                 */
+    #####:  973:                if (p->fts_level == FTS_ROOTLEVEL) {
+branch  0 never executed
+branch  1 never executed
+    #####:  974:                        if (restore_initial_cwd(sp)) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  975:                                SET(FTS_STOP);
+    #####:  976:                                return (NULL);
+        -:  977:                        }
+    #####:  978:                        free_dir(sp);
+call    0 never executed
+    #####:  979:                        fts_load(sp, p);
+call    0 never executed
+    #####:  980:                        setup_dir(sp);
+call    0 never executed
+    #####:  981:                        goto check_for_dir;
+        -:  982:                }
+        -:  983:
+        -:  984:                /*
+        -:  985:                 * User may have called fts_set on the node.  If skipped,
+        -:  986:                 * ignore.  If followed, get a file descriptor so we can
+        -:  987:                 * get back if necessary.
+        -:  988:                 */
+    #####:  989:                if (p->fts_instr == FTS_SKIP)
+branch  0 never executed
+branch  1 never executed
+    #####:  990:                        goto next;
+    #####:  991:                if (p->fts_instr == FTS_FOLLOW) {
+branch  0 never executed
+branch  1 never executed
+    #####:  992:                        p->fts_info = fts_stat(sp, p, true);
+call    0 never executed
+    #####:  993:                        if (p->fts_info == FTS_D && !ISSET(FTS_NOCHDIR)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  994:                                if ((p->fts_symfd = diropen (sp, ".")) < 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  995:                                        p->fts_errno = errno;
+    #####:  996:                                        p->fts_info = FTS_ERR;
+        -:  997:                                } else
+    #####:  998:                                        p->fts_flags |= FTS_SYMFOLLOW;
+        -:  999:                        }
+    #####: 1000:                        p->fts_instr = FTS_NOINSTR;
+        -: 1001:                }
+        -: 1002:
+    #####: 1003:name:           t = sp->fts_path + NAPPEND(p->fts_parent);
+branch  0 never executed
+branch  1 never executed
+    #####: 1004:                *t++ = '/';
+    #####: 1005:                memmove(t, p->fts_name, p->fts_namelen + 1);
+    #####: 1006:check_for_dir:
+    #####: 1007:                sp->fts_cur = p;
+    #####: 1008:                if (p->fts_info == FTS_NSOK)
+branch  0 never executed
+branch  1 never executed
+        -: 1009:                  {
+    #####: 1010:                    if (p->fts_statp->st_size == FTS_STAT_REQUIRED)
+branch  0 never executed
+branch  1 never executed
+    #####: 1011:                      p->fts_info = fts_stat(sp, p, false);
+call    0 never executed
+        -: 1012:                    else
+    #####: 1013:                      fts_assert (p->fts_statp->st_size == FTS_NO_STAT_REQUIRED);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1014:                  }
+        -: 1015:
+    #####: 1016:                if (p->fts_info == FTS_D)
+branch  0 never executed
+branch  1 never executed
+        -: 1017:                  {
+        -: 1018:                    /* Now that P->fts_statp is guaranteed to be valid,
+        -: 1019:                       if this is a command-line directory, record its
+        -: 1020:                       device number, to be used for FTS_XDEV.  */
+    #####: 1021:                    if (p->fts_level == FTS_ROOTLEVEL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1022:                      sp->fts_dev = p->fts_statp->st_dev;
+        -: 1023:                    Dprintf (("  entering: %s\n", p->fts_path));
+    #####: 1024:                    if (! enter_dir (sp, p))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1025:                      {
+    #####: 1026:                        __set_errno (ENOMEM);
+    #####: 1027:                        return NULL;
+        -: 1028:                      }
+        -: 1029:                  }
+    #####: 1030:                return p;
+        -: 1031:        }
+    #####: 1032:cd_dot_dot:
+        -: 1033:
+        -: 1034:        /* Move up to the parent node. */
+    #####: 1035:        p = tmp->fts_parent;
+    #####: 1036:        sp->fts_cur = p;
+    #####: 1037:        free(tmp);
+        -: 1038:
+    #####: 1039:        if (p->fts_level == FTS_ROOTPARENTLEVEL) {
+branch  0 never executed
+branch  1 never executed
+        -: 1040:                /*
+        -: 1041:                 * Done; free everything up and set errno to 0 so the user
+        -: 1042:                 * can distinguish between error and EOF.
+        -: 1043:                 */
+    #####: 1044:                free(p);
+    #####: 1045:                __set_errno (0);
+    #####: 1046:                return (sp->fts_cur = NULL);
+        -: 1047:        }
+        -: 1048:
+    #####: 1049:        fts_assert (p->fts_info != FTS_NSOK);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1050:
+        -: 1051:        /* NUL terminate the file name.  */
+    #####: 1052:        sp->fts_path[p->fts_pathlen] = '\0';
+        -: 1053:
+        -: 1054:        /*
+        -: 1055:         * Return to the parent directory.  If at a root node, restore
+        -: 1056:         * the initial working directory.  If we came through a symlink,
+        -: 1057:         * go back through the file descriptor.  Otherwise, move up
+        -: 1058:         * one level, via "..".
+        -: 1059:         */
+    #####: 1060:        if (p->fts_level == FTS_ROOTLEVEL) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1061:                if (restore_initial_cwd(sp)) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1062:                        p->fts_errno = errno;
+    #####: 1063:                        SET(FTS_STOP);
+        -: 1064:                }
+    #####: 1065:        } else if (p->fts_flags & FTS_SYMFOLLOW) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1066:                if (FCHDIR(sp, p->fts_symfd)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+call    4 never executed
+call    5 never executed
+branch  6 never executed
+branch  7 never executed
+    #####: 1067:                        p->fts_errno = errno;
+    #####: 1068:                        SET(FTS_STOP);
+        -: 1069:                }
+    #####: 1070:                (void)close(p->fts_symfd);
+call    0 never executed
+    #####: 1071:        } else if (!(p->fts_flags & FTS_DONTCHDIR) &&
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1072:                   fts_safe_changedir(sp, p->fts_parent, -1, "..")) {
+call    0 never executed
+    #####: 1073:                p->fts_errno = errno;
+    #####: 1074:                SET(FTS_STOP);
+        -: 1075:        }
+        -: 1076:
+        -: 1077:        /* If the directory causes a cycle, preserve the FTS_DC flag and keep
+        -: 1078:           the corresponding dev/ino pair in the hash table.  It is going to be
+        -: 1079:           removed when leaving the original directory.  */
+    #####: 1080:        if (p->fts_info != FTS_DC) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1081:                p->fts_info = p->fts_errno ? FTS_ERR : FTS_DP;
+branch  0 never executed
+branch  1 never executed
+    #####: 1082:                if (p->fts_errno == 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1083:                        LEAVE_DIR (sp, p, "3");
+call    0 never executed
+        -: 1084:        }
+    #####: 1085:        return ISSET(FTS_STOP) ? NULL : p;
+branch  0 never executed
+branch  1 never executed
+        -: 1086:}
+        -: 1087:
+        -: 1088:/*
+        -: 1089: * Fts_set takes the stream as an argument although it's not used in this
+        -: 1090: * implementation; it would be necessary if anyone wanted to add global
+        -: 1091: * semantics to fts using fts_set.  An error return is allowed for similar
+        -: 1092: * reasons.
+        -: 1093: */
+        -: 1094:/* ARGSUSED */
+        -: 1095:int
+function rpl_fts_set called 0 returned 0% blocks executed 0%
+    #####: 1096:fts_set(FTS *sp _GL_UNUSED, FTSENT *p, int instr)
+        -: 1097:{
+    #####: 1098:        if (instr != 0 && instr != FTS_AGAIN && instr != FTS_FOLLOW &&
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+    #####: 1099:            instr != FTS_NOINSTR && instr != FTS_SKIP) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1100:                __set_errno (EINVAL);
+    #####: 1101:                return (1);
+        -: 1102:        }
+    #####: 1103:        p->fts_instr = instr;
+    #####: 1104:        return (0);
+        -: 1105:}
+        -: 1106:
+        -: 1107:FTSENT *
+function rpl_fts_children called 0 returned 0% blocks executed 0%
+    #####: 1108:fts_children (register FTS *sp, int instr)
+        -: 1109:{
+        -: 1110:        register FTSENT *p;
+        -: 1111:        int fd;
+        -: 1112:
+    #####: 1113:        if (instr != 0 && instr != FTS_NAMEONLY) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1114:                __set_errno (EINVAL);
+    #####: 1115:                return (NULL);
+        -: 1116:        }
+        -: 1117:
+        -: 1118:        /* Set current node pointer. */
+    #####: 1119:        p = sp->fts_cur;
+        -: 1120:
+        -: 1121:        /*
+        -: 1122:         * Errno set to 0 so user can distinguish empty directory from
+        -: 1123:         * an error.
+        -: 1124:         */
+    #####: 1125:        __set_errno (0);
+        -: 1126:
+        -: 1127:        /* Fatal errors stop here. */
+    #####: 1128:        if (ISSET(FTS_STOP))
+branch  0 never executed
+branch  1 never executed
+    #####: 1129:                return (NULL);
+        -: 1130:
+        -: 1131:        /* Return logical hierarchy of user's arguments. */
+    #####: 1132:        if (p->fts_info == FTS_INIT)
+branch  0 never executed
+branch  1 never executed
+    #####: 1133:                return (p->fts_link);
+        -: 1134:
+        -: 1135:        /*
+        -: 1136:         * If not a directory being visited in pre-order, stop here.  Could
+        -: 1137:         * allow FTS_DNR, assuming the user has fixed the problem, but the
+        -: 1138:         * same effect is available with FTS_AGAIN.
+        -: 1139:         */
+    #####: 1140:        if (p->fts_info != FTS_D /* && p->fts_info != FTS_DNR */)
+branch  0 never executed
+branch  1 never executed
+    #####: 1141:                return (NULL);
+        -: 1142:
+        -: 1143:        /* Free up any previous child list. */
+    #####: 1144:        if (sp->fts_child != NULL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1145:                fts_lfree(sp->fts_child);
+call    0 never executed
+        -: 1146:
+    #####: 1147:        if (instr == FTS_NAMEONLY) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1148:                SET(FTS_NAMEONLY);
+    #####: 1149:                instr = BNAMES;
+        -: 1150:        } else
+    #####: 1151:                instr = BCHILD;
+        -: 1152:
+        -: 1153:        /*
+        -: 1154:         * If using chdir on a relative file name and called BEFORE fts_read
+        -: 1155:         * does its chdir to the root of a traversal, we can lose -- we need to
+        -: 1156:         * chdir into the subdirectory, and we don't know where the current
+        -: 1157:         * directory is, so we can't get back so that the upcoming chdir by
+        -: 1158:         * fts_read will work.
+        -: 1159:         */
+    #####: 1160:        if (p->fts_level != FTS_ROOTLEVEL || p->fts_accpath[0] == '/' ||
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1161:            ISSET(FTS_NOCHDIR))
+    #####: 1162:                return (sp->fts_child = fts_build(sp, instr));
+call    0 never executed
+        -: 1163:
+    #####: 1164:        if ((fd = diropen (sp, ".")) < 0)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1165:                return (sp->fts_child = NULL);
+    #####: 1166:        sp->fts_child = fts_build(sp, instr);
+call    0 never executed
+    #####: 1167:        if (ISSET(FTS_CWDFD))
+branch  0 never executed
+branch  1 never executed
+        -: 1168:          {
+    #####: 1169:            cwd_advance_fd (sp, fd, true);
+call    0 never executed
+        -: 1170:          }
+        -: 1171:        else
+        -: 1172:          {
+    #####: 1173:            if (fchdir(fd))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1174:              {
+    #####: 1175:                int saved_errno = errno;
+    #####: 1176:                close (fd);
+call    0 never executed
+    #####: 1177:                __set_errno (saved_errno);
+    #####: 1178:                return NULL;
+        -: 1179:              }
+    #####: 1180:            close (fd);
+call    0 never executed
+        -: 1181:          }
+    #####: 1182:        return (sp->fts_child);
+        -: 1183:}
+        -: 1184:
+        -: 1185:/* A comparison function to sort on increasing inode number.
+        -: 1186:   For some file system types, sorting either way makes a huge
+        -: 1187:   performance difference for a directory with very many entries,
+        -: 1188:   but sorting on increasing values is slightly better than sorting
+        -: 1189:   on decreasing values.  The difference is in the 5% range.  */
+        -: 1190:static int
+function fts_compare_ino called 0 returned 0% blocks executed 0%
+    #####: 1191:fts_compare_ino (struct _ftsent const **a, struct _ftsent const **b)
+        -: 1192:{
+    #####: 1193:  return _GL_CMP (a[0]->fts_statp->st_ino, b[0]->fts_statp->st_ino);
+        -: 1194:}
+        -: 1195:
+        -: 1196:/* Map the dirent.d_type value, DTYPE, to the corresponding stat.st_mode
+        -: 1197:   S_IF* bit and set ST.st_mode, thus clearing all other bits in that field.  */
+        -: 1198:static void
+function set_stat_type called 0 returned 0% blocks executed 0%
+    #####: 1199:set_stat_type (struct stat *st, unsigned int dtype)
+        -: 1200:{
+        -: 1201:  mode_t type;
+    #####: 1202:  switch (dtype)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 1203:    {
+    #####: 1204:    case DT_BLK:
+    #####: 1205:      type = S_IFBLK;
+    #####: 1206:      break;
+    #####: 1207:    case DT_CHR:
+    #####: 1208:      type = S_IFCHR;
+    #####: 1209:      break;
+    #####: 1210:    case DT_DIR:
+    #####: 1211:      type = S_IFDIR;
+    #####: 1212:      break;
+    #####: 1213:    case DT_FIFO:
+    #####: 1214:      type = S_IFIFO;
+    #####: 1215:      break;
+    #####: 1216:    case DT_LNK:
+    #####: 1217:      type = S_IFLNK;
+    #####: 1218:      break;
+    #####: 1219:    case DT_REG:
+    #####: 1220:      type = S_IFREG;
+    #####: 1221:      break;
+    #####: 1222:    case DT_SOCK:
+    #####: 1223:      type = S_IFSOCK;
+    #####: 1224:      break;
+    #####: 1225:    default:
+    #####: 1226:      type = 0;
+        -: 1227:    }
+    #####: 1228:  st->st_mode = type;
+    #####: 1229:}
+        -: 1230:
+        -: 1231:#define closedir_and_clear(dirp)                \
+        -: 1232:  do                                            \
+        -: 1233:    {                                           \
+        -: 1234:      closedir (dirp);                          \
+        -: 1235:      dirp = NULL;                              \
+        -: 1236:    }                                           \
+        -: 1237:  while (0)
+        -: 1238:
+        -: 1239:#define fts_opendir(file, Pdir_fd)                              \
+        -: 1240:        opendirat((! ISSET(FTS_NOCHDIR) && ISSET(FTS_CWDFD)     \
+        -: 1241:                   ? sp->fts_cwd_fd : AT_FDCWD),                \
+        -: 1242:                  file,                                         \
+        -: 1243:                  (((ISSET(FTS_PHYSICAL)                        \
+        -: 1244:                     && ! (ISSET(FTS_COMFOLLOW)                 \
+        -: 1245:                           && cur->fts_level == FTS_ROOTLEVEL)) \
+        -: 1246:                    ? O_NOFOLLOW : 0)),                         \
+        -: 1247:                  Pdir_fd)
+        -: 1248:
+        -: 1249:/*
+        -: 1250: * This is the tricky part -- do not casually change *anything* in here.  The
+        -: 1251: * idea is to build the linked list of entries that are used by fts_children
+        -: 1252: * and fts_read.  There are lots of special cases.
+        -: 1253: *
+        -: 1254: * The real slowdown in walking the tree is the stat calls.  If FTS_NOSTAT is
+        -: 1255: * set and it's a physical walk (so that symbolic links can't be directories),
+        -: 1256: * we can do things quickly.  First, if it's a 4.4BSD file system, the type
+        -: 1257: * of the file is in the directory entry.  Otherwise, we assume that the number
+        -: 1258: * of subdirectories in a node is equal to the number of links to the parent.
+        -: 1259: * The former skips all stat calls.  The latter skips stat calls in any leaf
+        -: 1260: * directories and for any files after the subdirectories in the directory have
+        -: 1261: * been found, cutting the stat calls by about 2/3.
+        -: 1262: */
+        -: 1263:static FTSENT *
+        -: 1264:internal_function
+function fts_build called 0 returned 0% blocks executed 0%
+    #####: 1265:fts_build (register FTS *sp, int type)
+        -: 1266:{
+        -: 1267:        register FTSENT *p, *head;
+        -: 1268:        register size_t nitems;
+        -: 1269:        FTSENT *tail;
+        -: 1270:        void *oldaddr;
+        -: 1271:        int saved_errno;
+        -: 1272:        bool descend;
+        -: 1273:        bool doadjust;
+        -: 1274:        ptrdiff_t level;
+        -: 1275:        size_t len, maxlen, new_len;
+        -: 1276:        char *cp;
+        -: 1277:        int dir_fd;
+    #####: 1278:        FTSENT *cur = sp->fts_cur;
+    #####: 1279:        bool continue_readdir = !!cur->fts_dirp;
+    #####: 1280:        bool sort_by_inode = false;
+        -: 1281:        size_t max_entries;
+        -: 1282:
+        -: 1283:        /* When cur->fts_dirp is non-NULL, that means we should
+        -: 1284:           continue calling readdir on that existing DIR* pointer
+        -: 1285:           rather than opening a new one.  */
+    #####: 1286:        if (continue_readdir)
+branch  0 never executed
+branch  1 never executed
+        -: 1287:          {
+    #####: 1288:            DIR *dp = cur->fts_dirp;
+    #####: 1289:            dir_fd = dirfd (dp);
+call    0 never executed
+    #####: 1290:            if (dir_fd < 0)
+branch  0 never executed
+branch  1 never executed
+        -: 1291:              {
+    #####: 1292:                closedir_and_clear (cur->fts_dirp);
+call    0 never executed
+    #####: 1293:                if (type == BREAD)
+branch  0 never executed
+branch  1 never executed
+        -: 1294:                  {
+    #####: 1295:                    cur->fts_info = FTS_DNR;
+    #####: 1296:                    cur->fts_errno = errno;
+        -: 1297:                  }
+    #####: 1298:                return NULL;
+        -: 1299:              }
+        -: 1300:          }
+        -: 1301:        else
+        -: 1302:          {
+        -: 1303:            /* Open the directory for reading.  If this fails, we're done.
+        -: 1304:               If being called from fts_read, set the fts_info field. */
+    #####: 1305:            if ((cur->fts_dirp = fts_opendir(cur->fts_accpath, &dir_fd)) == NULL)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+call   10 never executed
+branch 11 never executed
+branch 12 never executed
+        -: 1306:              {
+    #####: 1307:                if (type == BREAD)
+branch  0 never executed
+branch  1 never executed
+        -: 1308:                  {
+    #####: 1309:                    cur->fts_info = FTS_DNR;
+    #####: 1310:                    cur->fts_errno = errno;
+        -: 1311:                  }
+    #####: 1312:                return NULL;
+        -: 1313:              }
+        -: 1314:            /* Rather than calling fts_stat for each and every entry encountered
+        -: 1315:               in the readdir loop (below), stat each directory only right after
+        -: 1316:               opening it.  */
+    #####: 1317:            if (cur->fts_info == FTS_NSOK)
+branch  0 never executed
+branch  1 never executed
+    #####: 1318:              cur->fts_info = fts_stat(sp, cur, false);
+call    0 never executed
+    #####: 1319:            else if (sp->fts_options & FTS_TIGHT_CYCLE_CHECK)
+branch  0 never executed
+branch  1 never executed
+        -: 1320:              {
+        -: 1321:                /* Now read the stat info again after opening a directory to
+        -: 1322:                   reveal eventual changes caused by a submount triggered by
+        -: 1323:                   the traversal.  But do it only for utilities which use
+        -: 1324:                   FTS_TIGHT_CYCLE_CHECK.  Therefore, only find and du
+        -: 1325:                   benefit/suffer from this feature for now.  */
+    #####: 1326:                LEAVE_DIR (sp, cur, "4");
+call    0 never executed
+    #####: 1327:                fts_stat (sp, cur, false);
+call    0 never executed
+    #####: 1328:                if (! enter_dir (sp, cur))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1329:                  {
+    #####: 1330:                    __set_errno (ENOMEM);
+    #####: 1331:                    return NULL;
+        -: 1332:                  }
+        -: 1333:              }
+        -: 1334:          }
+        -: 1335:
+        -: 1336:        /* Maximum number of readdir entries to read at one time.  This
+        -: 1337:           limitation is to avoid reading millions of entries into memory
+        -: 1338:           at once.  When an fts_compar function is specified, we have no
+        -: 1339:           choice: we must read all entries into memory before calling that
+        -: 1340:           function.  But when no such function is specified, we can read
+        -: 1341:           entries in batches that are large enough to help us with inode-
+        -: 1342:           sorting, yet not so large that we risk exhausting memory.  */
+    #####: 1343:        max_entries = sp->fts_compar ? SIZE_MAX : FTS_MAX_READDIR_ENTRIES;
+branch  0 never executed
+branch  1 never executed
+        -: 1344:
+        -: 1345:        /*
+        -: 1346:         * If we're going to need to stat anything or we want to descend
+        -: 1347:         * and stay in the directory, chdir.  If this fails we keep going,
+        -: 1348:         * but set a flag so we don't chdir after the post-order visit.
+        -: 1349:         * We won't be able to stat anything, but we can still return the
+        -: 1350:         * names themselves.  Note, that since fts_read won't be able to
+        -: 1351:         * chdir into the directory, it will have to return different file
+        -: 1352:         * names than before, i.e. "a/b" instead of "b".  Since the node
+        -: 1353:         * has already been visited in pre-order, have to wait until the
+        -: 1354:         * post-order visit to return the error.  There is a special case
+        -: 1355:         * here, if there was nothing to stat then it's not an error to
+        -: 1356:         * not be able to stat.  This is all fairly nasty.  If a program
+        -: 1357:         * needed sorted entries or stat information, they had better be
+        -: 1358:         * checking FTS_NS on the returned nodes.
+        -: 1359:         */
+    #####: 1360:        if (continue_readdir)
+branch  0 never executed
+branch  1 never executed
+        -: 1361:          {
+        -: 1362:            /* When resuming a short readdir run, we already have
+        -: 1363:               the required dirp and dir_fd.  */
+    #####: 1364:            descend = true;
+        -: 1365:          }
+        -: 1366:        else
+        -: 1367:          {
+        -: 1368:            /* Try to descend unless it is a names-only fts_children,
+        -: 1369:               or the directory is known to lack subdirectories.  */
+    #####: 1370:            descend = (type != BNAMES
+    #####: 1371:                       && ! (ISSET (FTS_NOSTAT) && ISSET (FTS_PHYSICAL)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+    #####: 1372:                             && ! ISSET (FTS_SEEDOT)
+branch  0 never executed
+branch  1 never executed
+    #####: 1373:                             && cur->fts_statp->st_nlink == MIN_DIR_NLINK
+branch  0 never executed
+branch  1 never executed
+    #####: 1374:                             && (leaf_optimization (cur, dir_fd)
+call    0 never executed
+        -: 1375:                                 != NO_LEAF_OPTIMIZATION)));
+    #####: 1376:            if (descend || type == BREAD)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1377:              {
+    #####: 1378:                if (ISSET(FTS_CWDFD))
+branch  0 never executed
+branch  1 never executed
+    #####: 1379:                  dir_fd = fcntl (dir_fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+call    0 never executed
+    #####: 1380:                if (dir_fd < 0 || fts_safe_changedir(sp, cur, dir_fd, NULL)) {
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####: 1381:                        if (descend && type == BREAD)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1382:                                cur->fts_errno = errno;
+    #####: 1383:                        cur->fts_flags |= FTS_DONTCHDIR;
+    #####: 1384:                        descend = false;
+    #####: 1385:                        closedir_and_clear(cur->fts_dirp);
+call    0 never executed
+    #####: 1386:                        if (ISSET(FTS_CWDFD) && 0 <= dir_fd)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1387:                                close (dir_fd);
+call    0 never executed
+    #####: 1388:                        cur->fts_dirp = NULL;
+        -: 1389:                } else
+    #####: 1390:                        descend = true;
+        -: 1391:              }
+        -: 1392:          }
+        -: 1393:
+        -: 1394:        /*
+        -: 1395:         * Figure out the max file name length that can be stored in the
+        -: 1396:         * current buffer -- the inner loop allocates more space as necessary.
+        -: 1397:         * We really wouldn't have to do the maxlen calculations here, we
+        -: 1398:         * could do them in fts_read before returning the name, but it's a
+        -: 1399:         * lot easier here since the length is part of the dirent structure.
+        -: 1400:         *
+        -: 1401:         * If not changing directories set a pointer so that can just append
+        -: 1402:         * each new component into the file name.
+        -: 1403:         */
+    #####: 1404:        len = NAPPEND(cur);
+branch  0 never executed
+branch  1 never executed
+    #####: 1405:        if (ISSET(FTS_NOCHDIR)) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1406:                cp = sp->fts_path + len;
+    #####: 1407:                *cp++ = '/';
+        -: 1408:        } else {
+        -: 1409:                /* GCC, you're too verbose. */
+    #####: 1410:                cp = NULL;
+        -: 1411:        }
+    #####: 1412:        len++;
+    #####: 1413:        maxlen = sp->fts_pathlen - len;
+        -: 1414:
+    #####: 1415:        level = cur->fts_level + 1;
+        -: 1416:
+        -: 1417:        /* Read the directory, attaching each entry to the "link" pointer. */
+    #####: 1418:        doadjust = false;
+    #####: 1419:        head = NULL;
+    #####: 1420:        tail = NULL;
+    #####: 1421:        nitems = 0;
+    #####: 1422:        while (cur->fts_dirp) {
+branch  0 never executed
+branch  1 never executed
+        -: 1423:                size_t d_namelen;
+    #####: 1424:                __set_errno (0);
+    #####: 1425:                struct dirent *dp = readdir(cur->fts_dirp);
+call    0 never executed
+    #####: 1426:                if (dp == NULL) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1427:                        if (errno) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1428:                                cur->fts_errno = errno;
+        -: 1429:                                /* If we've not read any items yet, treat
+        -: 1430:                                   the error as if we can't access the dir.  */
+    #####: 1431:                                cur->fts_info = (continue_readdir || nitems)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1432:                                                ? FTS_ERR : FTS_DNR;
+        -: 1433:                        }
+    #####: 1434:                        break;
+        -: 1435:                }
+    #####: 1436:                if (!ISSET(FTS_SEEDOT) && ISDOT(dp->d_name))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+    #####: 1437:                        continue;
+        -: 1438:
+    #####: 1439:                d_namelen = _D_EXACT_NAMLEN (dp);
+    #####: 1440:                p = fts_alloc (sp, dp->d_name, d_namelen);
+call    0 never executed
+    #####: 1441:                if (!p)
+branch  0 never executed
+branch  1 never executed
+    #####: 1442:                        goto mem1;
+    #####: 1443:                if (d_namelen >= maxlen) {
+branch  0 never executed
+branch  1 never executed
+        -: 1444:                        /* include space for NUL */
+    #####: 1445:                        oldaddr = sp->fts_path;
+    #####: 1446:                        if (! fts_palloc(sp, d_namelen + len + 1)) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1447:                                /*
+        -: 1448:                                 * No more memory.  Save
+        -: 1449:                                 * errno, free up the current structure and the
+        -: 1450:                                 * structures already allocated.
+        -: 1451:                                 */
+    #####: 1452:mem1:                           saved_errno = errno;
+    #####: 1453:                                free(p);
+    #####: 1454:                                fts_lfree(head);
+call    0 never executed
+    #####: 1455:                                closedir_and_clear(cur->fts_dirp);
+call    0 never executed
+    #####: 1456:                                cur->fts_info = FTS_ERR;
+    #####: 1457:                                SET(FTS_STOP);
+    #####: 1458:                                __set_errno (saved_errno);
+    #####: 1459:                                return (NULL);
+        -: 1460:                        }
+        -: 1461:                        /* Did realloc() change the pointer? */
+    #####: 1462:                        if (oldaddr != sp->fts_path) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1463:                                doadjust = true;
+    #####: 1464:                                if (ISSET(FTS_NOCHDIR))
+branch  0 never executed
+branch  1 never executed
+    #####: 1465:                                        cp = sp->fts_path + len;
+        -: 1466:                        }
+    #####: 1467:                        maxlen = sp->fts_pathlen - len;
+        -: 1468:                }
+        -: 1469:
+    #####: 1470:                new_len = len + d_namelen;
+    #####: 1471:                if (new_len < len) {
+branch  0 never executed
+branch  1 never executed
+        -: 1472:                        /*
+        -: 1473:                         * In the unlikely event that we would end up
+        -: 1474:                         * with a file name longer than SIZE_MAX, free up
+        -: 1475:                         * the current structure and the structures already
+        -: 1476:                         * allocated, then error out with ENAMETOOLONG.
+        -: 1477:                         */
+    #####: 1478:                        free(p);
+    #####: 1479:                        fts_lfree(head);
+call    0 never executed
+    #####: 1480:                        closedir_and_clear(cur->fts_dirp);
+call    0 never executed
+    #####: 1481:                        cur->fts_info = FTS_ERR;
+    #####: 1482:                        SET(FTS_STOP);
+    #####: 1483:                        __set_errno (ENAMETOOLONG);
+    #####: 1484:                        return (NULL);
+        -: 1485:                }
+    #####: 1486:                p->fts_level = level;
+    #####: 1487:                p->fts_parent = sp->fts_cur;
+    #####: 1488:                p->fts_pathlen = new_len;
+        -: 1489:
+        -: 1490:                /* Store dirent.d_ino, in case we need to sort
+        -: 1491:                   entries before processing them.  */
+    #####: 1492:                p->fts_statp->st_ino = D_INO (dp);
+        -: 1493:
+        -: 1494:                /* Build a file name for fts_stat to stat. */
+    #####: 1495:                if (ISSET(FTS_NOCHDIR)) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1496:                        p->fts_accpath = p->fts_path;
+    #####: 1497:                        memmove(cp, p->fts_name, p->fts_namelen + 1);
+        -: 1498:                } else
+    #####: 1499:                        p->fts_accpath = p->fts_name;
+        -: 1500:
+    #####: 1501:                if (sp->fts_compar == NULL || ISSET(FTS_DEFER_STAT)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1502:                        /* Record what fts_read will have to do with this
+        -: 1503:                           entry. In many cases, it will simply fts_stat it,
+        -: 1504:                           but we can take advantage of any d_type information
+        -: 1505:                           to optimize away the unnecessary stat calls.  I.e.,
+        -: 1506:                           if FTS_NOSTAT is in effect and we're not following
+        -: 1507:                           symlinks (FTS_PHYSICAL) and d_type indicates this
+        -: 1508:                           is *not* a directory, then we won't have to stat it
+        -: 1509:                           at all.  If it *is* a directory, then (currently)
+        -: 1510:                           we stat it regardless, in order to get device and
+        -: 1511:                           inode numbers.  Some day we might optimize that
+        -: 1512:                           away, too, for directories where d_ino is known to
+        -: 1513:                           be valid.  */
+    #####: 1514:                        bool skip_stat = (ISSET(FTS_NOSTAT)
+    #####: 1515:                                          && DT_IS_KNOWN(dp)
+branch  0 never executed
+branch  1 never executed
+    #####: 1516:                                          && ! DT_MUST_BE(dp, DT_DIR)
+branch  0 never executed
+branch  1 never executed
+    #####: 1517:                                          && (ISSET(FTS_PHYSICAL)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1518:                                              || ! DT_MUST_BE(dp, DT_LNK)));
+branch  0 never executed
+branch  1 never executed
+    #####: 1519:                        p->fts_info = FTS_NSOK;
+        -: 1520:                        /* Propagate dirent.d_type information back
+        -: 1521:                           to caller, when possible.  */
+    #####: 1522:                        set_stat_type (p->fts_statp, D_TYPE (dp));
+call    0 never executed
+    #####: 1523:                        fts_set_stat_required(p, !skip_stat);
+call    0 never executed
+        -: 1524:                } else {
+    #####: 1525:                        p->fts_info = fts_stat(sp, p, false);
+call    0 never executed
+        -: 1526:                }
+        -: 1527:
+        -: 1528:                /* We walk in directory order so "ls -f" doesn't get upset. */
+    #####: 1529:                p->fts_link = NULL;
+    #####: 1530:                if (head == NULL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1531:                        head = tail = p;
+        -: 1532:                else {
+    #####: 1533:                        tail->fts_link = p;
+    #####: 1534:                        tail = p;
+        -: 1535:                }
+        -: 1536:
+        -: 1537:                /* If there are many entries, no sorting function has been
+        -: 1538:                   specified, and this file system is of a type that may be
+        -: 1539:                   slow with a large number of entries, arrange to sort the
+        -: 1540:                   directory entries on increasing inode numbers.
+        -: 1541:
+        -: 1542:                   The NITEMS comparison uses ==, not >, because the test
+        -: 1543:                   needs to be tried at most once once, and NITEMS will exceed
+        -: 1544:                   the threshold after it is incremented below.  */
+    #####: 1545:                if (nitems == _FTS_INODE_SORT_DIR_ENTRIES_THRESHOLD
+branch  0 never executed
+branch  1 never executed
+    #####: 1546:                    && !sp->fts_compar)
+branch  0 never executed
+branch  1 never executed
+    #####: 1547:                  sort_by_inode = dirent_inode_sort_may_be_useful (cur, dir_fd);
+call    0 never executed
+        -: 1548:
+    #####: 1549:                ++nitems;
+    #####: 1550:                if (max_entries <= nitems) {
+branch  0 never executed
+branch  1 never executed
+        -: 1551:                        /* When there are too many dir entries, leave
+        -: 1552:                           fts_dirp open, so that a subsequent fts_read
+        -: 1553:                           can take up where we leave off.  */
+    #####: 1554:                        goto break_without_closedir;
+        -: 1555:                }
+        -: 1556:        }
+        -: 1557:
+    #####: 1558:        if (cur->fts_dirp)
+branch  0 never executed
+branch  1 never executed
+    #####: 1559:                closedir_and_clear(cur->fts_dirp);
+call    0 never executed
+        -: 1560:
+    #####: 1561: break_without_closedir:
+        -: 1562:
+        -: 1563:        /*
+        -: 1564:         * If realloc() changed the address of the file name, adjust the
+        -: 1565:         * addresses for the rest of the tree and the dir list.
+        -: 1566:         */
+    #####: 1567:        if (doadjust)
+branch  0 never executed
+branch  1 never executed
+    #####: 1568:                fts_padjust(sp, head);
+call    0 never executed
+        -: 1569:
+        -: 1570:        /*
+        -: 1571:         * If not changing directories, reset the file name back to original
+        -: 1572:         * state.
+        -: 1573:         */
+    #####: 1574:        if (ISSET(FTS_NOCHDIR)) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1575:                if (len == sp->fts_pathlen || nitems == 0)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1576:                        --cp;
+    #####: 1577:                *cp = '\0';
+        -: 1578:        }
+        -: 1579:
+        -: 1580:        /*
+        -: 1581:         * If descended after called from fts_children or after called from
+        -: 1582:         * fts_read and nothing found, get back.  At the root level we use
+        -: 1583:         * the saved fd; if one of fts_open()'s arguments is a relative name
+        -: 1584:         * to an empty directory, we wind up here with no other way back.  If
+        -: 1585:         * can't get back, we're done.
+        -: 1586:         */
+    #####: 1587:        if (!continue_readdir && descend && (type == BCHILD || !nitems) &&
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+branch 10 never executed
+branch 11 never executed
+    #####: 1588:            (cur->fts_level == FTS_ROOTLEVEL
+    #####: 1589:             ? restore_initial_cwd(sp)
+call    0 never executed
+    #####: 1590:             : fts_safe_changedir(sp, cur->fts_parent, -1, ".."))) {
+call    0 never executed
+    #####: 1591:                cur->fts_info = FTS_ERR;
+    #####: 1592:                SET(FTS_STOP);
+    #####: 1593:                fts_lfree(head);
+call    0 never executed
+    #####: 1594:                return (NULL);
+        -: 1595:        }
+        -: 1596:
+        -: 1597:        /* If didn't find anything, return NULL. */
+    #####: 1598:        if (!nitems) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1599:                if (type == BREAD
+branch  0 never executed
+branch  1 never executed
+    #####: 1600:                    && cur->fts_info != FTS_DNR && cur->fts_info != FTS_ERR)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1601:                        cur->fts_info = FTS_DP;
+    #####: 1602:                fts_lfree(head);
+call    0 never executed
+    #####: 1603:                return (NULL);
+        -: 1604:        }
+        -: 1605:
+    #####: 1606:        if (sort_by_inode) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1607:                sp->fts_compar = fts_compare_ino;
+    #####: 1608:                head = fts_sort (sp, head, nitems);
+call    0 never executed
+    #####: 1609:                sp->fts_compar = NULL;
+        -: 1610:        }
+        -: 1611:
+        -: 1612:        /* Sort the entries. */
+    #####: 1613:        if (sp->fts_compar && nitems > 1)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1614:                head = fts_sort(sp, head, nitems);
+call    0 never executed
+    #####: 1615:        return (head);
+        -: 1616:}
+        -: 1617:
+        -: 1618:#if FTS_DEBUG
+        -: 1619:
+        -: 1620:/* Walk ->fts_parent links starting at E_CURR, until the root of the
+        -: 1621:   current hierarchy.  There should be a directory with dev/inode
+        -: 1622:   matching those of AD.  If not, print a lot of diagnostics.  */
+        -: 1623:static void
+        -: 1624:find_matching_ancestor (FTSENT const *e_curr, struct Active_dir const *ad)
+        -: 1625:{
+        -: 1626:  FTSENT const *ent;
+        -: 1627:  for (ent = e_curr; ent->fts_level >= FTS_ROOTLEVEL; ent = ent->fts_parent)
+        -: 1628:    {
+        -: 1629:      if (ad->ino == ent->fts_statp->st_ino
+        -: 1630:          && ad->dev == ent->fts_statp->st_dev)
+        -: 1631:        return;
+        -: 1632:    }
+        -: 1633:  printf ("ERROR: tree dir, %s, not active\n", ad->fts_ent->fts_accpath);
+        -: 1634:  printf ("active dirs:\n");
+        -: 1635:  for (ent = e_curr;
+        -: 1636:       ent->fts_level >= FTS_ROOTLEVEL; ent = ent->fts_parent)
+        -: 1637:    printf ("  %s(%"PRIuMAX"/%"PRIuMAX") to %s(%"PRIuMAX"/%"PRIuMAX")...\n",
+        -: 1638:            ad->fts_ent->fts_accpath,
+        -: 1639:            (uintmax_t) ad->dev,
+        -: 1640:            (uintmax_t) ad->ino,
+        -: 1641:            ent->fts_accpath,
+        -: 1642:            (uintmax_t) ent->fts_statp->st_dev,
+        -: 1643:            (uintmax_t) ent->fts_statp->st_ino);
+        -: 1644:}
+        -: 1645:
+        -: 1646:void
+        -: 1647:fts_cross_check (FTS const *sp)
+        -: 1648:{
+        -: 1649:  FTSENT const *ent = sp->fts_cur;
+        -: 1650:  FTSENT const *t;
+        -: 1651:  if ( ! ISSET (FTS_TIGHT_CYCLE_CHECK))
+        -: 1652:    return;
+        -: 1653:
+        -: 1654:  Dprintf (("fts-cross-check cur=%s\n", ent->fts_path));
+        -: 1655:  /* Make sure every parent dir is in the tree.  */
+        -: 1656:  for (t = ent->fts_parent; t->fts_level >= FTS_ROOTLEVEL; t = t->fts_parent)
+        -: 1657:    {
+        -: 1658:      struct Active_dir ad;
+        -: 1659:      ad.ino = t->fts_statp->st_ino;
+        -: 1660:      ad.dev = t->fts_statp->st_dev;
+        -: 1661:      if ( ! hash_lookup (sp->fts_cycle.ht, &ad))
+        -: 1662:        printf ("ERROR: active dir, %s, not in tree\n", t->fts_path);
+        -: 1663:    }
+        -: 1664:
+        -: 1665:  /* Make sure every dir in the tree is an active dir.
+        -: 1666:     But ENT is not necessarily a directory.  If so, just skip this part. */
+        -: 1667:  if (ent->fts_parent->fts_level >= FTS_ROOTLEVEL
+        -: 1668:      && (ent->fts_info == FTS_DP
+        -: 1669:          || ent->fts_info == FTS_D))
+        -: 1670:    {
+        -: 1671:      struct Active_dir *ad;
+        -: 1672:      for (ad = hash_get_first (sp->fts_cycle.ht); ad != NULL;
+        -: 1673:           ad = hash_get_next (sp->fts_cycle.ht, ad))
+        -: 1674:        {
+        -: 1675:          find_matching_ancestor (ent, ad);
+        -: 1676:        }
+        -: 1677:    }
+        -: 1678:}
+        -: 1679:
+        -: 1680:static bool
+        -: 1681:same_fd (int fd1, int fd2)
+        -: 1682:{
+        -: 1683:  struct stat sb1, sb2;
+        -: 1684:  return (fstat (fd1, &sb1) == 0
+        -: 1685:          && fstat (fd2, &sb2) == 0
+        -: 1686:          && SAME_INODE (sb1, sb2));
+        -: 1687:}
+        -: 1688:
+        -: 1689:static void
+        -: 1690:fd_ring_print (FTS const *sp, FILE *stream, char const *msg)
+        -: 1691:{
+        -: 1692:  I_ring const *fd_ring = &sp->fts_fd_ring;
+        -: 1693:  unsigned int i = fd_ring->fts_front;
+        -: 1694:  char *cwd = getcwdat (sp->fts_cwd_fd, NULL, 0);
+        -: 1695:  fprintf (stream, "=== %s ========== %s\n", msg, cwd);
+        -: 1696:  free (cwd);
+        -: 1697:  if (i_ring_empty (fd_ring))
+        -: 1698:    return;
+        -: 1699:
+        -: 1700:  while (true)
+        -: 1701:    {
+        -: 1702:      int fd = fd_ring->fts_fd_ring[i];
+        -: 1703:      if (fd < 0)
+        -: 1704:        fprintf (stream, "%d: %d:\n", i, fd);
+        -: 1705:      else
+        -: 1706:        {
+        -: 1707:          char *wd = getcwdat (fd, NULL, 0);
+        -: 1708:          fprintf (stream, "%d: %d: %s\n", i, fd, wd);
+        -: 1709:          free (wd);
+        -: 1710:        }
+        -: 1711:      if (i == fd_ring->fts_back)
+        -: 1712:        break;
+        -: 1713:      i = (i + I_RING_SIZE - 1) % I_RING_SIZE;
+        -: 1714:    }
+        -: 1715:}
+        -: 1716:
+        -: 1717:/* Ensure that each file descriptor on the fd_ring matches a
+        -: 1718:   parent, grandparent, etc. of the current working directory.  */
+        -: 1719:static void
+        -: 1720:fd_ring_check (FTS const *sp)
+        -: 1721:{
+        -: 1722:  if (!fts_debug)
+        -: 1723:    return;
+        -: 1724:
+        -: 1725:  /* Make a writable copy.  */
+        -: 1726:  I_ring fd_w = sp->fts_fd_ring;
+        -: 1727:
+        -: 1728:  int cwd_fd = sp->fts_cwd_fd;
+        -: 1729:  cwd_fd = fcntl (cwd_fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+        -: 1730:  char *dot = getcwdat (cwd_fd, NULL, 0);
+        -: 1731:  error (0, 0, "===== check ===== cwd: %s", dot);
+        -: 1732:  free (dot);
+        -: 1733:  while ( ! i_ring_empty (&fd_w))
+        -: 1734:    {
+        -: 1735:      int fd = i_ring_pop (&fd_w);
+        -: 1736:      if (0 <= fd)
+        -: 1737:        {
+        -: 1738:          int open_flags = O_SEARCH | O_CLOEXEC;
+        -: 1739:          int parent_fd = openat (cwd_fd, "..", open_flags);
+        -: 1740:          if (parent_fd < 0)
+        -: 1741:            {
+        -: 1742:              // Warn?
+        -: 1743:              break;
+        -: 1744:            }
+        -: 1745:          if (!same_fd (fd, parent_fd))
+        -: 1746:            {
+        -: 1747:              char *cwd = getcwdat (fd, NULL, 0);
+        -: 1748:              error (0, errno, "ring  : %s", cwd);
+        -: 1749:              char *c2 = getcwdat (parent_fd, NULL, 0);
+        -: 1750:              error (0, errno, "parent: %s", c2);
+        -: 1751:              free (cwd);
+        -: 1752:              free (c2);
+        -: 1753:              fts_assert (0);
+        -: 1754:            }
+        -: 1755:          close (cwd_fd);
+        -: 1756:          cwd_fd = parent_fd;
+        -: 1757:        }
+        -: 1758:    }
+        -: 1759:  close (cwd_fd);
+        -: 1760:}
+        -: 1761:#endif
+        -: 1762:
+        -: 1763:static unsigned short int
+        -: 1764:internal_function
+function fts_stat called 0 returned 0% blocks executed 0%
+    #####: 1765:fts_stat(FTS *sp, register FTSENT *p, bool follow)
+        -: 1766:{
+    #####: 1767:        struct stat *sbp = p->fts_statp;
+        -: 1768:
+    #####: 1769:        if (p->fts_level == FTS_ROOTLEVEL && ISSET(FTS_COMFOLLOW))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1770:                follow = true;
+        -: 1771:
+        -: 1772:        /*
+        -: 1773:         * If doing a logical walk, or application requested FTS_FOLLOW, do
+        -: 1774:         * a stat(2).  If that fails, check for a non-existent symlink.  If
+        -: 1775:         * fail, set the errno from the stat call.
+        -: 1776:         */
+    #####: 1777:        if (ISSET(FTS_LOGICAL) || follow) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1778:                if (stat(p->fts_accpath, sbp)) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1779:                        if (errno == ENOENT
+branch  0 never executed
+branch  1 never executed
+    #####: 1780:                            && lstat(p->fts_accpath, sbp) == 0) {
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1781:                                __set_errno (0);
+    #####: 1782:                                return (FTS_SLNONE);
+        -: 1783:                        }
+    #####: 1784:                        p->fts_errno = errno;
+    #####: 1785:                        goto err;
+        -: 1786:                }
+    #####: 1787:        } else if (fstatat(sp->fts_cwd_fd, p->fts_accpath, sbp,
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1788:                           AT_SYMLINK_NOFOLLOW)) {
+    #####: 1789:                p->fts_errno = errno;
+    #####: 1790:err:            memset(sbp, 0, sizeof(struct stat));
+    #####: 1791:                return (FTS_NS);
+        -: 1792:        }
+        -: 1793:
+    #####: 1794:        if (S_ISDIR(sbp->st_mode)) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1795:                if (ISDOT(p->fts_name)) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 1796:                        /* Command-line "." and ".." are real directories. */
+    #####: 1797:                        return (p->fts_level == FTS_ROOTLEVEL ? FTS_D : FTS_DOT);
+branch  0 never executed
+branch  1 never executed
+        -: 1798:                }
+        -: 1799:
+    #####: 1800:                return (FTS_D);
+        -: 1801:        }
+    #####: 1802:        if (S_ISLNK(sbp->st_mode))
+branch  0 never executed
+branch  1 never executed
+    #####: 1803:                return (FTS_SL);
+    #####: 1804:        if (S_ISREG(sbp->st_mode))
+branch  0 never executed
+branch  1 never executed
+    #####: 1805:                return (FTS_F);
+    #####: 1806:        return (FTS_DEFAULT);
+        -: 1807:}
+        -: 1808:
+        -: 1809:static int
+function fts_compar called 0 returned 0% blocks executed 0%
+    #####: 1810:fts_compar (void const *a, void const *b)
+        -: 1811:{
+        -: 1812:  /* Convert A and B to the correct types, to pacify the compiler, and
+        -: 1813:     for portability to bizarre hosts where "void const *" and "FTSENT
+        -: 1814:     const **" differ in runtime representation.  The comparison
+        -: 1815:     function cannot modify *a and *b, but there is no compile-time
+        -: 1816:     check for this.  */
+    #####: 1817:  FTSENT const **pa = (FTSENT const **) a;
+    #####: 1818:  FTSENT const **pb = (FTSENT const **) b;
+    #####: 1819:  return pa[0]->fts_fts->fts_compar (pa, pb);
+call    0 never executed
+        -: 1820:}
+        -: 1821:
+        -: 1822:static FTSENT *
+        -: 1823:internal_function
+function fts_sort called 0 returned 0% blocks executed 0%
+    #####: 1824:fts_sort (FTS *sp, FTSENT *head, register size_t nitems)
+        -: 1825:{
+        -: 1826:        register FTSENT **ap, *p;
+        -: 1827:
+        -: 1828:        /* On most modern hosts, void * and FTSENT ** have the same
+        -: 1829:           run-time representation, and one can convert sp->fts_compar to
+        -: 1830:           the type qsort expects without problem.  Use the heuristic that
+        -: 1831:           this is OK if the two pointer types are the same size, and if
+        -: 1832:           converting FTSENT ** to long int is the same as converting
+        -: 1833:           FTSENT ** to void * and then to long int.  This heuristic isn't
+        -: 1834:           valid in general but we don't know of any counterexamples.  */
+        -: 1835:        FTSENT *dummy;
+    #####: 1836:        int (*compare) (void const *, void const *) =
+        -: 1837:          ((sizeof &dummy == sizeof (void *)
+        -: 1838:            && (long int) &dummy == (long int) (void *) &dummy)
+        -: 1839:           ? (int (*) (void const *, void const *)) sp->fts_compar
+        -: 1840:           : fts_compar);
+        -: 1841:
+        -: 1842:        /*
+        -: 1843:         * Construct an array of pointers to the structures and call qsort(3).
+        -: 1844:         * Reassemble the array in the order returned by qsort.  If unable to
+        -: 1845:         * sort for memory reasons, return the directory entries in their
+        -: 1846:         * current order.  Allocate enough space for the current needs plus
+        -: 1847:         * 40 so don't realloc one entry at a time.
+        -: 1848:         */
+    #####: 1849:        if (nitems > sp->fts_nitems) {
+branch  0 never executed
+branch  1 never executed
+        -: 1850:                FTSENT **a;
+        -: 1851:
+    #####: 1852:                sp->fts_nitems = nitems + 40;
+    #####: 1853:                if (SIZE_MAX / sizeof *a < sp->fts_nitems
+branch  0 never executed
+branch  1 never executed
+    #####: 1854:                    || ! (a = realloc (sp->fts_array,
+branch  0 never executed
+branch  1 never executed
+    #####: 1855:                                       sp->fts_nitems * sizeof *a))) {
+    #####: 1856:                        free(sp->fts_array);
+    #####: 1857:                        sp->fts_array = NULL;
+    #####: 1858:                        sp->fts_nitems = 0;
+    #####: 1859:                        return (head);
+        -: 1860:                }
+    #####: 1861:                sp->fts_array = a;
+        -: 1862:        }
+    #####: 1863:        for (ap = sp->fts_array, p = head; p; p = p->fts_link)
+branch  0 never executed
+branch  1 never executed
+    #####: 1864:                *ap++ = p;
+    #####: 1865:        qsort((void *)sp->fts_array, nitems, sizeof(FTSENT *), compare);
+call    0 never executed
+    #####: 1866:        for (head = *(ap = sp->fts_array); --nitems; ++ap)
+branch  0 never executed
+branch  1 never executed
+    #####: 1867:                ap[0]->fts_link = ap[1];
+    #####: 1868:        ap[0]->fts_link = NULL;
+    #####: 1869:        return (head);
+        -: 1870:}
+        -: 1871:
+        -: 1872:static FTSENT *
+        -: 1873:internal_function
+function fts_alloc called 0 returned 0% blocks executed 0%
+    #####: 1874:fts_alloc (FTS *sp, const char *name, register size_t namelen)
+        -: 1875:{
+        -: 1876:        register FTSENT *p;
+        -: 1877:        size_t len;
+        -: 1878:
+        -: 1879:        /*
+        -: 1880:         * The file name is a variable length array.  Allocate the FTSENT
+        -: 1881:         * structure and the file name in one chunk.
+        -: 1882:         */
+    #####: 1883:        len = FLEXSIZEOF(FTSENT, fts_name, namelen + 1);
+    #####: 1884:        if ((p = malloc(len)) == NULL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1885:                return (NULL);
+        -: 1886:
+        -: 1887:        /* Copy the name and guarantee NUL termination. */
+    #####: 1888:        memcpy(p->fts_name, name, namelen);
+    #####: 1889:        p->fts_name[namelen] = '\0';
+        -: 1890:
+    #####: 1891:        p->fts_namelen = namelen;
+    #####: 1892:        p->fts_fts = sp;
+    #####: 1893:        p->fts_path = sp->fts_path;
+    #####: 1894:        p->fts_errno = 0;
+    #####: 1895:        p->fts_dirp = NULL;
+    #####: 1896:        p->fts_flags = 0;
+    #####: 1897:        p->fts_instr = FTS_NOINSTR;
+    #####: 1898:        p->fts_number = 0;
+    #####: 1899:        p->fts_pointer = NULL;
+    #####: 1900:        return (p);
+        -: 1901:}
+        -: 1902:
+        -: 1903:static void
+        -: 1904:internal_function
+function fts_lfree called 0 returned 0% blocks executed 0%
+    #####: 1905:fts_lfree (register FTSENT *head)
+        -: 1906:{
+        -: 1907:        register FTSENT *p;
+        -: 1908:
+        -: 1909:        /* Free a linked list of structures. */
+    #####: 1910:        while ((p = head)) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1911:                head = head->fts_link;
+    #####: 1912:                if (p->fts_dirp)
+branch  0 never executed
+branch  1 never executed
+    #####: 1913:                        closedir (p->fts_dirp);
+call    0 never executed
+    #####: 1914:                free(p);
+        -: 1915:        }
+    #####: 1916:}
+        -: 1917:
+        -: 1918:/*
+        -: 1919: * Allow essentially unlimited file name lengths; find, rm, ls should
+        -: 1920: * all work on any tree.  Most systems will allow creation of file
+        -: 1921: * names much longer than MAXPATHLEN, even though the kernel won't
+        -: 1922: * resolve them.  Add the size (not just what's needed) plus 256 bytes
+        -: 1923: * so don't realloc the file name 2 bytes at a time.
+        -: 1924: */
+        -: 1925:static bool
+        -: 1926:internal_function
+function fts_palloc called 0 returned 0% blocks executed 0%
+    #####: 1927:fts_palloc (FTS *sp, size_t more)
+        -: 1928:{
+        -: 1929:        char *p;
+    #####: 1930:        size_t new_len = sp->fts_pathlen + more + 256;
+        -: 1931:
+        -: 1932:        /*
+        -: 1933:         * See if fts_pathlen would overflow.
+        -: 1934:         */
+    #####: 1935:        if (new_len < sp->fts_pathlen) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1936:                free(sp->fts_path);
+    #####: 1937:                sp->fts_path = NULL;
+    #####: 1938:                __set_errno (ENAMETOOLONG);
+    #####: 1939:                return false;
+        -: 1940:        }
+    #####: 1941:        sp->fts_pathlen = new_len;
+    #####: 1942:        p = realloc(sp->fts_path, sp->fts_pathlen);
+    #####: 1943:        if (p == NULL) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1944:                free(sp->fts_path);
+    #####: 1945:                sp->fts_path = NULL;
+    #####: 1946:                return false;
+        -: 1947:        }
+    #####: 1948:        sp->fts_path = p;
+    #####: 1949:        return true;
+        -: 1950:}
+        -: 1951:
+        -: 1952:/*
+        -: 1953: * When the file name is realloc'd, have to fix all of the pointers in
+        -: 1954: *  structures already returned.
+        -: 1955: */
+        -: 1956:static void
+        -: 1957:internal_function
+function fts_padjust called 0 returned 0% blocks executed 0%
+    #####: 1958:fts_padjust (FTS *sp, FTSENT *head)
+        -: 1959:{
+        -: 1960:        FTSENT *p;
+    #####: 1961:        char *addr = sp->fts_path;
+        -: 1962:
+        -: 1963:#define ADJUST(p) do {                                                  \
+        -: 1964:        if ((p)->fts_accpath != (p)->fts_name) {                        \
+        -: 1965:                (p)->fts_accpath =                                      \
+        -: 1966:                    (char *)addr + ((p)->fts_accpath - (p)->fts_path);  \
+        -: 1967:        }                                                               \
+        -: 1968:        (p)->fts_path = addr;                                           \
+        -: 1969:} while (0)
+        -: 1970:        /* Adjust the current set of children. */
+    #####: 1971:        for (p = sp->fts_child; p; p = p->fts_link)
+branch  0 never executed
+branch  1 never executed
+    #####: 1972:                ADJUST(p);
+branch  0 never executed
+branch  1 never executed
+        -: 1973:
+        -: 1974:        /* Adjust the rest of the tree, including the current level. */
+    #####: 1975:        for (p = head; p->fts_level >= FTS_ROOTLEVEL;) {
+branch  0 never executed
+branch  1 never executed
+    #####: 1976:                ADJUST(p);
+branch  0 never executed
+branch  1 never executed
+    #####: 1977:                p = p->fts_link ? p->fts_link : p->fts_parent;
+branch  0 never executed
+branch  1 never executed
+        -: 1978:        }
+    #####: 1979:}
+        -: 1980:
+        -: 1981:static size_t
+        -: 1982:internal_function _GL_ATTRIBUTE_PURE
+function fts_maxarglen called 0 returned 0% blocks executed 0%
+    #####: 1983:fts_maxarglen (char * const *argv)
+        -: 1984:{
+        -: 1985:        size_t len, max;
+        -: 1986:
+    #####: 1987:        for (max = 0; *argv; ++argv)
+branch  0 never executed
+branch  1 never executed
+    #####: 1988:                if ((len = strlen(*argv)) > max)
+branch  0 never executed
+branch  1 never executed
+    #####: 1989:                        max = len;
+    #####: 1990:        return (max + 1);
+        -: 1991:}
+        -: 1992:
+        -: 1993:/*
+        -: 1994: * Change to dir specified by fd or file name without getting
+        -: 1995: * tricked by someone changing the world out from underneath us.
+        -: 1996: * Assumes p->fts_statp->st_dev and p->fts_statp->st_ino are filled in.
+        -: 1997: * If FD is non-negative, expect it to be used after this function returns,
+        -: 1998: * and to be closed eventually.  So don't pass e.g., 'dirfd(dirp)' and then
+        -: 1999: * do closedir(dirp), because that would invalidate the saved FD.
+        -: 2000: * Upon failure, close FD immediately and return nonzero.
+        -: 2001: */
+        -: 2002:static int
+        -: 2003:internal_function
+function fts_safe_changedir called 0 returned 0% blocks executed 0%
+    #####: 2004:fts_safe_changedir (FTS *sp, FTSENT *p, int fd, char const *dir)
+        -: 2005:{
+        -: 2006:        int ret;
+    #####: 2007:        bool is_dotdot = dir && STREQ (dir, "..");
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2008:        int newfd;
+        -: 2009:
+        -: 2010:        /* This clause handles the unusual case in which FTS_NOCHDIR
+        -: 2011:           is specified, along with FTS_CWDFD.  In that case, there is
+        -: 2012:           no need to change even the virtual cwd file descriptor.
+        -: 2013:           However, if FD is non-negative, we do close it here.  */
+    #####: 2014:        if (ISSET (FTS_NOCHDIR))
+branch  0 never executed
+branch  1 never executed
+        -: 2015:          {
+    #####: 2016:            if (ISSET (FTS_CWDFD) && 0 <= fd)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2017:              close (fd);
+call    0 never executed
+    #####: 2018:            return 0;
+        -: 2019:          }
+        -: 2020:
+    #####: 2021:        if (fd < 0 && is_dotdot && ISSET (FTS_CWDFD))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2022:          {
+        -: 2023:            /* When possible, skip the diropen and subsequent fstat+dev/ino
+        -: 2024:               comparison.  I.e., when changing to parent directory
+        -: 2025:               (chdir ("..")), use a file descriptor from the ring and
+        -: 2026:               save the overhead of diropen+fstat, as well as avoiding
+        -: 2027:               failure when we lack "x" access to the virtual cwd.  */
+    #####: 2028:            if ( ! i_ring_empty (&sp->fts_fd_ring))
+branch  0 never executed
+branch  1 never executed
+        -: 2029:              {
+        -: 2030:                int parent_fd;
+        -: 2031:                fd_ring_print (sp, stderr, "pre-pop");
+    #####: 2032:                parent_fd = i_ring_pop (&sp->fts_fd_ring);
+call    0 never executed
+    #####: 2033:                if (0 <= parent_fd)
+branch  0 never executed
+branch  1 never executed
+        -: 2034:                  {
+    #####: 2035:                    fd = parent_fd;
+    #####: 2036:                    dir = NULL;
+        -: 2037:                  }
+        -: 2038:              }
+        -: 2039:          }
+        -: 2040:
+    #####: 2041:        newfd = fd;
+    #####: 2042:        if (fd < 0 && (newfd = diropen (sp, dir)) < 0)
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####: 2043:          return -1;
+        -: 2044:
+        -: 2045:        /* The following dev/inode check is necessary if we're doing a
+        -: 2046:           "logical" traversal (through symlinks, a la chown -L), if the
+        -: 2047:           system lacks O_NOFOLLOW support, or if we're changing to ".."
+        -: 2048:           (but not via a popped file descriptor).  When changing to the
+        -: 2049:           name "..", O_NOFOLLOW can't help.  In general, when the target is
+        -: 2050:           not "..", diropen's use of O_NOFOLLOW ensures we don't mistakenly
+        -: 2051:           follow a symlink, so we can avoid the expense of this fstat.  */
+    #####: 2052:        if (ISSET(FTS_LOGICAL) || ! HAVE_WORKING_O_NOFOLLOW
+branch  0 never executed
+branch  1 never executed
+    #####: 2053:            || (dir && STREQ (dir, "..")))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2054:          {
+        -: 2055:            struct stat sb;
+    #####: 2056:            if (fstat(newfd, &sb))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 2057:              {
+    #####: 2058:                ret = -1;
+    #####: 2059:                goto bail;
+        -: 2060:              }
+    #####: 2061:            if (p->fts_statp->st_dev != sb.st_dev
+branch  0 never executed
+branch  1 never executed
+    #####: 2062:                || p->fts_statp->st_ino != sb.st_ino)
+branch  0 never executed
+branch  1 never executed
+        -: 2063:              {
+    #####: 2064:                __set_errno (ENOENT);           /* disinformation */
+    #####: 2065:                ret = -1;
+    #####: 2066:                goto bail;
+        -: 2067:              }
+        -: 2068:          }
+        -: 2069:
+    #####: 2070:        if (ISSET(FTS_CWDFD))
+branch  0 never executed
+branch  1 never executed
+        -: 2071:          {
+    #####: 2072:            cwd_advance_fd (sp, newfd, ! is_dotdot);
+call    0 never executed
+    #####: 2073:            return 0;
+        -: 2074:          }
+        -: 2075:
+    #####: 2076:        ret = fchdir(newfd);
+call    0 never executed
+    #####: 2077:bail:
+    #####: 2078:        if (fd < 0)
+branch  0 never executed
+branch  1 never executed
+        -: 2079:          {
+    #####: 2080:            int oerrno = errno;
+    #####: 2081:            (void)close(newfd);
+call    0 never executed
+    #####: 2082:            __set_errno (oerrno);
+        -: 2083:          }
+    #####: 2084:        return ret;
+        -: 2085:}

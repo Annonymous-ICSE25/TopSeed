@@ -1,0 +1,87 @@
+        -:    0:Source:../../lib/basename-lgpl.c
+        -:    0:Programs:50
+        -:    1:/* basename.c -- return the last element in a file name
+        -:    2:
+        -:    3:   Copyright (C) 1990, 1998-2001, 2003-2006, 2009-2020 Free Software
+        -:    4:   Foundation, Inc.
+        -:    5:
+        -:    6:   This program is free software: you can redistribute it and/or modify
+        -:    7:   it under the terms of the GNU General Public License as published by
+        -:    8:   the Free Software Foundation; either version 3 of the License, or
+        -:    9:   (at your option) any later version.
+        -:   10:
+        -:   11:   This program is distributed in the hope that it will be useful,
+        -:   12:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:   GNU General Public License for more details.
+        -:   15:
+        -:   16:   You should have received a copy of the GNU General Public License
+        -:   17:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:
+        -:   21:/* Specification.  */
+        -:   22:#include "basename-lgpl.h"
+        -:   23:
+        -:   24:#include <stdbool.h>
+        -:   25:#include <string.h>
+        -:   26:
+        -:   27:#include "filename.h"
+        -:   28:
+        -:   29:char *
+function last_component called 0 returned 0% blocks executed 0%
+    #####:   30:last_component (char const *name)
+        -:   31:{
+    #####:   32:  char const *base = name + FILE_SYSTEM_PREFIX_LEN (name);
+        -:   33:  char const *p;
+    #####:   34:  bool last_was_slash = false;
+        -:   35:
+    #####:   36:  while (ISSLASH (*base))
+branch  0 never executed
+branch  1 never executed
+    #####:   37:    base++;
+        -:   38:
+    #####:   39:  for (p = base; *p; p++)
+branch  0 never executed
+branch  1 never executed
+        -:   40:    {
+    #####:   41:      if (ISSLASH (*p))
+branch  0 never executed
+branch  1 never executed
+    #####:   42:        last_was_slash = true;
+    #####:   43:      else if (last_was_slash)
+branch  0 never executed
+branch  1 never executed
+        -:   44:        {
+    #####:   45:          base = p;
+    #####:   46:          last_was_slash = false;
+        -:   47:        }
+        -:   48:    }
+        -:   49:
+    #####:   50:  return (char *) base;
+        -:   51:}
+        -:   52:
+        -:   53:size_t
+function base_len called 0 returned 0% blocks executed 0%
+    #####:   54:base_len (char const *name)
+        -:   55:{
+        -:   56:  size_t len;
+    #####:   57:  size_t prefix_len = FILE_SYSTEM_PREFIX_LEN (name);
+        -:   58:
+    #####:   59:  for (len = strlen (name);  1 < len && ISSLASH (name[len - 1]);  len--)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:   60:    continue;
+        -:   61:
+        -:   62:  if (DOUBLE_SLASH_IS_DISTINCT_ROOT && len == 1
+        -:   63:      && ISSLASH (name[0]) && ISSLASH (name[1]) && ! name[2])
+        -:   64:    return 2;
+        -:   65:
+        -:   66:  if (FILE_SYSTEM_DRIVE_PREFIX_CAN_BE_RELATIVE && prefix_len
+        -:   67:      && len == prefix_len && ISSLASH (name[prefix_len]))
+        -:   68:    return prefix_len + 1;
+        -:   69:
+    #####:   70:  return len;
+        -:   71:}

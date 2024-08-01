@@ -1,0 +1,3895 @@
+        -:    0:Source:../../src/rc-check.c
+        -:    0:Programs:20
+        -:    1:/*!
+        -:    2:*  \file rc-check.c
+        -:    3:*  \brief Checks if a line (of a resource file)
+        -:    4:*               must be inserted into `rc_elems_table[]'.
+        -:    5:*/
+        -:    6:/*
+        -:    7:*  Copyright (c) 1994, 95, 96, 1997, 2000 Thomas Esken
+        -:    8:*  Copyright (c) 2010, 2011, 2013 Free Software Foundation, Inc.
+        -:    9:*
+        -:   10:*  This software doesn't claim completeness, correctness or usability.
+        -:   11:*  On principle I will not be liable for ANY damages or losses (implicit
+        -:   12:*  or explicit), which result from using or handling my software.
+        -:   13:*  If you use this software, you agree without any exception to this
+        -:   14:*  agreement, which binds you LEGALLY !!
+        -:   15:*
+        -:   16:*  This program is free software; you can redistribute it and/or modify
+        -:   17:*  it under the terms of the `GNU General Public License' as published by
+        -:   18:*  the `Free Software Foundation'; either version 3, or (at your option)
+        -:   19:*  any later version.
+        -:   20:*
+        -:   21:*  You should have received a copy of the `GNU General Public License'
+        -:   22:*  along with this program; if not, write to the:
+        -:   23:*
+        -:   24:*/
+        -:   25:
+        -:   26:
+        -:   27:
+        -:   28:/*
+        -:   29:*  Include definition header file to see whether USE_RC is defined there.
+        -:   30:*    Compile this module only if USE_RC is defined, otherwise skip it.
+        -:   31:*/
+        -:   32:#include "tailor.h"
+        -:   33:
+        -:   34:
+        -:   35:
+        -:   36:#if USE_RC
+        -:   37:
+        -:   38:
+        -:   39:/*
+        -:   40:*  Include header files.
+        -:   41:*/
+        -:   42:# if HAVE_CTYPE_H
+        -:   43:#  include <ctype.h>
+        -:   44:# endif
+        -:   45:# include "common.h"
+        -:   46:# include "rc-defs.h"
+        -:   47:# include "globals.h"
+        -:   48:# include "rc-insert.h"
+        -:   49:# include "rc-utils.h"
+        -:   50:# include "utils.h"
+        -:   51:# include "rc-check.h"
+        -:   52:
+        -:   53:
+        -:   54:
+        -:   55:/*
+        -:   56:*  static functions prototypes.
+        -:   57:*/
+        -:   58:__BEGIN_DECLARATIONS
+        -:   59:/*
+        -:   60:************************************************** Defined in `rc-check.c'.
+        -:   61:*/
+        -:   62:static Bool
+        -:   63:  date_matches_period __P_ ((int *print_twice,
+        -:   64:			     int day, int ed, const int wd));
+        -:   65:static int get_number __P_ ((char **string));
+        -:   66:__END_DECLARATIONS
+        -:   67:/*
+        -:   68:*  static variables definitions.
+        -:   69:*/
+        -:   70:/*! Textual weekday name is found and must be respected. */
+        -:   71:static Bool is_weekday_mode = FALSE;
+        -:   72:
+        -:   73:/*! No explicit month command is given in the command line. */
+        -:   74:static Bool changed_month = FALSE;
+        -:   75:
+        -:   76:
+        -:   77:
+        -:   78:/*
+        -:   79:*  Function implementations.
+        -:   80:*/
+        -:   81:void
+function rc_check called 1 returned 100% blocks executed 5%
+        1:   82:rc_check (line_buffer, filename, line_number, line_length, rc_elems, day, ed,
+        -:   83:	  wd)
+        -:   84:     char *line_buffer;
+        -:   85:     const char *filename;
+        -:   86:     const long line_number;
+        -:   87:     const int line_length;
+        -:   88:     int *rc_elems;
+        -:   89:     const int day;
+        -:   90:     const int ed;
+        -:   91:     const int wd;
+        -:   92:/*!
+        -:   93:   Checks whether a single line of a resource file resp.,
+        -:   94:     eternal holiday must be displayed.
+        -:   95:*/
+        -:   96:{
+        -:   97:  register int i;
+        -:   98:  register int j;
+        1:   99:  register int buf_d = 0;
+        -:  100:  register int buf_m;
+        -:  101:  register int buf_y;
+        1:  102:  register int dvar_base_day = 0;
+        1:  103:  register int dvar_base_month = 0;
+        1:  104:  register int repeat = 0;
+        1:  105:  register int appears = 0;
+        1:  106:  register int productions = 2;
+        1:  107:  register int tmp_month = month;
+        -:  108:  auto int print_twice;
+        -:  109:  auto int len_date;
+        -:  110:  auto int n;
+        -:  111:  auto int tmp_d;
+        -:  112:  auto int tmp_m;
+        -:  113:  auto int tmp_y;
+        -:  114:  auto int tmp_n;
+        -:  115:  auto int tmp_hn;
+        1:  116:  auto int tmp_hwd = 0;
+        -:  117:  auto Bool is_valid_date;
+        -:  118:  auto Bool is_day_given;
+        -:  119:  auto Bool is_month_given;
+        -:  120:  auto Bool is_coded_month;
+        1:  121:  auto Bool is_first = TRUE;
+        1:  122:  auto Bool is_range = FALSE;
+        1:  123:  auto Bool date_unset = FALSE;
+        1:  124:  auto Bool must_ignore_feb_29 = FALSE;
+        -:  125:
+        -:  126:
+        -:  127:  /*
+        -:  128:     Decode a delivered line:
+        -:  129:     This means all necessary information is stored in the according
+        -:  130:     variables, which are set by decoding the "date"-part of the line.
+        -:  131:   */
+        1:  132:  lineptrs =
+        1:  133:    rc_get_date (line_buffer, lineptrs, TRUE, &is_weekday_mode, &d, &m, &y,
+call    0 returned 100%
+        -:  134:		 &n, &len_date, &hc, &hn, &hwd, filename, line_number,
+        -:  135:		 line_buffer, TRUE);
+        1:  136:  if (len_date < 1)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  137:    /*
+        -:  138:       Error, invalid date field given.
+        -:  139:     */
+    #####:  140:    my_error (ERR_INVALID_DATE_FIELD, filename, line_number, line_buffer, 0);
+call    0 never executed
+        1:  141:  if ((len_date < line_length) && !*lineptrs->text_part)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:  142:    /*
+        -:  143:       Error, missing whitespace character between "date"-part and "text"-part.
+        -:  144:     */
+    #####:  145:    my_error (ERR_NO_SEPARATOR_CHAR, filename, line_number, line_buffer, 0);
+call    0 never executed
+        1:  146:  if (!month)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  147:    {
+    #####:  148:      month = act_month;
+    #####:  149:      changed_month = TRUE;
+        -:  150:    }
+        -:  151:  else
+        1:  152:    changed_month = FALSE;
+        1:  153:  buf_m = m;
+        1:  154:  buf_y = y;
+        -:  155:  /*
+        -:  156:     We work with a buffer of the returned (allocated and filled)
+        -:  157:     char pointers of the `lineptrs' struct.
+        -:  158:   */
+        1:  159:  lptrs->day_part = lineptrs->day_part;
+        1:  160:  lptrs->repeat_part = lineptrs->repeat_part;
+        1:  161:  lptrs->appears_part = lineptrs->appears_part;
+        -:  162:  do
+        -:  163:    {
+        -:  164:      /*
+        -:  165:         Look if a list/range of days/weekday names is given,
+        -:  166:         if so then let's create 1xN productions of such a line.
+        -:  167:       */
+        1:  168:      if (!is_range && (lptrs->day_part != (char *) NULL))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  169:	{
+        -:  170:	  auto char *ptr2_char;
+        -:  171:	  auto char ch;
+        -:  172:
+        -:  173:
+    #####:  174:	  repeat = appears = hwd = tmp_hn = hn = tmp_n = n = i = 0;
+    #####:  175:	  is_range = is_coded_month = is_month_given = is_day_given =
+    #####:  176:	    is_weekday_mode = FALSE;
+        -:  177:	  /*
+        -:  178:	     Store the base date if a date variable is given.
+        -:  179:	   */
+    #####:  180:	  if (is_first && islower (hc))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  181:	    {
+    #####:  182:	      if (y == SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+        -:  183:		/*
+        -:  184:		   Error, date variable is undefined.
+        -:  185:		 */
+    #####:  186:		break;
+    #####:  187:	      dvar_base_day = d;
+    #####:  188:	      dvar_base_month = m;
+        -:  189:	    }
+    #####:  190:	  if (lineptrs->day_list)
+branch  0 never executed
+branch  1 never executed
+        -:  191:	    /*
+        -:  192:	       Manage a list of days/weekday names.
+        -:  193:	     */
+        -:  194:	    {
+        -:  195:	      /*
+        -:  196:	         If a list of days/weekday names is given, we have to set the
+        -:  197:	         number of productions to any value greater 1, because we
+        -:  198:	         terminate the production creating loop by a `break' statement
+        -:  199:	         after all elements of the list are evaluated.
+        -:  200:	       */
+    #####:  201:	      productions = 2;
+        -:  202:	      /*
+        -:  203:	         Copy an element of the list into `s6'.
+        -:  204:	       */
+    #####:  205:	      while (*lptrs->day_part
+branch  0 never executed
+branch  1 never executed
+    #####:  206:		     && !isspace (*lptrs->day_part)
+branch  0 never executed
+branch  1 never executed
+    #####:  207:		     && (*lptrs->day_part != RC_DLIST_CHAR
+branch  0 never executed
+branch  1 never executed
+    #####:  208:			 && (*lptrs->day_part != RC_REPEAT_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####:  209:			 && (*lptrs->day_part != RC_APPEARS_CHAR)))
+branch  0 never executed
+branch  1 never executed
+    #####:  210:		s6[i++] = *(lptrs->day_part++);
+    #####:  211:	      s6[i] = '\0';
+    #####:  212:	      if (!i && (!is_first || !islower (hc)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  213:		/*
+        -:  214:		   Error, an empty list element given (e.g.:  DD,,DD or WW[W],,WW[W]N).
+        -:  215:		   The only place where an empty list element may occur is the
+        -:  216:		   trailing character after a @e|t|DVAR text, e.g.:  @e,+10,-3fr ...,
+        -:  217:		   which means -> first evaluate  @e  and then  @e+10  and then  @e-3fr.
+        -:  218:		 */
+    #####:  219:		my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  220:			  line_buffer, 0);
+    #####:  221:	      is_first = FALSE;
+    #####:  222:	      ptr2_char = s6;
+    #####:  223:	      if (hc && *ptr2_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  224:		{
+    #####:  225:		  hn = atoi (s6);
+    #####:  226:		  if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  227:		    {
+    #####:  228:		      if (*ptr2_char == *ASC_LIT || *ptr2_char == *DES_LIT)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  229:			ptr2_char++;
+    #####:  230:		      if (*ptr2_char == *ASC_LIT
+branch  0 never executed
+branch  1 never executed
+    #####:  231:			  || *ptr2_char == *DES_LIT || isalpha (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  232:			/*
+        -:  233:			   Error, simple weekday name or invalid sign given.
+        -:  234:			 */
+    #####:  235:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  236:				  line_number, line_buffer, 0);
+        -:  237:		    }
+    #####:  238:		  else if (*ptr2_char == *ASC_LIT || *ptr2_char == *DES_LIT)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  239:		    /*
+        -:  240:		       Error, invalid sign given.
+        -:  241:		     */
+    #####:  242:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  243:			      line_buffer, 0);
+        -:  244:		  /*
+        -:  245:		     Now eat all digits.
+        -:  246:		   */
+    #####:  247:		  while (isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+    #####:  248:		    ptr2_char++;
+        -:  249:		}
+    #####:  250:	      if (!hc || *ptr2_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  251:		{
+    #####:  252:		  if (!hc && i)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  253:		    {
+    #####:  254:		      if (i > 2)
+branch  0 never executed
+branch  1 never executed
+        -:  255:			{
+    #####:  256:			  if (!isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  257:			    {
+    #####:  258:			      ch = s6[TXTLEN_MONTH];
+    #####:  259:			      s6[TXTLEN_MONTH] = '\0';
+    #####:  260:			      m = compare_d_m_name (ptr2_char, MOnth);
+call    0 never executed
+    #####:  261:			      s6[TXTLEN_MONTH] = ch;
+    #####:  262:			      if (!m)
+branch  0 never executed
+branch  1 never executed
+        -:  263:				{
+    #####:  264:				  if (compare_d_m_name (ptr2_char, DAy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  265:				    goto LABEL_list_day_name_given;
+        -:  266:				  /*
+        -:  267:				     Error, invalid textual month name given.
+        -:  268:				   */
+    #####:  269:				  my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  270:					    line_number, line_buffer, 0);
+        -:  271:				}
+    #####:  272:			      ptr2_char++;
+        -:  273:			    }
+        -:  274:			  else
+        -:  275:			    {
+    #####:  276:			      ch = s6[2];
+    #####:  277:			      s6[2] = '\0';
+    #####:  278:			      m = atoi (ptr2_char);
+    #####:  279:			      if (m == 99)
+branch  0 never executed
+branch  1 never executed
+    #####:  280:				m = MONTH_MAX;
+    #####:  281:			      if (m > MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+        -:  282:				/*
+        -:  283:				   Error, invalid month number (mm) given.
+        -:  284:				 */
+    #####:  285:				my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  286:					  line_number, line_buffer, 0);
+    #####:  287:			      s6[2] = ch;
+        -:  288:			    }
+    #####:  289:			  ptr2_char += 2;
+    #####:  290:			  if (m)
+branch  0 never executed
+branch  1 never executed
+    #####:  291:			    is_month_given = TRUE;
+        -:  292:			  else
+    #####:  293:			    is_coded_month = TRUE;
+        -:  294:			}
+    #####:  295:		    LABEL_list_day_name_given:
+    #####:  296:		      d = atoi (ptr2_char);
+    #####:  297:		      if (d)
+branch  0 never executed
+branch  1 never executed
+    #####:  298:			is_day_given = TRUE;
+    #####:  299:		      else if (isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  300:			/*
+        -:  301:			   Error, invalid day number (DD) given.
+        -:  302:			 */
+    #####:  303:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  304:				  line_number, line_buffer, 0);
+        -:  305:		    }
+    #####:  306:		  if (!isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  307:		    {
+    #####:  308:		      d = compare_d_m_name (ptr2_char, DAy);
+call    0 never executed
+    #####:  309:		      if (!d)
+branch  0 never executed
+branch  1 never executed
+        -:  310:			/*
+        -:  311:			   Error, invalid textual day name (WW[W]) given.
+        -:  312:			 */
+    #####:  313:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  314:				  line_number, line_buffer, 0);
+        -:  315:		    }
+        -:  316:		}
+    #####:  317:	      if (!is_month_given && !is_coded_month)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  318:		m = buf_m;
+    #####:  319:	      y = buf_y;
+    #####:  320:	      if (!is_day_given)
+branch  0 never executed
+branch  1 never executed
+        -:  321:		{
+    #####:  322:		  if (!hc)
+branch  0 never executed
+branch  1 never executed
+        -:  323:		    {
+    #####:  324:		      if (isdigit (s6[i - 1]))
+branch  0 never executed
+branch  1 never executed
+        -:  325:			{
+    #####:  326:			  if (isdigit (s6[i - 2]))
+branch  0 never executed
+branch  1 never executed
+        -:  327:			    /*
+        -:  328:			       Error, "N'th weekday of month" field contains more than one digit.
+        -:  329:			     */
+    #####:  330:			    my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  331:				      line_number, line_buffer, 0);
+    #####:  332:			  n = CHR2DIG (s6[i - 1]);
+        -:  333:			  /*
+        -:  334:			     Error, invalid "N'th weekday of month" number given.
+        -:  335:			   */
+    #####:  336:			  if ((n > 5) && (n < 9))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  337:			    my_error (ERR_INVALID_NWD_FIELD, filename,
+call    0 never executed
+        -:  338:				      line_number, line_buffer, n);
+        -:  339:			}
+    #####:  340:		      if (!n)
+branch  0 never executed
+branch  1 never executed
+    #####:  341:			is_weekday_mode = TRUE;
+        -:  342:		    }
+        -:  343:		  else
+        -:  344:		    {
+    #####:  345:		      if (*ptr2_char)
+branch  0 never executed
+branch  1 never executed
+    #####:  346:			hwd = d;
+    #####:  347:		      if (!islower (hc))
+branch  0 never executed
+branch  1 never executed
+    #####:  348:			d = 0;
+        -:  349:		    }
+        -:  350:		}
+    #####:  351:	      if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  352:		{
+    #####:  353:		  d = dvar_base_day;
+    #####:  354:		  m = dvar_base_month;
+        -:  355:		}
+    #####:  356:	      if (hc && y)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  357:		{
+    #####:  358:		  if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  359:		    {
+    #####:  360:		      if (!precomp_date (hn, hwd, &d, &m, y,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  361:					 (hc == RC_EASTER_CHAR) ? EAster :
+branch  0 never executed
+branch  1 never executed
+    #####:  362:					 ((hc ==
+        -:  363:					   RC_TODAY_CHAR) ? TOday : DVar)))
+        -:  364:			/*
+        -:  365:			   If the date is not computable, skip this list entry.
+        -:  366:			 */
+    #####:  367:			y = SPECIAL_VALUE;
+        -:  368:		    }
+        -:  369:		  else
+    #####:  370:		    if (!precomp_nth_wd (hn, hwd, &hn, &d, &m, &y,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  371:					 (hc == 'D') ? DAy : WEek))
+        -:  372:		    /*
+        -:  373:		       If the date is not computable, skip this list entry.
+        -:  374:		     */
+    #####:  375:		    y = SPECIAL_VALUE;
+        -:  376:		}
+    #####:  377:	      if (!y && !is_coded_month)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  378:		manage_leap_day (&d, &m, year, line_buffer, filename,
+call    0 never executed
+        -:  379:				 line_number);
+        -:  380:	      /*
+        -:  381:	         Check if a "repeat for N days since..." field or a
+        -:  382:	         "for each N'th day since..." field is given in this list element.
+        -:  383:	       */
+    #####:  384:	      if (*lptrs->day_part == RC_REPEAT_CHAR
+branch  0 never executed
+branch  1 never executed
+    #####:  385:		  || *lptrs->day_part == RC_APPEARS_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -:  386:		{
+    #####:  387:		  if (is_weekday_mode)
+branch  0 never executed
+branch  1 never executed
+        -:  388:		    /*
+        -:  389:		       Error, it's invalid to specify a simple weekday name WWW
+        -:  390:		       with a "repeat" or "appears" coding (e.g.: WWW:10,WWW.3,WWW:10.3 ...).
+        -:  391:		     */
+    #####:  392:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  393:			      line_buffer, 0);
+        -:  394:		  else
+        -:  395:		    {
+    #####:  396:		      register int num_repeat = 0;
+    #####:  397:		      register int num_appears = 0;
+        -:  398:
+        -:  399:
+        -:  400:		      do
+        -:  401:			{
+    #####:  402:			  if (*lptrs->day_part == RC_REPEAT_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -:  403:			    {
+    #####:  404:			      repeat = get_number (&lptrs->day_part);
+call    0 never executed
+    #####:  405:			      num_repeat++;
+        -:  406:			    }
+    #####:  407:			  if (*lptrs->day_part == RC_APPEARS_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -:  408:			    {
+    #####:  409:			      appears = get_number (&lptrs->day_part);
+call    0 never executed
+    #####:  410:			      num_appears++;
+        -:  411:			    }
+        -:  412:			}
+    #####:  413:		      while (--productions);
+branch  0 never executed
+branch  1 never executed
+    #####:  414:		      if (num_repeat > 1
+branch  0 never executed
+branch  1 never executed
+    #####:  415:			  || num_appears > 1 || (!repeat && !appears))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  416:			/*
+        -:  417:			   Error, either "repeat" or "appears" coding given twice
+        -:  418:			   or invalid by other reasons (a number > 999 given).
+        -:  419:			 */
+    #####:  420:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  421:				  line_number, line_buffer, 0);
+    #####:  422:		      if (appears)
+branch  0 never executed
+branch  1 never executed
+    #####:  423:			appears--;
+        -:  424:		      /*
+        -:  425:		         Well, we have to use an unoptimized number of productions now.
+        -:  426:		       */
+    #####:  427:		      productions = repeat;
+        -:  428:		    }
+        -:  429:		}
+        -:  430:	      /*
+        -:  431:	         Skip the ONE separating character of the list of days.
+        -:  432:	       */
+    #####:  433:	      if (*lptrs->day_part == RC_DLIST_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####:  434:		lptrs->day_part++;
+    #####:  435:	      else if (!*lptrs->day_part || isspace (*lptrs->day_part))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  436:		{
+    #####:  437:		  free (lineptrs->day_part);
+    #####:  438:		  lptrs->day_part = lineptrs->day_part = (char *) NULL;
+        -:  439:		}
+        -:  440:	      else
+        -:  441:		/*
+        -:  442:		   Error, invalid "repeat" or "appears" coding given
+        -:  443:		   (one of the fields contains invalid characters).
+        -:  444:		 */
+    #####:  445:		my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  446:			  line_buffer, 0);
+        -:  447:	    }
+        -:  448:	  else
+        -:  449:	    /*
+        -:  450:	       Manage a range of days/weekday names.
+        -:  451:	     */
+        -:  452:	    {
+    #####:  453:	      if (lptrs->repeat_part != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -:  454:		/*
+        -:  455:		   Error, a "repeat" coding makes no sense in ranges of days.
+        -:  456:		 */
+    #####:  457:		my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  458:			  line_buffer, 0);
+        -:  459:	      /*
+        -:  460:	         Copy the starting element of the range into `s6'.
+        -:  461:	       */
+    #####:  462:	      while (*lptrs->day_part != RC_DRANGE_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####:  463:		s6[i++] = *(lptrs->day_part++);
+    #####:  464:	      s6[i] = '\0';
+    #####:  465:	      if (strchr (s6, RC_APPEARS_CHAR) != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -:  466:		/*
+        -:  467:		   Error, a "appears" coding may only be given last to a range of days.
+        -:  468:		 */
+    #####:  469:		my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  470:			  line_buffer, 0);
+    #####:  471:	      ptr2_char = s6;
+        -:  472:	      /*
+        -:  473:	         Skip THE separating character of the range of days.
+        -:  474:	       */
+    #####:  475:	      lptrs->day_part++;
+    #####:  476:	      if (hc && *ptr2_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  477:		{
+    #####:  478:		  hn = atoi (s6);
+    #####:  479:		  if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  480:		    {
+    #####:  481:		      if (*ptr2_char == *ASC_LIT || *ptr2_char == *DES_LIT)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  482:			ptr2_char++;
+    #####:  483:		      if (*ptr2_char == *ASC_LIT
+branch  0 never executed
+branch  1 never executed
+    #####:  484:			  || *ptr2_char == *DES_LIT || isalpha (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  485:			/*
+        -:  486:			   Error, simple weekday name WWW or invalid sign given.
+        -:  487:			 */
+    #####:  488:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  489:				  line_number, line_buffer, 0);
+        -:  490:		    }
+    #####:  491:		  else if (*ptr2_char == *ASC_LIT || *ptr2_char == *DES_LIT)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  492:		    /*
+        -:  493:		       Error, invalid sign given.
+        -:  494:		     */
+    #####:  495:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  496:			      line_buffer, 0);
+        -:  497:		  /*
+        -:  498:		     Now eat all digits.
+        -:  499:		   */
+    #####:  500:		  while (isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+    #####:  501:		    ptr2_char++;
+        -:  502:		}
+    #####:  503:	      if (!hc || *ptr2_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  504:		{
+    #####:  505:		  if (!hc)
+branch  0 never executed
+branch  1 never executed
+        -:  506:		    {
+    #####:  507:		      d = atoi (ptr2_char);
+    #####:  508:		      if (d)
+branch  0 never executed
+branch  1 never executed
+    #####:  509:			is_day_given = TRUE;
+    #####:  510:		      else if (isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  511:			/*
+        -:  512:			   Error, invalid day number (==0) given.
+        -:  513:			 */
+    #####:  514:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  515:				  line_number, line_buffer, 0);
+        -:  516:		    }
+    #####:  517:		  if (!isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  518:		    {
+    #####:  519:		      buf_d = d = compare_d_m_name (ptr2_char, DAy);
+call    0 never executed
+    #####:  520:		      if (!d)
+branch  0 never executed
+branch  1 never executed
+        -:  521:			/*
+        -:  522:			   Error, invalid weekday name (WW[W]) given.
+        -:  523:			 */
+    #####:  524:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  525:				  line_number, line_buffer, 0);
+        -:  526:		    }
+    #####:  527:		  if (!is_day_given)
+branch  0 never executed
+branch  1 never executed
+        -:  528:		    {
+    #####:  529:		      if (!hc && isdigit (s6[i - 1]))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  530:			{
+    #####:  531:			  if (isdigit (s6[i - 2]))
+branch  0 never executed
+branch  1 never executed
+        -:  532:			    /*
+        -:  533:			       Error, "N'th weekday of month" field contains more than one digit.
+        -:  534:			     */
+    #####:  535:			    my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  536:				      line_number, line_buffer, 0);
+    #####:  537:			  n = CHR2DIG (s6[i - 1]);
+        -:  538:			  /*
+        -:  539:			     Error, invalid "N'th weekday of month" number given.
+        -:  540:			   */
+    #####:  541:			  if ((n > 5) && (n < 9))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  542:			    my_error (ERR_INVALID_NWD_FIELD, filename,
+call    0 never executed
+        -:  543:				      line_number, line_buffer, n);
+    #####:  544:			  if (n)
+branch  0 never executed
+branch  1 never executed
+        -:  545:			    {
+    #####:  546:			      is_range = TRUE;
+    #####:  547:			      nth_weekday_of_month (&d, &m, &y, &n,
+call    0 never executed
+        -:  548:						    &is_weekday_mode);
+    #####:  549:			      if (!m || y == SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  550:				/*
+        -:  551:				   If the date is not computable, exit the loop.
+        -:  552:				 */
+        -:  553:				break;
+        -:  554:			    }
+        -:  555:			  else
+    #####:  556:			    is_weekday_mode = TRUE;
+        -:  557:			}
+        -:  558:		      else
+        -:  559:			{
+    #####:  560:			  if (!hc)
+branch  0 never executed
+branch  1 never executed
+    #####:  561:			    is_weekday_mode = TRUE;
+        -:  562:			  else
+        -:  563:			    {
+    #####:  564:			      is_range = TRUE;
+    #####:  565:			      hwd = d;
+        -:  566:			    }
+        -:  567:			}
+        -:  568:		    }
+        -:  569:		  else
+        -:  570:		    {
+    #####:  571:		      if (!m
+branch  0 never executed
+branch  1 never executed
+    #####:  572:			  && (rc_year_flag
+branch  0 never executed
+branch  1 never executed
+    #####:  573:			      || rc_period_list
+branch  0 never executed
+branch  1 never executed
+    #####:  574:			      || is_3month_mode
+branch  0 never executed
+branch  1 never executed
+    #####:  575:			      || is_3month_mode2 || fiscal_month > MONTH_MIN))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  576:			/*
+        -:  577:			   If no month `m' is given and we are in one of these modes,
+        -:  578:			   exit the loop.
+        -:  579:			 */
+        -:  580:			break;
+    #####:  581:		      is_range = TRUE;
+    #####:  582:		      if (!y)
+branch  0 never executed
+branch  1 never executed
+    #####:  583:			y = year;
+    #####:  584:		      if (!m)
+branch  0 never executed
+branch  1 never executed
+    #####:  585:			m = month;
+        -:  586:		    }
+        -:  587:		}
+        -:  588:	      else
+        -:  589:		{
+    #####:  590:		  is_range = TRUE;
+    #####:  591:		  hwd = 0;
+        -:  592:		}
+    #####:  593:	      if (hc)
+branch  0 never executed
+branch  1 never executed
+        -:  594:		{
+    #####:  595:		  if (!y)
+branch  0 never executed
+branch  1 never executed
+    #####:  596:		    y = year;
+    #####:  597:		  if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  598:		    {
+    #####:  599:		      d = dvar_base_day;
+    #####:  600:		      m = dvar_base_month;
+    #####:  601:		      if (!precomp_date (hn, hwd, &d, &m, y,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  602:					 (hc == RC_EASTER_CHAR) ? EAster :
+branch  0 never executed
+branch  1 never executed
+    #####:  603:					 ((hc ==
+        -:  604:					   RC_TODAY_CHAR) ? TOday : DVar)))
+    #####:  605:			date_unset = TRUE;
+        -:  606:		    }
+        -:  607:		  else
+    #####:  608:		    if (!precomp_nth_wd (hn, hwd, &hn, &d, &m, &y,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  609:					 (hc == 'D') ? DAy : WEek))
+    #####:  610:		    date_unset = TRUE;
+    #####:  611:		  if (date_unset)
+branch  0 never executed
+branch  1 never executed
+        -:  612:		    {
+        -:  613:		      /*
+        -:  614:		         If the date is not computable, set `d' and `m'
+        -:  615:		         to 1-JAN if `hn' is less zero, otherwise to 31-DEC
+        -:  616:		         if `hn' is greater than +1.
+        -:  617:		       */
+    #####:  618:		      if (!hn || hwd)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  619:			/*
+        -:  620:			   If the date isn't computable at all, exit the loop.
+        -:  621:			 */
+        -:  622:			break;
+    #####:  623:		      date_unset = FALSE;
+    #####:  624:		      if (hn < 0)
+branch  0 never executed
+branch  1 never executed
+        -:  625:			{
+    #####:  626:			  m = MONTH_MIN;
+    #####:  627:			  d = DAY_MIN;
+        -:  628:			}
+        -:  629:		      else
+        -:  630:			{
+    #####:  631:			  m = MONTH_MAX;
+    #####:  632:			  d = dvec[m - 1];
+        -:  633:			}
+        -:  634:		    }
+        -:  635:		}
+        -:  636:	      /*
+        -:  637:	         Copy the final element of the range into `s6'.
+        -:  638:	       */
+    #####:  639:	      is_day_given = FALSE;
+    #####:  640:	      i = 0;
+    #####:  641:	      while (*lptrs->day_part
+branch  0 never executed
+branch  1 never executed
+    #####:  642:		     && !isspace (*lptrs->day_part)
+branch  0 never executed
+branch  1 never executed
+    #####:  643:		     && (*lptrs->day_part != RC_APPEARS_CHAR))
+branch  0 never executed
+branch  1 never executed
+    #####:  644:		s6[i++] = *(lptrs->day_part++);
+    #####:  645:	      s6[i] = '\0';
+    #####:  646:	      ptr2_char = s6;
+    #####:  647:	      free (lineptrs->day_part);
+    #####:  648:	      lptrs->day_part = lineptrs->day_part = (char *) NULL;
+    #####:  649:	      if (hc && *ptr2_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  650:		{
+    #####:  651:		  tmp_hn = atoi (s6);
+    #####:  652:		  if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  653:		    {
+    #####:  654:		      if (*ptr2_char == *ASC_LIT || *ptr2_char == *DES_LIT)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  655:			ptr2_char++;
+    #####:  656:		      if (*ptr2_char == *ASC_LIT
+branch  0 never executed
+branch  1 never executed
+    #####:  657:			  || *ptr2_char == *DES_LIT || isalpha (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  658:			/*
+        -:  659:			   Error, simple weekday name or invalid sign given.
+        -:  660:			 */
+    #####:  661:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  662:				  line_number, line_buffer, 0);
+        -:  663:		    }
+    #####:  664:		  else if (*ptr2_char == *ASC_LIT || *ptr2_char == *DES_LIT)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  665:		    /*
+        -:  666:		       Error, invalid sign given.
+        -:  667:		     */
+    #####:  668:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  669:			      line_buffer, 0);
+        -:  670:		  /*
+        -:  671:		     Now eat all digits.
+        -:  672:		   */
+    #####:  673:		  while (isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+    #####:  674:		    ptr2_char++;
+        -:  675:		  /*
+        -:  676:		     Now eat an "appears" field (if given).
+        -:  677:		   */
+    #####:  678:		  if (*ptr2_char == RC_APPEARS_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -:  679:		    {
+    #####:  680:		      ptr2_char++;
+    #####:  681:		      while (isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+    #####:  682:			ptr2_char++;
+        -:  683:		    }
+        -:  684:		}
+    #####:  685:	      if (!hc || *ptr2_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  686:		{
+    #####:  687:		  if (!hc && i)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  688:		    {
+    #####:  689:		      if (i > 2)
+branch  0 never executed
+branch  1 never executed
+        -:  690:			{
+    #####:  691:			  if (!isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  692:			    {
+    #####:  693:			      ch = s6[TXTLEN_MONTH];
+    #####:  694:			      s6[TXTLEN_MONTH] = '\0';
+    #####:  695:			      tmp_m = compare_d_m_name (ptr2_char, MOnth);
+call    0 never executed
+    #####:  696:			      s6[TXTLEN_MONTH] = ch;
+    #####:  697:			      if (!tmp_m)
+branch  0 never executed
+branch  1 never executed
+        -:  698:				{
+    #####:  699:				  if (compare_d_m_name (ptr2_char, DAy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  700:				    goto LABEL_range_day_name_given;
+        -:  701:				  /*
+        -:  702:				     Error, invalid textual month name given.
+        -:  703:				   */
+    #####:  704:				  my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  705:					    line_number, line_buffer, 0);
+        -:  706:				}
+    #####:  707:			      s6[3] = ch;
+    #####:  708:			      ptr2_char++;
+        -:  709:			    }
+        -:  710:			  else
+        -:  711:			    {
+    #####:  712:			      ch = s6[2];
+    #####:  713:			      s6[2] = '\0';
+    #####:  714:			      tmp_m = atoi (ptr2_char);
+    #####:  715:			      if (tmp_m == 99)
+branch  0 never executed
+branch  1 never executed
+    #####:  716:				tmp_m = MONTH_MAX;
+    #####:  717:			      if (tmp_m > MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+        -:  718:				/*
+        -:  719:				   Error, invalid month number (MM) given.
+        -:  720:				 */
+    #####:  721:				my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  722:					  line_number, line_buffer, 0);
+    #####:  723:			      s6[2] = ch;
+        -:  724:			    }
+    #####:  725:			  ptr2_char += 2;
+    #####:  726:			  if (tmp_m)
+branch  0 never executed
+branch  1 never executed
+    #####:  727:			    is_month_given = TRUE;
+        -:  728:			  else
+    #####:  729:			    is_coded_month = TRUE;
+        -:  730:			}
+    #####:  731:		    LABEL_range_day_name_given:
+    #####:  732:		      tmp_d = atoi (ptr2_char);
+    #####:  733:		      if (tmp_d)
+branch  0 never executed
+branch  1 never executed
+    #####:  734:			is_day_given = TRUE;
+        -:  735:		    }
+    #####:  736:		  if (!isdigit (*ptr2_char))
+branch  0 never executed
+branch  1 never executed
+        -:  737:		    {
+    #####:  738:		      buf_d = tmp_d = compare_d_m_name (ptr2_char, DAy);
+call    0 never executed
+    #####:  739:		      if (!tmp_d)
+branch  0 never executed
+branch  1 never executed
+        -:  740:			/*
+        -:  741:			   Error, invalid textual day name (WW[W]) given.
+        -:  742:			 */
+    #####:  743:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  744:				  line_number, line_buffer, 0);
+        -:  745:		    }
+    #####:  746:		  if (!is_day_given)
+branch  0 never executed
+branch  1 never executed
+        -:  747:		    {
+    #####:  748:		      if (isdigit (s6[i - 1]))
+branch  0 never executed
+branch  1 never executed
+        -:  749:			{
+    #####:  750:			  if (isdigit (s6[i - 2]))
+branch  0 never executed
+branch  1 never executed
+        -:  751:			    /*
+        -:  752:			       Error, "N'th weekday of month" field contains more than one digit.
+        -:  753:			     */
+    #####:  754:			    my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  755:				      line_number, line_buffer, 0);
+    #####:  756:			  tmp_n = CHR2DIG (s6[i - 1]);
+        -:  757:			}
+    #####:  758:		      if (!hc && tmp_n && is_range)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  759:			{
+        -:  760:			  /*
+        -:  761:			     Error, invalid "N'th weekday of month" number given.
+        -:  762:			   */
+    #####:  763:			  if ((tmp_n > 5) && (tmp_n < 9))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  764:			    my_error (ERR_INVALID_NWD_FIELD, filename,
+call    0 never executed
+        -:  765:				      line_number, line_buffer, tmp_n);
+    #####:  766:			  if (!is_month_given)
+branch  0 never executed
+branch  1 never executed
+    #####:  767:			    tmp_m = buf_m;
+    #####:  768:			  tmp_y = buf_y;
+    #####:  769:			  nth_weekday_of_month (&tmp_d, &tmp_m, &tmp_y,
+call    0 never executed
+        -:  770:						&tmp_n, &is_weekday_mode);
+    #####:  771:			  if (!tmp_m || tmp_y == SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  772:			    /*
+        -:  773:			       If the date is not computable, exit the loop.
+        -:  774:			     */
+        -:  775:			    break;
+    #####:  776:			  if (y != tmp_y)
+branch  0 never executed
+branch  1 never executed
+        -:  777:			    /*
+        -:  778:			       If the dates are in different years, exit the loop.
+        -:  779:			     */
+    #####:  780:			    break;
+        -:  781:			}
+        -:  782:		      else
+        -:  783:			{
+    #####:  784:			  if (!hc && (tmp_n || is_range))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  785:			    /*
+        -:  786:			       Error, mixed range of days given (DD#WW[W], WW[W]#WW[W]N or WW[W]N#WW[w]).
+        -:  787:			     */
+    #####:  788:			    my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  789:				      line_number, line_buffer, 0);
+    #####:  790:			  else if (!tmp_hn && is_range)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  791:			    /*
+        -:  792:			       Error, invalid range of days given (NWW[W]#WW[W]).
+        -:  793:			     */
+    #####:  794:			    my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  795:				      line_number, line_buffer, 0);
+        -:  796:			  else
+    #####:  797:			    tmp_hwd = tmp_d;
+        -:  798:			}
+        -:  799:		    }
+        -:  800:		  else
+        -:  801:		    {
+    #####:  802:		      if (is_day_given && !is_range)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  803:			/*
+        -:  804:			   Error, invalid range of days given (WW[W]#DD).
+        -:  805:			 */
+    #####:  806:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  807:				  line_number, line_buffer, 0);
+    #####:  808:		      if (!tmp_m && is_coded_month
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  809:			  && (rc_year_flag || rc_period_list || is_3month_mode
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  810:			      || is_3month_mode2 || fiscal_month > MONTH_MIN))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  811:			/*
+        -:  812:			   If the month of a final day is coded like: ...#MMDD
+        -:  813:			   or ...#MMWW[W]N, but MM is explicitly set to zero (==00 coded)
+        -:  814:			   and we are in one of these modes, exit the loop.
+        -:  815:			 */
+        -:  816:			break;
+    #####:  817:		      if (!is_month_given)
+branch  0 never executed
+branch  1 never executed
+    #####:  818:			tmp_m = m;
+    #####:  819:		      tmp_y = y;
+        -:  820:		    }
+        -:  821:		}
+        -:  822:	      else
+    #####:  823:		tmp_hwd = 0;
+        -:  824:	      /*
+        -:  825:	         We have to avoid constructions like: YYYY00DD|WW[W]N#MMDD|WW[W]N
+        -:  826:	         which means, no starting month but a final month is given and
+        -:  827:	         if both months differ after pre-evaluating the starting month
+        -:  828:	         (which is set to the current month), exit the loop.
+        -:  829:	       */
+    #####:  830:	      if (!buf_m && is_month_given && (m != tmp_m))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  831:		break;
+    #####:  832:	      if (hc)
+branch  0 never executed
+branch  1 never executed
+        -:  833:		{
+    #####:  834:		  tmp_y = y;
+    #####:  835:		  if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -:  836:		    {
+    #####:  837:		      tmp_d = dvar_base_day;
+    #####:  838:		      tmp_m = dvar_base_month;
+    #####:  839:		      if (!precomp_date
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+        -:  840:			  (tmp_hn, tmp_hwd, &tmp_d, &tmp_m, tmp_y,
+    #####:  841:			   (hc ==
+    #####:  842:			    RC_EASTER_CHAR) ? EAster : ((hc ==
+branch  0 never executed
+branch  1 never executed
+        -:  843:							 RC_TODAY_CHAR) ?
+        -:  844:							TOday : DVar)))
+    #####:  845:			date_unset = TRUE;
+        -:  846:		    }
+        -:  847:		  else
+    #####:  848:		    if (!precomp_nth_wd
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+        -:  849:			(tmp_hn, tmp_hwd, &tmp_hn, &tmp_d, &tmp_m, &tmp_y,
+    #####:  850:			 (hc == 'D') ? DAy : WEek))
+    #####:  851:		    date_unset = TRUE;
+    #####:  852:		  if (date_unset)
+branch  0 never executed
+branch  1 never executed
+        -:  853:		    {
+        -:  854:		      /*
+        -:  855:		         If the date is not computable, set `tmp_d' and `tmp_m'
+        -:  856:		         to 1-JAN if `tmp_hn' is less zero, otherwise to 31-DEC
+        -:  857:		         if `tmp_hn' is greater than +1.
+        -:  858:		       */
+    #####:  859:		      if (!tmp_hn || tmp_hwd)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  860:			/*
+        -:  861:			   If the date isn't computable at all, exit the loop.
+        -:  862:			 */
+        -:  863:			break;
+    #####:  864:		      if (tmp_hn < 0)
+branch  0 never executed
+branch  1 never executed
+        -:  865:			{
+    #####:  866:			  tmp_m = MONTH_MIN;
+    #####:  867:			  tmp_d = DAY_MIN;
+        -:  868:			}
+        -:  869:		      else
+        -:  870:			{
+    #####:  871:			  tmp_m = MONTH_MAX;
+    #####:  872:			  tmp_d = dvec[tmp_m - 1];
+        -:  873:			}
+        -:  874:		    }
+    #####:  875:		  hc = '\0';
+        -:  876:		}
+    #####:  877:	      n = 0;
+        -:  878:	      /*
+        -:  879:	         Let's decode the "for each N'th day since..." field of a line.
+        -:  880:	       */
+    #####:  881:	      if (lptrs->appears_part != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -:  882:		{
+    #####:  883:		  appears = get_number (&lptrs->appears_part);
+call    0 never executed
+    #####:  884:		  if (!appears
+branch  0 never executed
+branch  1 never executed
+    #####:  885:		      || (*lptrs->appears_part
+branch  0 never executed
+branch  1 never executed
+    #####:  886:			  && !isspace (*lptrs->appears_part)))
+branch  0 never executed
+branch  1 never executed
+        -:  887:		    /*
+        -:  888:		       Error, invalid "appears" field given.
+        -:  889:		     */
+    #####:  890:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  891:			      line_buffer, 0);
+    #####:  892:		  appears--;
+        -:  893:		}
+        -:  894:	      /*
+        -:  895:	         Compute the number of 1xN productions.
+        -:  896:	       */
+    #####:  897:	      if (is_range)
+branch  0 never executed
+branch  1 never executed
+        -:  898:		{
+        -:  899:		  /*
+        -:  900:		     If the special value "99" for a day is given,
+        -:  901:		     set the day to the last day of the month.
+        -:  902:		   */
+    #####:  903:		  if (d == 99)
+branch  0 never executed
+branch  1 never executed
+        -:  904:		    {
+    #####:  905:		      if (m == 2)
+branch  0 never executed
+branch  1 never executed
+    #####:  906:			d = days_of_february (y);
+call    0 never executed
+        -:  907:		      else
+    #####:  908:			d = dvec[m - 1];
+        -:  909:		    }
+    #####:  910:		  if (tmp_d == 99)
+branch  0 never executed
+branch  1 never executed
+        -:  911:		    {
+    #####:  912:		      if (tmp_m == 2)
+branch  0 never executed
+branch  1 never executed
+    #####:  913:			tmp_d = days_of_february (tmp_y);
+call    0 never executed
+        -:  914:		      else
+    #####:  915:			tmp_d = dvec[tmp_m - 1];
+        -:  916:		    }
+    #####:  917:		  if (d > MONTH_LAST || tmp_d > MONTH_LAST)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  918:		    /*
+        -:  919:		       Error, invalid day number (>MONTH_LAST) is given.
+        -:  920:		     */
+    #####:  921:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -:  922:			      line_buffer, 0);
+    #####:  923:		  if (!buf_y)
+branch  0 never executed
+branch  1 never executed
+        -:  924:		    {
+    #####:  925:		      if (buf_m)
+branch  0 never executed
+branch  1 never executed
+    #####:  926:			manage_leap_day (&d, &m, y, line_buffer, filename,
+call    0 never executed
+        -:  927:					 line_number);
+    #####:  928:		      if (is_month_given || (buf_m && !is_month_given))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  929:			manage_leap_day (&tmp_d, &tmp_m, tmp_y, line_buffer,
+call    0 never executed
+        -:  930:					 filename, line_number);
+        -:  931:		      /*
+        -:  932:		         Check if a range of days starting or ending at
+        -:  933:		         00000229 must be ignored in non-leap years.
+        -:  934:		       */
+    #####:  935:		      if ((days_of_february (y) == 28)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  936:			  && (((d == 29)
+branch  0 never executed
+branch  1 never executed
+    #####:  937:			       && (m == 2)
+branch  0 never executed
+branch  1 never executed
+    #####:  938:			       && (m == buf_m))
+branch  0 never executed
+branch  1 never executed
+    #####:  939:			      || ((tmp_d == 29)
+branch  0 never executed
+branch  1 never executed
+    #####:  940:				  && (tmp_m == 2)
+branch  0 never executed
+branch  1 never executed
+    #####:  941:				  && (tmp_m == buf_m || is_month_given))))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  942:			must_ignore_feb_29 = TRUE;
+        -:  943:		    }
+        -:  944:		  /*
+        -:  945:		     If invalid dates are given, try to correct them.
+        -:  946:		   */
+    #####:  947:		  while (!valid_date (d, m, y))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  948:		    {
+    #####:  949:		      if (!buf_m || must_ignore_feb_29)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  950:			d--;
+        -:  951:		      else
+        -:  952:			/*
+        -:  953:			   Error, invalid date given (e.g.: YYYY0230 or YYYY0931).
+        -:  954:			 */
+    #####:  955:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  956:				  line_number, line_buffer, 0);
+        -:  957:		    }
+    #####:  958:		  while (!valid_date (tmp_d, tmp_m, tmp_y))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  959:		    {
+    #####:  960:		      if ((!buf_m && !is_month_given) || must_ignore_feb_29)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  961:			tmp_d--;
+        -:  962:		      else
+        -:  963:			/*
+        -:  964:			   Error, invalid date given (e.g.: YYYY0230 or YYYY0931).
+        -:  965:			 */
+    #####:  966:			my_error (ERR_INVALID_DATE_FIELD, filename,
+call    0 never executed
+        -:  967:				  line_number, line_buffer, 0);
+        -:  968:		    }
+        -:  969:		  /*
+        -:  970:		     Compute the raw number of 1xN productions.
+        -:  971:		   */
+    #####:  972:		  i = day_of_year (d, m, y);
+call    0 never executed
+    #####:  973:		  j = day_of_year (tmp_d, tmp_m, tmp_y);
+call    0 never executed
+    #####:  974:		  if (i > j)
+branch  0 never executed
+branch  1 never executed
+        -:  975:		    {
+        -:  976:		      /*
+        -:  977:		         Swap the starting date of the event.
+        -:  978:		       */
+    #####:  979:		      int tmp = i;
+    #####:  980:		      i = j;
+    #####:  981:		      j = tmp;
+        -:  982:
+    #####:  983:		      d = tmp_d;
+    #####:  984:		      m = tmp_m;
+    #####:  985:		      y = tmp_y;
+        -:  986:		    }
+    #####:  987:		  productions = j - i;
+    #####:  988:		  if (productions)
+branch  0 never executed
+branch  1 never executed
+        -:  989:		    {
+        -:  990:		      /*
+        -:  991:		         Optimize the number of 1xN productions.
+        -:  992:		       */
+    #####:  993:		      if (i < day)
+branch  0 never executed
+branch  1 never executed
+        -:  994:			{
+    #####:  995:			  if (appears)
+branch  0 never executed
+branch  1 never executed
+        -:  996:			    {
+        -:  997:			      register int k;
+        -:  998:
+        -:  999:
+        -: 1000:			      /*
+        -: 1001:			         Advance to the first date in period if an "appears" coding is given.
+        -: 1002:			       */
+        -: 1003:			      do
+        -: 1004:				{
+    #####: 1005:				  k = i;
+    #####: 1006:				  (void) doy2date (i + appears + 1,
+call    0 never executed
+    #####: 1007:						   (days_of_february (y) ==
+call    0 never executed
+        -: 1008:						    29), &d, &m);
+    #####: 1009:				  i = day_of_year (d, m, y);
+call    0 never executed
+    #####: 1010:				  if (i == k)
+branch  0 never executed
+branch  1 never executed
+        -: 1011:				    /*
+        -: 1012:				       The date can't be advanced by an "appears" factor
+        -: 1013:				       because the computed date would be leaving the year bounds!
+        -: 1014:				     */
+    #####: 1015:				    i = day;
+        -: 1016:				}
+    #####: 1017:			      while (i < day);
+branch  0 never executed
+branch  1 never executed
+        -: 1018:			    }
+        -: 1019:			  else
+    #####: 1020:			    i = day;
+        -: 1021:			}
+        -: 1022:		      /*
+        -: 1023:		         Set a new starting date of the event.
+        -: 1024:		       */
+    #####: 1025:		      (void) doy2date (i, (days_of_february (y) == 29), &d,
+call    0 never executed
+call    1 never executed
+        -: 1026:				       &m);
+    #####: 1027:		      if (j > ed - 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1028:			j = ed - 1;
+    #####: 1029:		      productions = j - i;
+    #####: 1030:		      if (productions < 0)
+branch  0 never executed
+branch  1 never executed
+        -: 1031:			/*
+        -: 1032:			   Date doesn't match the period, exit the loop.
+        -: 1033:			 */
+    #####: 1034:			break;
+        -: 1035:		    }
+        -: 1036:		}
+        -: 1037:	      else
+        -: 1038:		{
+    #####: 1039:		  if (is_month_given)
+branch  0 never executed
+branch  1 never executed
+        -: 1040:		    /*
+        -: 1041:		       Error, simple textual weekday ranges (WW[W]#WW[W]) may
+        -: 1042:		       not have a specified final month like: WW[W]#MMWW[W].
+        -: 1043:		     */
+    #####: 1044:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -: 1045:			      line_buffer, 0);
+        -: 1046:		  /*
+        -: 1047:		     Compute the number of 1xN productions for simple weekdays!
+        -: 1048:		   */
+    #####: 1049:		  if (d > tmp_d)
+branch  0 never executed
+branch  1 never executed
+    #####: 1050:		    productions = DAY_MAX - d + tmp_d;
+        -: 1051:		  else
+    #####: 1052:		    productions = tmp_d - d;
+    #####: 1053:		  buf_d = d;
+        -: 1054:		}
+    #####: 1055:	      productions++;
+    #####: 1056:	      is_first = FALSE;
+        -: 1057:	    }
+        -: 1058:	}
+        1: 1059:      else if (is_first)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1060:	{
+        -: 1061:	  /*
+        -: 1062:	     Single date given (means no list of days AND no range of days).
+        -: 1063:	   */
+        1: 1064:	  if (!y)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1065:	    manage_leap_day (&d, &m, year, line_buffer, filename,
+call    0 never executed
+        -: 1066:			     line_number);
+        -: 1067:	  /*
+        -: 1068:	     Let's decode the "repeat for N days since..." field of a line
+        -: 1069:	     and/or the "for each N'th day since..." field of a line.
+        -: 1070:	   */
+        1: 1071:	  if (lptrs->repeat_part != (char *) NULL
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 1072:	      || lptrs->appears_part != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1073:	    {
+    #####: 1074:	      if (is_weekday_mode && !n)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1075:		/*
+        -: 1076:		   Error, "repeat" or "appears" coding given to a
+        -: 1077:		   simple weekday name (e.g.: YYYYMMWW[W]:10.3 ...).
+        -: 1078:		 */
+    #####: 1079:		my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -: 1080:			  line_buffer, 0);
+    #####: 1081:	      if (lptrs->repeat_part != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1082:		{
+    #####: 1083:		  repeat = get_number (&lptrs->repeat_part);
+call    0 never executed
+    #####: 1084:		  if (!repeat
+branch  0 never executed
+branch  1 never executed
+    #####: 1085:		      || (*lptrs->repeat_part
+branch  0 never executed
+branch  1 never executed
+    #####: 1086:			  && !isspace (*lptrs->repeat_part)
+branch  0 never executed
+branch  1 never executed
+    #####: 1087:			  && (*lptrs->repeat_part != RC_APPEARS_CHAR)))
+branch  0 never executed
+branch  1 never executed
+        -: 1088:		    /*
+        -: 1089:		       Error, invalid "repeat" field given.
+        -: 1090:		     */
+    #####: 1091:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -: 1092:			      line_buffer, 0);
+        -: 1093:		}
+    #####: 1094:	      if (lptrs->appears_part != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1095:		{
+    #####: 1096:		  appears = get_number (&lptrs->appears_part);
+call    0 never executed
+    #####: 1097:		  if (!appears
+branch  0 never executed
+branch  1 never executed
+    #####: 1098:		      || (*lptrs->appears_part
+branch  0 never executed
+branch  1 never executed
+    #####: 1099:			  && !isspace (*lptrs->appears_part)
+branch  0 never executed
+branch  1 never executed
+    #####: 1100:			  && (*lptrs->appears_part != RC_REPEAT_CHAR)))
+branch  0 never executed
+branch  1 never executed
+        -: 1101:		    /*
+        -: 1102:		       Error, invalid "appears" field given.
+        -: 1103:		     */
+    #####: 1104:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -: 1105:			      line_buffer, 0);
+        -: 1106:		}
+        -: 1107:	    }
+        1: 1108:	  if (!repeat)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1109:	    /*
+        -: 1110:	       Let's create either 1x1 or 1x2 productions of such a line by default.
+        -: 1111:	     */
+        1: 1112:	    productions = 1;
+        -: 1113:	  else
+        -: 1114:	    {
+        -: 1115:	      /*
+        -: 1116:	         Now we have the number of productions of this date!
+        -: 1117:	       */
+    #####: 1118:	      is_first = FALSE;
+    #####: 1119:	      if (appears)
+branch  0 never executed
+branch  1 never executed
+    #####: 1120:		appears--;
+        -: 1121:	      /*
+        -: 1122:	         Well, we have to use an unoptimized number of productions
+        -: 1123:	         in this case.
+        -: 1124:	       */
+    #####: 1125:	      productions = repeat;
+        -: 1126:	    }
+        -: 1127:	}
+        -: 1128:      /*
+        -: 1129:         If the "date"-part of the current line is valid,
+        -: 1130:         try to respect the current line.
+        -: 1131:       */
+        1: 1132:      if (y >= 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1133:	{
+        -: 1134:	  /*
+        -: 1135:	     Necessary pre-initializations of module local variables.
+        -: 1136:	   */
+        1: 1137:	  is_valid_date = TRUE;
+        1: 1138:	  is_2dvar = is_2easter = FALSE;
+        1: 1139:	  incr_year = decr_year = d_buf = m_buf = 0;
+        -: 1140:	  /*
+        -: 1141:	     Default is a 1x1 production of a line
+        -: 1142:	     (except some cases the `-c[]t' "tomorrow" flag is given).
+        -: 1143:	   */
+        1: 1144:	  print_twice = 1;
+        1: 1145:	  if (!is_range)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1146:	    {
+        1: 1147:	      if (d)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1148:		{
+        -: 1149:		  /*
+        -: 1150:		     If the special value "99" for a day is given,
+        -: 1151:		     set the day to the last day of the month.
+        -: 1152:		   */
+        1: 1153:		  if (d == 99)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1154:		    {
+    #####: 1155:		      if (m)
+branch  0 never executed
+branch  1 never executed
+        -: 1156:			{
+    #####: 1157:			  if (m == 2)
+branch  0 never executed
+branch  1 never executed
+    #####: 1158:			    d = days_of_february ((y) ? y : year);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1159:			  else
+    #####: 1160:			    d = dvec[m - 1];
+        -: 1161:			}
+        -: 1162:		      else
+        -: 1163:			{
+    #####: 1164:			  if (month == 2)
+branch  0 never executed
+branch  1 never executed
+    #####: 1165:			    d = days_of_february ((y) ? y : year);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1166:			  else
+    #####: 1167:			    d = dvec[month - 1];
+        -: 1168:			}
+        -: 1169:		    }
+        1: 1170:		  is_valid_date =
+call    0 returned 100%
+        1: 1171:		    valid_date (d, (m) ? m : month, (y) ? y : year);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -: 1172:		}
+        1: 1173:	      if (!is_valid_date)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1174:		{
+    #####: 1175:		  if ((!y
+branch  0 never executed
+branch  1 never executed
+    #####: 1176:		       && (((m == 2
+branch  0 never executed
+branch  1 never executed
+    #####: 1177:			     || (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 1178:				 && (month == 2)))
+branch  0 never executed
+branch  1 never executed
+    #####: 1179:			    && (d == 29))
+branch  0 never executed
+branch  1 never executed
+    #####: 1180:			   || (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 1181:			       && (d <= MONTH_LAST))))
+branch  0 never executed
+branch  1 never executed
+    #####: 1182:		      || (y && !m && (d <= MONTH_LAST)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1183:		    /*
+        -: 1184:		       If no month/year entry given, ignore that date.
+        -: 1185:		     */
+        -: 1186:		    ;
+        -: 1187:		  else
+        -: 1188:		    /*
+        -: 1189:		       Invalid date field given.
+        -: 1190:		     */
+    #####: 1191:		    my_error (ERR_INVALID_DATE_FIELD, filename, line_number,
+call    0 never executed
+        -: 1192:			      line_buffer, 0);
+        -: 1193:		}
+        -: 1194:	      /*
+        -: 1195:	         If a "N'th weekday of month" field is given, compute the according date.
+        -: 1196:	       */
+        1: 1197:	      if (n)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1198:		{
+    #####: 1199:		  nth_weekday_of_month (&d, &m, &y, &n, &is_weekday_mode);
+call    0 never executed
+    #####: 1200:		  if (!m)
+branch  0 never executed
+branch  1 never executed
+        -: 1201:		    /*
+        -: 1202:		       If the date is not computable (`m' is still 0), exit the loop.
+        -: 1203:		     */
+    #####: 1204:		    break;
+        -: 1205:		}
+        1: 1206:	      else if (!y)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1207:		{
+    #####: 1208:		  if (hwd
+branch  0 never executed
+branch  1 never executed
+    #####: 1209:		      && ((fiscal_month > MONTH_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1210:			  || ((hc == RC_EASTER_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 1211:			      && (day < DAY_MIN
+branch  0 never executed
+branch  1 never executed
+    #####: 1212:				  || ed > DAY_LAST + is_leap_year + 1))))
+branch  0 never executed
+branch  1 never executed
+        -: 1213:		    /*
+        -: 1214:		       FIXME!
+        -: 1215:		       Actually it's not possible to evaluate events, which
+        -: 1216:		       occur in every year and are set to a "N'th weekday"
+        -: 1217:		       displacement, and the mode of operation is generally
+        -: 1218:		       for fiscal years or for weeks, which have left the
+        -: 1219:		       bounds of the actual year and are related to the Easter
+        -: 1220:		       Sundays date, because Easter Sunday is on one date in
+        -: 1221:		       the current year and on another date in the other year!!
+        -: 1222:		       Grrr... seems I've to rework this for future releases
+        -: 1223:		       ...or will it be a feature???
+        -: 1224:		     */
+    #####: 1225:		    y = SPECIAL_VALUE;
+        -: 1226:		  else
+        -: 1227:		    {
+        -: 1228:		      /*
+        -: 1229:		         If @e... Easter holiday "date"-part is given, compute the according date.
+        -: 1230:		       */
+    #####: 1231:		      if (hc == RC_EASTER_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -: 1232:			{
+    #####: 1233:			  register int epy = knuth_easter_formula (year - 1);	/* Easter Sunday in previous year */
+call    0 never executed
+    #####: 1234:			  register int eay = knuth_easter_formula (year);	/* Easter Sunday in current year */
+call    0 never executed
+    #####: 1235:			  register int eny = knuth_easter_formula (year + 1);	/* Easter Sunday in next year */
+call    0 never executed
+        -: 1236:
+        -: 1237:
+    #####: 1238:			  if (fiscal_month > MONTH_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1239:			    {
+        -: 1240:			      /*
+        -: 1241:			         Precalculate the number of days in last month of fiscal year.
+        -: 1242:			       */
+    #####: 1243:			      if (fiscal_month - 1 == 2)
+branch  0 never executed
+branch  1 never executed
+    #####: 1244:				i = days_of_february (year + 1);
+call    0 never executed
+        -: 1245:			      else
+    #####: 1246:				i = dvec[fiscal_month - 2];
+        -: 1247:			      /*
+        -: 1248:			         Manage fiscal year request.
+        -: 1249:			       */
+    #####: 1250:			      if (year == EASTER_MIN - 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1251:				{
+    #####: 1252:				  j =
+call    0 never executed
+    #####: 1253:				    day_of_year (i, fiscal_month - 1,
+        -: 1254:						 year + 1);
+    #####: 1255:				  if (hn + eny <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1256:				    {
+    #####: 1257:				      if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1258:					  (hn, hwd, &d, &m, year + 1, EAster))
+    #####: 1259:					y = SPECIAL_VALUE;
+        -: 1260:				    }
+        -: 1261:				  else
+    #####: 1262:				    y = SPECIAL_VALUE;
+        -: 1263:				}
+        -: 1264:			      else
+        -: 1265:				{
+    #####: 1266:				  j =
+call    0 never executed
+    #####: 1267:				    day_of_year (DAY_MIN, fiscal_month, year);
+    #####: 1268:				  if (hn + eay >= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1269:				    {
+    #####: 1270:				      if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1271:					  (hn, hwd, &d, &m, year, EAster))
+    #####: 1272:					y = SPECIAL_VALUE;
+        -: 1273:				      else
+        -: 1274:					{
+        -: 1275:					  /*
+        -: 1276:					     Check whether this single event also occurs in the next year.
+        -: 1277:					   */
+    #####: 1278:					  j =
+call    0 never executed
+    #####: 1279:					    day_of_year (i, fiscal_month - 1,
+        -: 1280:							 year + 1);
+    #####: 1281:					  if (!is_3month_mode
+branch  0 never executed
+branch  1 never executed
+    #####: 1282:					      && !is_3month_mode2
+branch  0 never executed
+branch  1 never executed
+    #####: 1283:					      && (hn + eny <= j))
+branch  0 never executed
+branch  1 never executed
+        -: 1284:					    {
+        -: 1285:					      /*
+        -: 1286:					         We need a 1x2 production of the line.
+        -: 1287:					       */
+    #####: 1288:					      print_twice++;
+    #####: 1289:					      is_2easter = TRUE;
+        -: 1290:					    }
+        -: 1291:					}
+        -: 1292:				    }
+        -: 1293:				  else
+        -: 1294:				    {
+    #####: 1295:				      if (is_3month_mode || is_3month_mode2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1296:					{
+    #####: 1297:					  if (fiscal_month >= MONTH_MAX - 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1298:					    {
+    #####: 1299:					      j = dvec[MONTH_MIN - 1];
+    #####: 1300:					      if (fiscal_month == MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1301:						j +=
+    #####: 1302:						  days_of_february (year +
+call    0 never executed
+    #####: 1303:								    1) +
+        -: 1304:						  is_leap_year;
+    #####: 1305:					      if (hn + eny <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1306:						{
+    #####: 1307:						  if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1308:						      (hn, hwd, &d, &m,
+        -: 1309:						       year + 1, EAster))
+    #####: 1310:						    y = SPECIAL_VALUE;
+        -: 1311:						}
+        -: 1312:					      else
+    #####: 1313:						y = SPECIAL_VALUE;
+        -: 1314:					    }
+        -: 1315:					  else
+    #####: 1316:					    y = SPECIAL_VALUE;
+        -: 1317:					}
+        -: 1318:				      else
+        -: 1319:					{
+    #####: 1320:					  j =
+call    0 never executed
+    #####: 1321:					    day_of_year (i, fiscal_month - 1,
+        -: 1322:							 year + 1);
+    #####: 1323:					  if (hn + eny <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1324:					    {
+    #####: 1325:					      if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1326:						  (hn, hwd, &d, &m, year + 1,
+        -: 1327:						   EAster))
+    #####: 1328:						y = SPECIAL_VALUE;
+        -: 1329:					    }
+        -: 1330:					  else
+    #####: 1331:					    y = SPECIAL_VALUE;
+        -: 1332:					}
+        -: 1333:				    }
+        -: 1334:				}
+        -: 1335:			    }
+        -: 1336:			  else
+        -: 1337:			    /*
+        -: 1338:			       Manage `-c0w' request resp.,
+        -: 1339:			       `-cw' in case date is in first days of January.
+        -: 1340:			     */
+    #####: 1341:			  if (day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1342:			    {
+    #####: 1343:			      j =
+    #####: 1344:				DAY_LAST + (days_of_february (year - 1) ==
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1345:					    29);
+    #####: 1346:			      if ((hn + epy >= j + day) && (hn + epy <= j))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1347:				{
+    #####: 1348:				  if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1349:				      (hn, hwd, &d, &m, year - 1, EAster))
+    #####: 1350:				    y = SPECIAL_VALUE;
+        -: 1351:				}
+        -: 1352:			      else
+        -: 1353:				{
+    #####: 1354:				  if (hn + eay < ed)
+branch  0 never executed
+branch  1 never executed
+        -: 1355:				    {
+    #####: 1356:				      if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1357:					  (hn, hwd, &d, &m, year, EAster))
+    #####: 1358:					y = SPECIAL_VALUE;
+        -: 1359:				    }
+        -: 1360:				  else
+    #####: 1361:				    y = SPECIAL_VALUE;
+        -: 1362:				}
+        -: 1363:			    }
+        -: 1364:			  else
+        -: 1365:			    /*
+        -: 1366:			       Manage `-c99w' (`-c52w' | `-c53w') request resp.,
+        -: 1367:			       `-ct' or `-cw' in case date is in last days of December.
+        -: 1368:			     */
+    #####: 1369:			  if (ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1370:			    {
+    #####: 1371:			      j = DAY_LAST + is_leap_year;
+    #####: 1372:			      if ((hn + eay >= day) && (hn + eay <= j))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1373:				{
+    #####: 1374:				  if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1375:				      (hn, hwd, &d, &m, year, EAster))
+    #####: 1376:				    y = SPECIAL_VALUE;
+        -: 1377:				}
+        -: 1378:			      else
+        -: 1379:				{
+    #####: 1380:				  if (hn + eny < ed - j)
+branch  0 never executed
+branch  1 never executed
+        -: 1381:				    {
+    #####: 1382:				      if (!precomp_date
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1383:					  (hn, hwd, &d, &m, year + 1, EAster))
+    #####: 1384:					y = SPECIAL_VALUE;
+        -: 1385:				    }
+        -: 1386:				  else
+    #####: 1387:				    y = SPECIAL_VALUE;
+        -: 1388:				}
+        -: 1389:			    }
+        -: 1390:			  else
+        -: 1391:			    /*
+        -: 1392:			       All other "ordinary" requests...
+        -: 1393:			     */
+    #####: 1394:			  if (!precomp_date (hn, hwd, &d, &m, year, EAster))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1395:			    y = SPECIAL_VALUE;
+        -: 1396:			}
+        -: 1397:		      else
+        -: 1398:			/*
+        -: 1399:			   If @t|DVAR... "date"-part is given, compute the according date.
+        -: 1400:			 */
+    #####: 1401:		      if (islower (hc))
+branch  0 never executed
+branch  1 never executed
+        -: 1402:			{
+    #####: 1403:			  if (fiscal_month > MONTH_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1404:			    {
+    #####: 1405:			      register int date_dvar =
+call    0 never executed
+    #####: 1406:				day_of_year (d, m, year);
+        -: 1407:
+        -: 1408:
+        -: 1409:			      /*
+        -: 1410:			         Precalculate number of days in the last month of fiscal year.
+        -: 1411:			       */
+    #####: 1412:			      if (fiscal_month - 1 == 2)
+branch  0 never executed
+branch  1 never executed
+    #####: 1413:				i = days_of_february (year + 1);
+call    0 never executed
+        -: 1414:			      else
+    #####: 1415:				i = dvec[fiscal_month - 2];
+        -: 1416:			      /*
+        -: 1417:			         Manage fiscal year request.
+        -: 1418:			       */
+    #####: 1419:			      j = day_of_year (DAY_MIN, fiscal_month, year);
+call    0 never executed
+        -: 1420:			      /*
+        -: 1421:			         Buffer day and month.
+        -: 1422:			       */
+    #####: 1423:			      d_buf = d;
+    #####: 1424:			      m_buf = m;
+    #####: 1425:			      if (hn + date_dvar >= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1426:				{
+    #####: 1427:				  if (!precomp_date (hn, hwd, &d, &m, year,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####: 1428:						     (hc ==
+        -: 1429:						      RC_TODAY_CHAR) ? TOday :
+        -: 1430:						     DVar))
+    #####: 1431:				    y = SPECIAL_VALUE;
+        -: 1432:				  else
+        -: 1433:				    {
+        -: 1434:				      /*
+        -: 1435:				         Check whether this single event also occurs in next year.
+        -: 1436:				       */
+    #####: 1437:				      j =
+call    0 never executed
+    #####: 1438:					day_of_year (i, fiscal_month - 1,
+        -: 1439:						     year + 1);
+    #####: 1440:				      if (!is_3month_mode && !is_3month_mode2
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1441:					  && (hn + date_dvar <= j))
+branch  0 never executed
+branch  1 never executed
+        -: 1442:					{
+        -: 1443:					  /*
+        -: 1444:					     We need a 1x2 production of the line.
+        -: 1445:					   */
+    #####: 1446:					  print_twice++;
+    #####: 1447:					  is_2dvar = TRUE;
+        -: 1448:					}
+        -: 1449:				    }
+        -: 1450:				}
+        -: 1451:			      else
+        -: 1452:				{
+    #####: 1453:				  if (is_3month_mode || is_3month_mode2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1454:				    {
+    #####: 1455:				      if (fiscal_month >= MONTH_MAX - 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1456:					{
+    #####: 1457:					  j = dvec[MONTH_MIN - 1];
+    #####: 1458:					  if (fiscal_month == MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1459:					    j +=
+    #####: 1460:					      days_of_february (year + 1) +
+call    0 never executed
+        -: 1461:					      is_leap_year;
+    #####: 1462:					  if (hn + date_dvar <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1463:					    {
+    #####: 1464:					      if (!precomp_date
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 1465:						  (hn, hwd, &d, &m, year + 1,
+    #####: 1466:						   (hc ==
+        -: 1467:						    RC_TODAY_CHAR) ? TOday :
+        -: 1468:						   DVar))
+    #####: 1469:						y = SPECIAL_VALUE;
+        -: 1470:					    }
+        -: 1471:					  else
+    #####: 1472:					    y = SPECIAL_VALUE;
+        -: 1473:					}
+        -: 1474:				      else
+    #####: 1475:					y = SPECIAL_VALUE;
+        -: 1476:				    }
+        -: 1477:				  else
+        -: 1478:				    {
+    #####: 1479:				      j =
+call    0 never executed
+    #####: 1480:					day_of_year (i, fiscal_month - 1,
+        -: 1481:						     year + 1);
+    #####: 1482:				      if (hn + date_dvar <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1483:					{
+    #####: 1484:					  if (!precomp_date
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 1485:					      (hn, hwd, &d, &m, year + 1,
+    #####: 1486:					       (hc ==
+        -: 1487:						RC_TODAY_CHAR) ? TOday :
+        -: 1488:					       DVar))
+    #####: 1489:					    y = SPECIAL_VALUE;
+        -: 1490:					}
+        -: 1491:				      else
+    #####: 1492:					y = SPECIAL_VALUE;
+        -: 1493:				    }
+        -: 1494:				}
+        -: 1495:			    }
+        -: 1496:			  else
+        -: 1497:			    /*
+        -: 1498:			       All other "ordinary" requests...
+        -: 1499:			     */
+    #####: 1500:			  if (!precomp_date (hn, hwd, &d, &m, year,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####: 1501:					       (hc ==
+        -: 1502:						  RC_TODAY_CHAR) ? TOday :
+        -: 1503:					       DVar))
+    #####: 1504:			    y = SPECIAL_VALUE;
+        -: 1505:			}
+        -: 1506:		      else
+        -: 1507:			/*
+        -: 1508:			   If a 0*d|wN[WW[W]] "date"-part is given, compute the according date.
+        -: 1509:			 */
+    #####: 1510:		      if (hc == 'D' || hc == 'W')
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1511:			{
+    #####: 1512:			  y = year;
+    #####: 1513:			  if (precomp_nth_wd (hn, hwd, &hn, &d, &m, &y,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####: 1514:					      (hc == 'D') ? DAy : WEek))
+        -: 1515:			    {
+    #####: 1516:			      register int date_dvar = day_of_year (d, m, y);
+call    0 never executed
+        -: 1517:
+        -: 1518:
+    #####: 1519:			      if (fiscal_month > MONTH_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1520:				{
+        -: 1521:				  /*
+        -: 1522:				     Precalculate the number of days of the last month of fiscal year.
+        -: 1523:				   */
+    #####: 1524:				  if (fiscal_month - 1 == 2)
+branch  0 never executed
+branch  1 never executed
+    #####: 1525:				    i = days_of_february (year + 1);
+call    0 never executed
+        -: 1526:				  else
+    #####: 1527:				    i = dvec[fiscal_month - 2];
+        -: 1528:				  /*
+        -: 1529:				     Manage fiscal year request.
+        -: 1530:				   */
+    #####: 1531:				  j =
+call    0 never executed
+    #####: 1532:				    day_of_year (DAY_MIN, fiscal_month, year);
+    #####: 1533:				  if (date_dvar >= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1534:				    {
+        -: 1535:				      /*
+        -: 1536:				         Check whether this single event also occurs in the next year
+        -: 1537:				       */
+    #####: 1538:				      j =
+call    0 never executed
+    #####: 1539:					day_of_year (i, fiscal_month - 1,
+        -: 1540:						     year + 1);
+    #####: 1541:				      if (!is_3month_mode && !is_3month_mode2
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1542:					  && (date_dvar <= j))
+branch  0 never executed
+branch  1 never executed
+        -: 1543:					{
+        -: 1544:					  /*
+        -: 1545:					     Buffer day and month.
+        -: 1546:					   */
+    #####: 1547:					  d_buf = d;
+    #####: 1548:					  m_buf = m;
+        -: 1549:					  /*
+        -: 1550:					     We need a 1x2 production of the line.
+        -: 1551:					   */
+    #####: 1552:					  print_twice++;
+    #####: 1553:					  is_2dvar = TRUE;
+        -: 1554:					}
+        -: 1555:				    }
+        -: 1556:				  else
+        -: 1557:				    {
+    #####: 1558:				      if (is_3month_mode || is_3month_mode2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1559:					{
+    #####: 1560:					  if (fiscal_month >= MONTH_MAX - 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1561:					    {
+    #####: 1562:					      j = dvec[MONTH_MIN - 1];
+    #####: 1563:					      if (fiscal_month == MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1564:						j +=
+    #####: 1565:						  days_of_february (year +
+call    0 never executed
+    #####: 1566:								    1) +
+        -: 1567:						  is_leap_year;
+    #####: 1568:					      if (date_dvar <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1569:						{
+    #####: 1570:						  y++;
+    #####: 1571:						  (void) precomp_nth_wd (hn,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1572:									 hwd,
+        -: 1573:									 &hn,
+        -: 1574:									 &d,
+        -: 1575:									 &m,
+        -: 1576:									 &y,
+        -: 1577:									 (hc
+    #####: 1578:									  ==
+        -: 1579:									  'D')
+        -: 1580:									 ? DAy
+        -: 1581:									 :
+        -: 1582:									 WEek);
+        -: 1583:						}
+        -: 1584:					      else
+    #####: 1585:						y = SPECIAL_VALUE;
+        -: 1586:					    }
+        -: 1587:					  else
+    #####: 1588:					    y = SPECIAL_VALUE;
+        -: 1589:					}
+        -: 1590:				      else
+        -: 1591:					{
+    #####: 1592:					  j =
+call    0 never executed
+    #####: 1593:					    day_of_year (i, fiscal_month - 1,
+        -: 1594:							 year + 1);
+    #####: 1595:					  if (date_dvar <= j)
+branch  0 never executed
+branch  1 never executed
+        -: 1596:					    {
+    #####: 1597:					      y++;
+    #####: 1598:					      (void) precomp_nth_wd (hn, hwd,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1599:								     &hn, &d,
+        -: 1600:								     &m, &y,
+    #####: 1601:								     (hc ==
+        -: 1602:								      'D') ?
+        -: 1603:								     DAy :
+        -: 1604:								     WEek);
+        -: 1605:					    }
+        -: 1606:					  else
+    #####: 1607:					    y = SPECIAL_VALUE;
+        -: 1608:					}
+        -: 1609:				    }
+        -: 1610:				}
+        -: 1611:			    }
+        -: 1612:			}
+        -: 1613:		    }
+        -: 1614:		}
+        -: 1615:	    }
+        -: 1616:	  /*
+        -: 1617:	     Check whether this current line must be displayed.
+        -: 1618:	   */
+        1: 1619:	  if (y >= 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1620:	    {
+        1: 1621:	      if (!is_range && (repeat > 1))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####: 1622:		is_range = TRUE;
+        1: 1623:	      if (date_matches_period (&print_twice, day, ed, wd))
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -: 1624:		/*
+        -: 1625:		   Now insert this current line into `rc_elems_table[]'
+        -: 1626:		   (lines with no "text"-part are valid and are displayed).
+        -: 1627:		 */
+        1: 1628:		insert_line_into_table (line_buffer, filename, line_number,
+call    0 returned 100%
+        -: 1629:					rc_elems, len_date, print_twice);
+        -: 1630:	    }
+        -: 1631:	}
+        -: 1632:      /*
+        -: 1633:         We have to restore some elements of the date and
+        -: 1634:         to precompute the next date if a range of days is given!
+        -: 1635:       */
+        1: 1636:      if (lineptrs->day_range || repeat)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -: 1637:	{
+    #####: 1638:	  if (is_range)
+branch  0 never executed
+branch  1 never executed
+        -: 1639:	    {
+    #####: 1640:	      if (m)
+branch  0 never executed
+branch  1 never executed
+        -: 1641:		{
+    #####: 1642:		  if (y <= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1643:		    y = year;
+    #####: 1644:		  if (appears)
+branch  0 never executed
+branch  1 never executed
+        -: 1645:		    {
+        -: 1646:		      /*
+        -: 1647:		         Advance to the next date in period if an "appears" coding is given.
+        -: 1648:		       */
+    #####: 1649:		      i = day_of_year (d, m, y);
+call    0 never executed
+    #####: 1650:		      (void) doy2date (i + appears + 1,
+call    0 never executed
+    #####: 1651:				       (days_of_february (y) == 29), &d, &m);
+call    0 never executed
+    #####: 1652:		      productions -= appears;
+        -: 1653:		    }
+        -: 1654:		  else
+    #####: 1655:		    (void) next_date (&d, &m, &y);
+call    0 never executed
+        -: 1656:		  /*
+        -: 1657:		     If we evaluate a list of days and found "repeat" or "appears" fields
+        -: 1658:		     in it and made all necessary productions, we must manage this
+        -: 1659:		     explicitly by setting `is_range' to FALSE and `productions'
+        -: 1660:		     to any value greater 1, otherwise the next element of the
+        -: 1661:		     list would not be managed!
+        -: 1662:		   */
+    #####: 1663:		  if (lineptrs->day_list
+branch  0 never executed
+branch  1 never executed
+    #####: 1664:		      && (productions <= 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1665:		      && (lptrs->day_part != (char *) NULL))
+branch  0 never executed
+branch  1 never executed
+        -: 1666:		    {
+    #####: 1667:		      productions = 2;
+    #####: 1668:		      is_range = FALSE;
+        -: 1669:		    }
+        -: 1670:		}
+        -: 1671:	      else
+        -: 1672:		/*
+        -: 1673:		   Such a date is not computable.
+        -: 1674:		 */
+    #####: 1675:	      if (lineptrs->day_list)
+branch  0 never executed
+branch  1 never executed
+        -: 1676:		{
+        -: 1677:		  /*
+        -: 1678:		     The list of days still contains elements.
+        -: 1679:		   */
+    #####: 1680:		  if (lptrs->day_part != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1681:		    {
+    #####: 1682:		      productions = 2;
+    #####: 1683:		      is_range = FALSE;
+        -: 1684:		    }
+        -: 1685:		  else
+        -: 1686:		    /*
+        -: 1687:		       We are at the end of a list of days.
+        -: 1688:		     */
+    #####: 1689:		    break;
+        -: 1690:		}
+        -: 1691:	    }
+        -: 1692:	  else
+        -: 1693:	    {
+    #####: 1694:	      if (appears)
+branch  0 never executed
+branch  1 never executed
+        -: 1695:		{
+        -: 1696:		  /*
+        -: 1697:		     Advance to the next date in period if an "appears" coding is given.
+        -: 1698:		   */
+    #####: 1699:		  productions -= appears;
+    #####: 1700:		  if (productions > 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1701:		    for (i = 0; i <= appears; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1702:		      if (++buf_d > DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1703:			buf_d = DAY_MIN;
+        -: 1704:		}
+    #####: 1705:	      else if (++buf_d > DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1706:		buf_d = DAY_MIN;
+    #####: 1707:	      d = buf_d;
+    #####: 1708:	      m = buf_m;
+    #####: 1709:	      y = buf_y;
+        -: 1710:	    }
+        -: 1711:	}
+        1: 1712:      else if (lineptrs->day_list && (lptrs->day_part == (char *) NULL))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+        -: 1713:	/*
+        -: 1714:	   We have already managed the last element of a list of days.
+        -: 1715:	 */
+    #####: 1716:	break;
+        -: 1717:    }
+        1: 1718:  while (--productions > 0);
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        1: 1719:  month = tmp_month;
+        1: 1720:  if (lineptrs->repeat_part != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1721:    free (lineptrs->repeat_part);
+        1: 1722:  if (lineptrs->appears_part != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1723:    free (lineptrs->appears_part);
+        1: 1724:}
+        -: 1725:
+        -: 1726:
+        -: 1727:
+        -: 1728:static Bool
+function date_matches_period called 1 returned 100% blocks executed 8%
+        1: 1729:date_matches_period (print_twice, day, ed, wd)
+        -: 1730:     int *print_twice;
+        -: 1731:     int day;
+        -: 1732:     int ed;
+        -: 1733:     const int wd;
+        -: 1734:/*!
+        -: 1735:   Checks if a given date (module global variables `d' for the day, `m' for
+        -: 1736:     the month and `y' for the year) matches a given period, which starts at
+        -: 1737:     absolute day of year `day' and ends at absolute day of year `ed' (the
+        -: 1738:     actual weekday is given in `wd').  If the given date matches the
+        -: 1739:     specified period, return TRUE, otherwise FALSE.
+        -: 1740:*/
+        -: 1741:{
+        -: 1742:  register int i;
+        -: 1743:  register int j;
+        -: 1744:  auto int dd;
+        -: 1745:  auto int mm;
+        -: 1746:  auto int yy;
+        1: 1747:  auto Bool print_line = FALSE;
+        1: 1748:  auto Bool is_valid_date = TRUE;
+        -: 1749:
+        -: 1750:
+        1: 1751:  if (is_date_given
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 1752:      || ((year != act_year)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1753:	  && (day > 0))
+branch  0 never executed
+branch  1 never executed
+        1: 1754:      || ((month && (month != act_month)) && (year == act_year)))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 never executed
+branch  5 never executed
+        -: 1755:    {
+        -: 1756:      /*
+        -: 1757:         NOT in simple month-/year mode (an explicit date is given in command line):
+        -: 1758:         Manage `-c[]' arguments.
+        -: 1759:       */
+    #####: 1760:      if (d && !is_weekday_mode)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1761:	{
+    #####: 1762:	  incr_year = ((fiscal_month > MONTH_MIN)
+    #####: 1763:		       && (m < fiscal_month) && (!y || y == year + 1));
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+    #####: 1764:	  if (is_date_given && month && !changed_month && !m)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 1765:	    {
+    #####: 1766:	      m = month;
+    #####: 1767:	      is_valid_date = valid_date (d, m, (y) ? y : year);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1768:	    }
+    #####: 1769:	  if (is_valid_date && (!y || y - incr_year == year) && m && d)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+        -: 1770:	    {
+    #####: 1771:	      if (month && !changed_month)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1772:		{
+    #####: 1773:		  if (m == month)
+branch  0 never executed
+branch  1 never executed
+        -: 1774:		    {
+    #####: 1775:		      if (!is_leap_year && (m == 2) && (d == 29))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1776:			;	/* If the year is no leap year, ignore that date */
+        -: 1777:		      else
+    #####: 1778:			print_line = TRUE;
+        -: 1779:		    }
+        -: 1780:		}
+        -: 1781:	      else
+        -: 1782:		{
+    #####: 1783:		  if (fiscal_month > MONTH_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1784:		    {
+        -: 1785:		      /*
+        -: 1786:		         Respect fiscal years!
+        -: 1787:		       */
+    #####: 1788:		      if ((incr_year
+branch  0 never executed
+branch  1 never executed
+    #####: 1789:			   && (year < YEAR_MAX))
+branch  0 never executed
+branch  1 never executed
+    #####: 1790:			  || ((m >= fiscal_month) && (!y || y == year)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1791:			{
+    #####: 1792:			  if ((days_of_february (year + incr_year) == 28)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1793:			      && (m == 2) && (d == 29))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1794:			    ;	/* If the year is no leap year, ignore that date */
+        -: 1795:			  else
+    #####: 1796:			    print_line = TRUE;
+        -: 1797:			}
+        -: 1798:		    }
+        -: 1799:		  else
+        -: 1800:		    /*
+        -: 1801:		       Respect non fiscal years!
+        -: 1802:		     */
+    #####: 1803:		  if (!is_leap_year && (m == 2) && (d == 29))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1804:		    ;		/* If the year is no leap year, ignore that date */
+        -: 1805:		  else
+    #####: 1806:		    print_line = TRUE;
+        -: 1807:		}
+        -: 1808:	    }
+        -: 1809:	}
+        -: 1810:    }
+        -: 1811:  else
+        -: 1812:    {
+        -: 1813:      /*
+        -: 1814:         Simple month-/year mode (NO explicit date is given in command line):
+        -: 1815:         Manage `-c[]w|m|y[+|-]' arguments.
+        -: 1816:       */
+        1: 1817:      if ((rc_period_flag
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 1818:	   || rc_week_flag
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 1819:	   || rc_month_flag
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 1820:	   || rc_year_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1821:	  && !is_date_given
+branch  0 never executed
+branch  1 never executed
+    #####: 1822:	  && (!y
+branch  0 never executed
+branch  1 never executed
+    #####: 1823:	      || y == year
+branch  0 never executed
+branch  1 never executed
+    #####: 1824:	      || (rc_week_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1825:		  && (((year + 1 <= YEAR_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1826:		       && (ed > DAY_LAST + is_leap_year + 1))
+branch  0 never executed
+branch  1 never executed
+    #####: 1827:		      || ((year - 1 >= YEAR_MIN) && (day < DAY_MIN))))))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1828:	{
+        -: 1829:	  register int td;
+        -: 1830:
+        -: 1831:
+    #####: 1832:	  if (m && d)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1833:	    {
+    #####: 1834:	      if (rc_week_flag && !y && (m != month))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1835:		{
+    #####: 1836:		  if ((ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1837:		      && !adate_set
+branch  0 never executed
+branch  1 never executed
+    #####: 1838:		      && (rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1839:			  || (!rc_forwards_flag && !rc_backwards_flag)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1840:		    y = year + 1;
+        -: 1841:		  else
+    #####: 1842:		    if ((day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1843:			&& !adate_set
+branch  0 never executed
+branch  1 never executed
+    #####: 1844:			&& (rc_backwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1845:			    || (!rc_forwards_flag && !rc_backwards_flag)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1846:		    y = year - 1;
+        -: 1847:		}
+    #####: 1848:	      if (y < YEAR_MIN || y > YEAR_MAX)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1849:		{
+    #####: 1850:		  if (adate_set)
+branch  0 never executed
+branch  1 never executed
+        -: 1851:		    {
+    #####: 1852:		      if (m == month)
+branch  0 never executed
+branch  1 never executed
+        -: 1853:			{
+    #####: 1854:			  if (day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1855:			    y = year - 1;
+        -: 1856:			}
+        -: 1857:		      else
+        -: 1858:			{
+    #####: 1859:			  if (ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1860:			    y = year + 1;
+        -: 1861:			}
+    #####: 1862:		      if (y < YEAR_MIN || y > YEAR_MAX)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1863:			y = year;
+        -: 1864:		    }
+        -: 1865:		  else
+    #####: 1866:		    y = year;
+        -: 1867:		}
+        -: 1868:	    }
+    #####: 1869:	  if ((rc_week_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1870:	       && is_weekday_mode) || (!is_weekday_mode && (y || m || d)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+        -: 1871:	    {
+        -: 1872:	      /*
+        -: 1873:	         Respect short day name entry YYYYMMWW[W] ... (WW[W]==short dayname).
+        -: 1874:	       */
+    #####: 1875:	      if (rc_week_flag && is_weekday_mode)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1876:		{
+        -: 1877:		  static struct
+        -: 1878:		  {
+        -: 1879:		    char day[DAY_MAX];
+        -: 1880:		    char dst[DAY_MAX];
+        -: 1881:		  } wday_list;
+        -: 1882:		  static Bool fill_wday_list = FALSE;
+        -: 1883:
+        -: 1884:
+    #####: 1885:		  j = 0;
+    #####: 1886:		  if (!fill_wday_list)
+branch  0 never executed
+branch  1 never executed
+        -: 1887:		    {
+    #####: 1888:		      if (rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1889:			  || (!rc_forwards_flag && !rc_backwards_flag))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1890:			{
+    #####: 1891:			  i = wd;
+        -: 1892:			  LOOP
+        -: 1893:			  {
+    #####: 1894:			    wday_list.day[i - 1] = (char) i;
+    #####: 1895:			    wday_list.dst[i - 1] = (char) j++;
+    #####: 1896:			    i++;
+    #####: 1897:			    if (i > DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1898:			      i = DAY_MIN;
+    #####: 1899:			    if (i == start_day)
+branch  0 never executed
+branch  1 never executed
+    #####: 1900:			      break;
+        -: 1901:			  }
+        -: 1902:			}
+    #####: 1903:		      j = 0;
+    #####: 1904:		      if (rc_backwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1905:			  || (!rc_forwards_flag && !rc_backwards_flag))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1906:			{
+    #####: 1907:			  i = wd;
+        -: 1908:			  LOOP
+        -: 1909:			  {
+    #####: 1910:			    if (i < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1911:			      i = DAY_MAX;
+    #####: 1912:			    wday_list.day[i - 1] = (char) i;
+    #####: 1913:			    wday_list.dst[i - 1] = (char) ++j;
+    #####: 1914:			    if (i == start_day)
+branch  0 never executed
+branch  1 never executed
+    #####: 1915:			      break;
+    #####: 1916:			    i--;
+        -: 1917:			  }
+        -: 1918:			}
+    #####: 1919:		      fill_wday_list = TRUE;
+        -: 1920:		    }
+    #####: 1921:		  if (wday_list.day[d - 1])
+branch  0 never executed
+branch  1 never executed
+        -: 1922:		    {
+    #####: 1923:		      yy = year;
+    #####: 1924:		      if (rc_week_year_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 1925:			{
+    #####: 1926:			  j = day;
+    #####: 1927:			  if (day < 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1928:			    {
+    #####: 1929:			      yy = year - 1;
+    #####: 1930:			      j += (DAY_LAST + (days_of_february (yy) == 29));
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1931:			    }
+    #####: 1932:			  (void) doy2date (j, (days_of_february (yy) == 29),
+call    0 never executed
+call    1 never executed
+        -: 1933:					   &dd, &mm);
+        -: 1934:			}
+        -: 1935:		      else
+        -: 1936:			{
+    #####: 1937:			  dd = act_day;
+    #####: 1938:			  mm = month;
+        -: 1939:			}
+    #####: 1940:		      if (rc_forwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1941:			for (i = 0; i < wday_list.dst[d - 1]; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1942:			  (void) next_date (&dd, &mm, &yy);
+call    0 never executed
+    #####: 1943:		      else if (rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1944:			for (i = 1; i < wday_list.dst[d - 1]; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1945:			  (void) prev_date (&dd, &mm, &yy);
+call    0 never executed
+        -: 1946:		      else
+        -: 1947:			{
+    #####: 1948:			  i = SYEAR (d, start_day);
+branch  0 never executed
+branch  1 never executed
+    #####: 1949:			  j = SYEAR (wd, start_day);
+branch  0 never executed
+branch  1 never executed
+    #####: 1950:			  if (i - j <= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1951:			    for (i = 1; i < wday_list.dst[d - 1]; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1952:			      (void) prev_date (&dd, &mm, &yy);
+call    0 never executed
+        -: 1953:			  else
+    #####: 1954:			    for (i = 0; i < wday_list.dst[d - 1]; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1955:			      (void) next_date (&dd, &mm, &yy);
+call    0 never executed
+        -: 1956:			}
+    #####: 1957:		      if ((!m || m == mm) && (!y || y == yy))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 1958:			{
+    #####: 1959:			  d = dd;
+    #####: 1960:			  m = mm;
+    #####: 1961:			  y = yy;
+        -: 1962:			}
+        -: 1963:		      else
+    #####: 1964:			y = SPECIAL_VALUE;
+        -: 1965:		    }
+        -: 1966:		  else
+    #####: 1967:		    y = SPECIAL_VALUE;
+        -: 1968:		}
+    #####: 1969:	      if (rc_week_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1970:		  && (y >= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1971:		  && (day < DAY_MIN || ed > DAY_LAST + is_leap_year + 1))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1972:		{
+    #####: 1973:		  if ((rc_backwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1974:		       || (!rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1975:			   && !rc_backwards_flag))
+branch  0 never executed
+branch  1 never executed
+    #####: 1976:		      && (y == year - 1) && m && d)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1977:		    {
+    #####: 1978:		      ed = DAY_LAST + (days_of_february (y) == 29);
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1979:		      day = ed + day;
+    #####: 1980:		      td = day_of_year (d, m, y);
+call    0 never executed
+    #####: 1981:		      if ((td <= ed) && (td >= day))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1982:			{
+    #####: 1983:			  decr_year = 1;
+    #####: 1984:			  print_line = TRUE;
+        -: 1985:			}
+        -: 1986:		    }
+        -: 1987:		  else
+    #####: 1988:		    if ((rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1989:			 || (!rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1990:			     && !rc_backwards_flag))
+branch  0 never executed
+branch  1 never executed
+    #####: 1991:			&& (y == year + 1) && m && d)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1992:		    {
+    #####: 1993:		      td = day_of_year (d, m, y) + DAY_LAST + is_leap_year;
+call    0 never executed
+    #####: 1994:		      if ((td < ed) && (td >= day))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1995:			{
+    #####: 1996:			  incr_year = 1;
+    #####: 1997:			  print_line = TRUE;
+        -: 1998:			}
+        -: 1999:		    }
+        -: 2000:		  else
+        -: 2001:		    {
+    #####: 2002:		      if ((y == year
+branch  0 never executed
+branch  1 never executed
+    #####: 2003:			   || ((y == year - 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2004:			       && !rc_forwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2005:			   || ((y == year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2006:			       && !rc_backwards_flag)) && m && d)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2007:			{
+    #####: 2008:			  td = day_of_year (d, m, y);
+call    0 never executed
+    #####: 2009:			  if ((td < ed) && (td >= day))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2010:			    print_line = TRUE;
+        -: 2011:			}
+    #####: 2012:		      else if (d)
+branch  0 never executed
+branch  1 never executed
+        -: 2013:			{
+    #####: 2014:			  td = 0;
+    #####: 2015:			  m = month;
+    #####: 2016:			  if (day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 2017:			    {
+    #####: 2018:			      if (!y || y == year || y == year - 1)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2019:				{
+    #####: 2020:				  if (adate_set)
+branch  0 never executed
+branch  1 never executed
+    #####: 2021:				    i = dvec[MONTH_MAX - 1] + day - 1;
+        -: 2022:				  else
+    #####: 2023:				    i =
+    #####: 2024:				      dvec[MONTH_MAX - 1] + act_day -
+    #####: 2025:				      (SYEAR (wd, start_day));
+branch  0 never executed
+branch  1 never executed
+    #####: 2026:				  if (d > i)
+branch  0 never executed
+branch  1 never executed
+        -: 2027:				    {
+    #####: 2028:				      m = MONTH_MAX;
+    #####: 2029:				      if (!y)
+branch  0 never executed
+branch  1 never executed
+    #####: 2030:					y = year - 1;
+    #####: 2031:				      if (y == year)
+branch  0 never executed
+branch  1 never executed
+    #####: 2032:					td = day_of_year (d, m, year);
+call    0 never executed
+        -: 2033:				      else
+        -: 2034:					{
+    #####: 2035:					  ed =
+    #####: 2036:					    DAY_LAST +
+branch  0 never executed
+branch  1 never executed
+    #####: 2037:					    (days_of_february (y) == 29);
+call    0 never executed
+    #####: 2038:					  day = ed + day;
+    #####: 2039:					  td = day_of_year (d, m, y);
+call    0 never executed
+    #####: 2040:					  decr_year = 1;
+        -: 2041:					}
+        -: 2042:				    }
+    #####: 2043:				  else if (!y || y == year)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2044:				    {
+    #####: 2045:				      if (adate_set)
+branch  0 never executed
+branch  1 never executed
+        -: 2046:					{
+    #####: 2047:					  m = MONTH_MIN;
+    #####: 2048:					  td = day_of_year (d, m, year) + 1;
+call    0 never executed
+        -: 2049:					}
+        -: 2050:				      else
+    #####: 2051:					td = day_of_year (d, m, year) + 1;
+call    0 never executed
+        -: 2052:				    }
+        -: 2053:				  else
+    #####: 2054:				    td = ed + 1;
+    #####: 2055:				  if ((td <= ed) && (td >= day))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2056:				    print_line = TRUE;
+        -: 2057:				}
+        -: 2058:			    }
+    #####: 2059:			  else if (!y || y == year || y == year + 1)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2060:			    {
+    #####: 2061:			      i = act_day - (SYEAR (wd, start_day));
+branch  0 never executed
+branch  1 never executed
+    #####: 2062:			      if (d < i)
+branch  0 never executed
+branch  1 never executed
+        -: 2063:				{
+    #####: 2064:				  m = MONTH_MIN;
+    #####: 2065:				  if (!y)
+branch  0 never executed
+branch  1 never executed
+    #####: 2066:				    y = year + 1;
+    #####: 2067:				  if (y == year + 1)
+branch  0 never executed
+branch  1 never executed
+        -: 2068:				    {
+    #####: 2069:				      td =
+    #####: 2070:					day_of_year (d, m,
+call    0 never executed
+    #####: 2071:						     y) + DAY_LAST +
+        -: 2072:					is_leap_year;
+    #####: 2073:				      incr_year = 1;
+        -: 2074:				    }
+        -: 2075:				}
+    #####: 2076:			      else if (!y || y == year)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2077:				td = day_of_year (d, m, year);
+call    0 never executed
+    #####: 2078:			      if ((td < ed) && (td >= day))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2079:				print_line = TRUE;
+        -: 2080:			    }
+        -: 2081:			}
+        -: 2082:		    }
+        -: 2083:		}
+    #####: 2084:	      else if (y >= 0 || y == year)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2085:		{
+    #####: 2086:		  if (((rc_month_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2087:			|| rc_week_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2088:			|| rc_period_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2089:		       && m
+branch  0 never executed
+branch  1 never executed
+    #####: 2090:		       && !d)
+branch  0 never executed
+branch  1 never executed
+    #####: 2091:		      || ((rc_month_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2092:			   || rc_week_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2093:			  && !m
+branch  0 never executed
+branch  1 never executed
+    #####: 2094:			  && !d)
+branch  0 never executed
+branch  1 never executed
+    #####: 2095:		      || ((rc_year_flag || rc_period_list) && (!m || !d)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 2096:		    ;		/* Void, ignore such entries! */
+        -: 2097:		  else
+        -: 2098:		    {
+    #####: 2099:		      register int mmm = m;
+        -: 2100:
+        -: 2101:
+    #####: 2102:		      if (!y)
+branch  0 never executed
+branch  1 never executed
+    #####: 2103:			y = year;
+    #####: 2104:		      if (!m)
+branch  0 never executed
+branch  1 never executed
+        -: 2105:			{
+    #####: 2106:			  mmm = m = month;
+    #####: 2107:			  (void) doy2date (day, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####: 2108:			  if ((dd > d) && (mm == m))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2109:			    m++;
+    #####: 2110:			  else if ((dd < d) && (mm < m))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2111:			    m--;
+        -: 2112:			}
+        -: 2113:		      /*
+        -: 2114:		         If a valid date is given, respect it.
+        -: 2115:		       */
+    #####: 2116:		      if (valid_date (d, m, y))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 2117:			{
+    #####: 2118:			  td = day_of_year (d, m, y);
+call    0 never executed
+    #####: 2119:			  if ((td >= day) && (td < ed))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2120:			    print_line = TRUE;
+        -: 2121:			  else
+    #####: 2122:			    m = mmm;
+        -: 2123:			}
+        -: 2124:		      else
+    #####: 2125:			m = mmm;
+        -: 2126:		    }
+        -: 2127:		}
+        -: 2128:	    }
+        -: 2129:	}
+        -: 2130:      else
+        1: 2131:	if (!rc_period_flag
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2132:	    && !rc_week_flag && !rc_month_flag && !rc_year_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        -: 2133:	{
+        -: 2134:	  /*
+        -: 2135:	     Simple month-/year month mode (NO explicit date is given in command line):
+        -: 2136:	     Manage `-c[]' or `-c[]t' arguments.
+        -: 2137:	   */
+        1: 2138:	  dd = act_day;
+        1: 2139:	  mm = month;
+        1: 2140:	  yy = year;
+        1: 2141:	  if (rc_tomorrow_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2142:	    (void) next_date (&dd, &mm, &yy);
+call    0 never executed
+        1: 2143:	  if ((!y
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2144:	       || y == year
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2145:	       || (rc_tomorrow_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2146:		   && (ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2147:		   && (y == year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2148:		   && (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 2149:		       || m == mm)))
+branch  0 never executed
+branch  1 never executed
+        1: 2150:	      && (!m
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2151:		  || m == month
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2152:		  || (rc_tomorrow_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2153:		      && (m == mm)
+branch  0 never executed
+branch  1 never executed
+    #####: 2154:		      && (!y
+branch  0 never executed
+branch  1 never executed
+    #####: 2155:			  || ((ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2156:			      && (y == year + 1))
+branch  0 never executed
+branch  1 never executed
+    #####: 2157:			  || ((ed <= DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2158:			      && (y == year))))))
+branch  0 never executed
+branch  1 never executed
+        -: 2159:	    {
+        1: 2160:	      if (is_weekday_mode)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2161:		{
+        -: 2162:		  /*
+        -: 2163:		     Respect short day name entry YYYYMMWW[W] ... (WW[W]==short dayname).
+        -: 2164:		   */
+    #####: 2165:		  i = weekday_of_date (act_day, month, year);
+call    0 never executed
+    #####: 2166:		  j = 0;
+    #####: 2167:		  if (rc_tomorrow_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2168:		    j = (d == weekday_of_date (dd, mm, yy));
+call    0 never executed
+    #####: 2169:		  if (((d == i)
+branch  0 never executed
+branch  1 never executed
+    #####: 2170:		       && (ed <= DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2171:		       && (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 2172:			   || m == month))
+branch  0 never executed
+branch  1 never executed
+    #####: 2173:		      || ((d == i)
+branch  0 never executed
+branch  1 never executed
+    #####: 2174:			  && ((ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2175:			      && ((!y
+branch  0 never executed
+branch  1 never executed
+    #####: 2176:				   && (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 2177:				       || m == month))
+branch  0 never executed
+branch  1 never executed
+    #####: 2178:				  || y == year)))
+branch  0 never executed
+branch  1 never executed
+    #####: 2179:		      || (j
+branch  0 never executed
+branch  1 never executed
+    #####: 2180:			  && (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 2181:			      || m == month + 1
+branch  0 never executed
+branch  1 never executed
+    #####: 2182:			      || m == mm)
+branch  0 never executed
+branch  1 never executed
+    #####: 2183:			  && (!y
+branch  0 never executed
+branch  1 never executed
+    #####: 2184:			      || ((ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2185:				  && (y == year + 1))
+branch  0 never executed
+branch  1 never executed
+    #####: 2186:			      || ((ed <= DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2187:				  && (y == year)))))
+branch  0 never executed
+branch  1 never executed
+        -: 2188:		    {
+    #####: 2189:		      if (j)
+branch  0 never executed
+branch  1 never executed
+        -: 2190:			{
+    #####: 2191:			  m = mm;
+    #####: 2192:			  d = dd;
+    #####: 2193:			  if (rc_tomorrow_flag && (yy != year))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2194:			    incr_year = 1;
+        -: 2195:			}
+        -: 2196:		      else
+        -: 2197:			{
+    #####: 2198:			  m = month;
+    #####: 2199:			  d = act_day;
+        -: 2200:			}
+    #####: 2201:		      if (rc_tomorrow_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2202:			  && !rc_have_today_in_list && (d != dd))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2203:			;	/* Void, ignore such entries! */
+        -: 2204:		      else
+    #####: 2205:			print_line = TRUE;
+        -: 2206:		    }
+        -: 2207:		}
+        -: 2208:	      else
+        1: 2209:		if (!d
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2210:		    || ((d == act_day)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2211:			&& (!m
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2212:			    || m == month)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2213:			&& (!y
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2214:			    || y == year))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2215:		    || ((d == dd)
+branch  0 never executed
+branch  1 never executed
+    #####: 2216:			&& (mm == month
+branch  0 never executed
+branch  1 never executed
+    #####: 2217:			    || (rc_tomorrow_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2218:				&& ((!m
+branch  0 never executed
+branch  1 never executed
+    #####: 2219:				     && (ed <= DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2220:				     && (!y
+branch  0 never executed
+branch  1 never executed
+    #####: 2221:					 || y == year))
+branch  0 never executed
+branch  1 never executed
+    #####: 2222:				    || m == month + 1 || m == mm)))))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2223:		{
+        1: 2224:		  if (rc_tomorrow_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2225:		    {
+    #####: 2226:		      if (!d
+branch  0 never executed
+branch  1 never executed
+    #####: 2227:			  && (!m
+branch  0 never executed
+branch  1 never executed
+    #####: 2228:			      || (mm == month || m == month + 1 || m == mm)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2229:			{
+    #####: 2230:			  if ((yy > year) && (d || m || y))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 2231:			    {
+    #####: 2232:			      if (!y || y == yy)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2233:				{
+    #####: 2234:				  m = mm;
+    #####: 2235:				  d = dd;
+    #####: 2236:				  incr_year = 1;
+        -: 2237:				}
+        -: 2238:			    }
+        -: 2239:			  else
+    #####: 2240:			    if (m
+branch  0 never executed
+branch  1 never executed
+    #####: 2241:				|| y != year
+branch  0 never executed
+branch  1 never executed
+    #####: 2242:				|| ed <= DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+        -: 2243:			    {
+    #####: 2244:			      if (!d
+branch  0 never executed
+branch  1 never executed
+    #####: 2245:				  && m && (mm != month) && (!y || y == year))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 2246:				{
+    #####: 2247:				  m = mm;
+    #####: 2248:				  d = dd;
+        -: 2249:				}
+        -: 2250:			      else
+        -: 2251:				{
+    #####: 2252:				  if (rc_have_today_in_list)
+branch  0 never executed
+branch  1 never executed
+        -: 2253:				    /*
+        -: 2254:				       We need a 1x2 production of the line.
+        -: 2255:				     */
+    #####: 2256:				    (*print_twice)++;
+        -: 2257:				  else
+        -: 2258:				    {
+    #####: 2259:				      m = mm;
+    #####: 2260:				      d = dd;
+    #####: 2261:				      if (yy != year)
+branch  0 never executed
+branch  1 never executed
+    #####: 2262:					incr_year = 1;
+        -: 2263:				    }
+        -: 2264:				}
+        -: 2265:			    }
+        -: 2266:			}
+        -: 2267:		      else
+        -: 2268:			{
+    #####: 2269:			  if ((d == dd) && (!m || m == mm))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2270:			    {
+    #####: 2271:			      m = mm;
+    #####: 2272:			      if (ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2273:				incr_year = 1;
+        -: 2274:			    }
+        -: 2275:			}
+        -: 2276:		    }
+        1: 2277:		  if (!m)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2278:		    m = month;
+        1: 2279:		  if (!d)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2280:		    d = act_day;
+        1: 2281:		  if (rc_tomorrow_flag && !rc_have_today_in_list && (d != dd))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2282:		    ;		/* Void, ignore such entries! */
+        -: 2283:		  else
+        1: 2284:		    print_line = TRUE;
+        -: 2285:		}
+        -: 2286:	    }
+        -: 2287:	}
+        -: 2288:    }
+        -: 2289:  /*
+        -: 2290:     Avoid an incorrect assignment in case fixed date mentioned occurred
+        -: 2291:     during the missing period in month of Gregorian Reformation.
+        -: 2292:   */
+        1: 2293:  if (print_line
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2294:      && (year + incr_year - decr_year == greg->year)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2295:      && (m == greg->month)
+branch  0 never executed
+branch  1 never executed
+    #####: 2296:      && ((d >= greg->first_day) && (d <= greg->last_day)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2297:    print_line = FALSE;
+        -: 2298:  /*
+        -: 2299:     If 3-month mode is wanted, insert only those fixed dates
+        -: 2300:     which occur in that period.
+        -: 2301:   */
+        1: 2302:  if (print_line && (is_3month_mode || is_3month_mode2))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+        -: 2303:    {
+    #####: 2304:      register int m2 = fiscal_month + 1;
+    #####: 2305:      register int m3 = fiscal_month + 2;
+        -: 2306:
+        -: 2307:
+    #####: 2308:      if (fiscal_month >= MONTH_MAX - 1)
+branch  0 never executed
+branch  1 never executed
+        -: 2309:	{
+    #####: 2310:	  m3 = MONTH_MIN;
+    #####: 2311:	  if (fiscal_month == MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+        -: 2312:	    {
+    #####: 2313:	      m2 = MONTH_MIN;
+    #####: 2314:	      m3++;
+        -: 2315:	    }
+        -: 2316:	}
+    #####: 2317:      if ((m != fiscal_month) && (m != m2) && (m != m3))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 2318:	print_line = FALSE;
+        -: 2319:    }
+        -: 2320:
+        1: 2321:  return (print_line);
+        -: 2322:}
+        -: 2323:
+        -: 2324:
+        -: 2325:
+        -: 2326:static int
+function get_number called 0 returned 0% blocks executed 0%
+    #####: 2327:get_number (string)
+        -: 2328:     char **string;
+        -: 2329:/*!
+        -: 2330:   Returns the absolute value of a "repeat for N days since..." field or
+        -: 2331:     "for each N'th day since..." field using the global `s6' text buffer.
+        -: 2332:*/
+        -: 2333:{
+    #####: 2334:  register int i = 0;
+        -: 2335:
+        -: 2336:
+    #####: 2337:  if (*string != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2338:    {
+    #####: 2339:      (*string)++;
+    #####: 2340:      while (isdigit (**string))
+branch  0 never executed
+branch  1 never executed
+    #####: 2341:	s6[i++] = *((*string)++);
+    #####: 2342:      s6[i] = '\0';
+        -: 2343:      /*
+        -: 2344:         Make sure we return values in range 1...366
+        -: 2345:         or 0 if an error has occurred.
+        -: 2346:       */
+    #####: 2347:      if (i > 3)
+branch  0 never executed
+branch  1 never executed
+    #####: 2348:	return (0);
+    #####: 2349:      i = atoi (s6);
+    #####: 2350:      if (i > DAY_LAST + 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 2351:	i = DAY_LAST + 1;
+        -: 2352:    }
+        -: 2353:
+    #####: 2354:  return (i);
+        -: 2355:}
+        -: 2356:#endif /* USE_RC */

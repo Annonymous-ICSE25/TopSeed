@@ -1,0 +1,322 @@
+        -:    0:Source:../../lib/argmatch.c
+        -:    0:Programs:50
+        -:    1:/* argmatch.c -- find a match for a string in an array
+        -:    2:
+        -:    3:   Copyright (C) 1990, 1998-1999, 2001-2007, 2009-2020 Free Software
+        -:    4:   Foundation, Inc.
+        -:    5:
+        -:    6:   This program is free software: you can redistribute it and/or modify
+        -:    7:   it under the terms of the GNU General Public License as published by
+        -:    8:   the Free Software Foundation; either version 3 of the License, or
+        -:    9:   (at your option) any later version.
+        -:   10:
+        -:   11:   This program is distributed in the hope that it will be useful,
+        -:   12:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:   GNU General Public License for more details.
+        -:   15:
+        -:   16:   You should have received a copy of the GNU General Public License
+        -:   17:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   18:
+        -:   19:/* Written by David MacKenzie <djm@ai.mit.edu>
+        -:   20:   Modified by Akim Demaille <demaille@inf.enst.fr> */
+        -:   21:
+        -:   22:#include <config.h>
+        -:   23:
+        -:   24:/* Specification.  */
+        -:   25:#include "argmatch.h"
+        -:   26:
+        -:   27:#include <stdbool.h>
+        -:   28:#include <stdio.h>
+        -:   29:#include <stdlib.h>
+        -:   30:#include <string.h>
+        -:   31:
+        -:   32:#define _(msgid) gettext (msgid)
+        -:   33:
+        -:   34:#include "error.h"
+        -:   35:#include "quotearg.h"
+        -:   36:#include "getprogname.h"
+        -:   37:
+        -:   38:#if USE_UNLOCKED_IO
+        -:   39:# include "unlocked-io.h"
+        -:   40:#endif
+        -:   41:
+        -:   42:/* When reporting an invalid argument, show nonprinting characters
+        -:   43:   by using the quoting style ARGMATCH_QUOTING_STYLE.  Do not use
+        -:   44:   literal_quoting_style.  */
+        -:   45:#ifndef ARGMATCH_QUOTING_STYLE
+        -:   46:# define ARGMATCH_QUOTING_STYLE locale_quoting_style
+        -:   47:#endif
+        -:   48:
+        -:   49:/* Non failing version of argmatch call this function after failing. */
+        -:   50:#ifndef ARGMATCH_DIE
+        -:   51:# include "exitfail.h"
+        -:   52:# define ARGMATCH_DIE exit (exit_failure)
+        -:   53:#endif
+        -:   54:
+        -:   55:#ifdef ARGMATCH_DIE_DECL
+        -:   56:ARGMATCH_DIE_DECL;
+        -:   57:#endif
+        -:   58:
+        -:   59:static void
+function __argmatch_die called 0 returned 0% blocks executed 0%
+    #####:   60:__argmatch_die (void)
+        -:   61:{
+    #####:   62:  ARGMATCH_DIE;
+call    0 never executed
+    #####:   63:}
+        -:   64:
+        -:   65:/* Used by XARGMATCH and XARGCASEMATCH.  See description in argmatch.h.
+        -:   66:   Default to __argmatch_die, but allow caller to change this at run-time. */
+        -:   67:argmatch_exit_fn argmatch_die = __argmatch_die;
+        -:   68:
+        -:   69:
+        -:   70:/* If ARG is an unambiguous match for an element of the
+        -:   71:   NULL-terminated array ARGLIST, return the index in ARGLIST
+        -:   72:   of the matched element, else -1 if it does not match any element
+        -:   73:   or -2 if it is ambiguous (is a prefix of more than one element).
+        -:   74:
+        -:   75:   If VALLIST is none null, use it to resolve ambiguities limited to
+        -:   76:   synonyms, i.e., for
+        -:   77:     "yes", "yop" -> 0
+        -:   78:     "no", "nope" -> 1
+        -:   79:   "y" is a valid argument, for 0, and "n" for 1.  */
+        -:   80:
+        -:   81:ptrdiff_t
+function argmatch called 0 returned 0% blocks executed 0%
+    #####:   82:argmatch (const char *arg, const char *const *arglist,
+        -:   83:          const void *vallist, size_t valsize)
+        -:   84:{
+        -:   85:  size_t i;                     /* Temporary index in ARGLIST.  */
+        -:   86:  size_t arglen;                /* Length of ARG.  */
+    #####:   87:  ptrdiff_t matchind = -1;      /* Index of first nonexact match.  */
+    #####:   88:  bool ambiguous = false;       /* If true, multiple nonexact match(es).  */
+        -:   89:
+    #####:   90:  arglen = strlen (arg);
+        -:   91:
+        -:   92:  /* Test all elements for either exact match or abbreviated matches.  */
+    #####:   93:  for (i = 0; arglist[i]; i++)
+branch  0 never executed
+branch  1 never executed
+        -:   94:    {
+    #####:   95:      if (!strncmp (arglist[i], arg, arglen))
+branch  0 never executed
+branch  1 never executed
+        -:   96:        {
+    #####:   97:          if (strlen (arglist[i]) == arglen)
+branch  0 never executed
+branch  1 never executed
+        -:   98:            /* Exact match found.  */
+    #####:   99:            return i;
+    #####:  100:          else if (matchind == -1)
+branch  0 never executed
+branch  1 never executed
+        -:  101:            /* First nonexact match found.  */
+    #####:  102:            matchind = i;
+        -:  103:          else
+        -:  104:            {
+        -:  105:              /* Second nonexact match found.  */
+    #####:  106:              if (vallist == NULL
+branch  0 never executed
+branch  1 never executed
+    #####:  107:                  || memcmp ((char const *) vallist + valsize * matchind,
+branch  0 never executed
+branch  1 never executed
+    #####:  108:                             (char const *) vallist + valsize * i, valsize))
+        -:  109:                {
+        -:  110:                  /* There is a real ambiguity, or we could not
+        -:  111:                     disambiguate. */
+    #####:  112:                  ambiguous = true;
+        -:  113:                }
+        -:  114:            }
+        -:  115:        }
+        -:  116:    }
+    #####:  117:  if (ambiguous)
+branch  0 never executed
+branch  1 never executed
+    #####:  118:    return -2;
+        -:  119:  else
+    #####:  120:    return matchind;
+        -:  121:}
+        -:  122:
+        -:  123:/* Error reporting for argmatch.
+        -:  124:   CONTEXT is a description of the type of entity that was being matched.
+        -:  125:   VALUE is the invalid value that was given.
+        -:  126:   PROBLEM is the return value from argmatch.  */
+        -:  127:
+        -:  128:void
+function argmatch_invalid called 0 returned 0% blocks executed 0%
+    #####:  129:argmatch_invalid (const char *context, const char *value, ptrdiff_t problem)
+        -:  130:{
+    #####:  131:  char const *format = (problem == -1
+        -:  132:                        ? _("invalid argument %s for %s")
+    #####:  133:                        : _("ambiguous argument %s for %s"));
+branch  0 never executed
+branch  1 never executed
+        -:  134:
+    #####:  135:  error (0, 0, format, quotearg_n_style (0, ARGMATCH_QUOTING_STYLE, value),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  136:         quote_n (1, context));
+    #####:  137:}
+        -:  138:
+        -:  139:/* List the valid arguments for argmatch.
+        -:  140:   ARGLIST is the same as in argmatch.
+        -:  141:   VALLIST is a pointer to an array of values.
+        -:  142:   VALSIZE is the size of the elements of VALLIST */
+        -:  143:void
+function argmatch_valid called 0 returned 0% blocks executed 0%
+    #####:  144:argmatch_valid (const char *const *arglist,
+        -:  145:                const void *vallist, size_t valsize)
+        -:  146:{
+        -:  147:  size_t i;
+    #####:  148:  const char *last_val = NULL;
+        -:  149:
+        -:  150:  /* We try to put synonyms on the same line.  The assumption is that
+        -:  151:     synonyms follow each other */
+    #####:  152:  fputs (_("Valid arguments are:"), stderr);
+call    0 never executed
+    #####:  153:  for (i = 0; arglist[i]; i++)
+branch  0 never executed
+branch  1 never executed
+    #####:  154:    if ((i == 0)
+branch  0 never executed
+branch  1 never executed
+    #####:  155:        || memcmp (last_val, (char const *) vallist + valsize * i, valsize))
+branch  0 never executed
+branch  1 never executed
+        -:  156:      {
+    #####:  157:        fprintf (stderr, "\n  - %s", quote (arglist[i]));
+call    0 never executed
+call    1 never executed
+    #####:  158:        last_val = (char const *) vallist + valsize * i;
+        -:  159:      }
+        -:  160:    else
+        -:  161:      {
+    #####:  162:        fprintf (stderr, ", %s", quote (arglist[i]));
+call    0 never executed
+call    1 never executed
+        -:  163:      }
+    #####:  164:  putc ('\n', stderr);
+call    0 never executed
+    #####:  165:}
+        -:  166:
+        -:  167:/* Never failing versions of the previous functions.
+        -:  168:
+        -:  169:   CONTEXT is the context for which argmatch is called (e.g.,
+        -:  170:   "--version-control", or "$VERSION_CONTROL" etc.).  Upon failure,
+        -:  171:   calls the (supposed never to return) function EXIT_FN. */
+        -:  172:
+        -:  173:ptrdiff_t
+function __xargmatch_internal called 0 returned 0% blocks executed 0%
+    #####:  174:__xargmatch_internal (const char *context,
+        -:  175:                      const char *arg, const char *const *arglist,
+        -:  176:                      const void *vallist, size_t valsize,
+        -:  177:                      argmatch_exit_fn exit_fn)
+        -:  178:{
+    #####:  179:  ptrdiff_t res = argmatch (arg, arglist, vallist, valsize);
+    #####:  180:  if (res >= 0)
+branch  0 never executed
+branch  1 never executed
+        -:  181:    /* Success. */
+    #####:  182:    return res;
+        -:  183:
+        -:  184:  /* We failed.  Explain why. */
+    #####:  185:  argmatch_invalid (context, arg, res);
+call    0 never executed
+    #####:  186:  argmatch_valid (arglist, vallist, valsize);
+call    0 never executed
+    #####:  187:  (*exit_fn) ();
+call    0 never executed
+        -:  188:
+    #####:  189:  return -1; /* To please the compilers. */
+        -:  190:}
+        -:  191:
+        -:  192:/* Look for VALUE in VALLIST, an array of objects of size VALSIZE and
+        -:  193:   return the first corresponding argument in ARGLIST */
+        -:  194:const char *
+function argmatch_to_argument called 0 returned 0% blocks executed 0%
+    #####:  195:argmatch_to_argument (const void *value,
+        -:  196:                      const char *const *arglist,
+        -:  197:                      const void *vallist, size_t valsize)
+        -:  198:{
+        -:  199:  size_t i;
+        -:  200:
+    #####:  201:  for (i = 0; arglist[i]; i++)
+branch  0 never executed
+branch  1 never executed
+    #####:  202:    if (!memcmp (value, (char const *) vallist + valsize * i, valsize))
+branch  0 never executed
+branch  1 never executed
+    #####:  203:      return arglist[i];
+    #####:  204:  return NULL;
+        -:  205:}
+        -:  206:
+        -:  207:#ifdef TEST
+        -:  208:/*
+        -:  209: * Based on "getversion.c" by David MacKenzie <djm@gnu.ai.mit.edu>
+        -:  210: */
+        -:  211:
+        -:  212:/* When to make backup files.  */
+        -:  213:enum backup_type
+        -:  214:{
+        -:  215:  /* Never make backups.  */
+        -:  216:  no_backups,
+        -:  217:
+        -:  218:  /* Make simple backups of every file.  */
+        -:  219:  simple_backups,
+        -:  220:
+        -:  221:  /* Make numbered backups of files that already have numbered backups,
+        -:  222:     and simple backups of the others.  */
+        -:  223:  numbered_existing_backups,
+        -:  224:
+        -:  225:  /* Make numbered backups of every file.  */
+        -:  226:  numbered_backups
+        -:  227:};
+        -:  228:
+        -:  229:/* Two tables describing arguments (keys) and their corresponding
+        -:  230:   values */
+        -:  231:static const char *const backup_args[] =
+        -:  232:{
+        -:  233:  "no", "none", "off",
+        -:  234:  "simple", "never",
+        -:  235:  "existing", "nil",
+        -:  236:  "numbered", "t",
+        -:  237:  0
+        -:  238:};
+        -:  239:
+        -:  240:static const enum backup_type backup_vals[] =
+        -:  241:{
+        -:  242:  no_backups, no_backups, no_backups,
+        -:  243:  simple_backups, simple_backups,
+        -:  244:  numbered_existing_backups, numbered_existing_backups,
+        -:  245:  numbered_backups, numbered_backups
+        -:  246:};
+        -:  247:
+        -:  248:int
+        -:  249:main (int argc, const char *const *argv)
+        -:  250:{
+        -:  251:  const char *cp;
+        -:  252:  enum backup_type backup_type = no_backups;
+        -:  253:
+        -:  254:  if (argc > 2)
+        -:  255:    {
+        -:  256:      fprintf (stderr, "Usage: %s [VERSION_CONTROL]\n", getprogname ());
+        -:  257:      exit (1);
+        -:  258:    }
+        -:  259:
+        -:  260:  if ((cp = getenv ("VERSION_CONTROL")))
+        -:  261:    backup_type = XARGMATCH ("$VERSION_CONTROL", cp,
+        -:  262:                             backup_args, backup_vals);
+        -:  263:
+        -:  264:  if (argc == 2)
+        -:  265:    backup_type = XARGMATCH (getprogname (), argv[1],
+        -:  266:                             backup_args, backup_vals);
+        -:  267:
+        -:  268:  printf ("The version control is '%s'\n",
+        -:  269:          ARGMATCH_TO_ARGUMENT (backup_type, backup_args, backup_vals));
+        -:  270:
+        -:  271:  return 0;
+        -:  272:}
+        -:  273:#endif

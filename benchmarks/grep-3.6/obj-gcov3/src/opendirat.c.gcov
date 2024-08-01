@@ -1,0 +1,64 @@
+        -:    0:Source:../../lib/opendirat.c
+        -:    0:Programs:50
+        -:    1:/* Open a directory relative to another directory.
+        -:    2:
+        -:    3:   Copyright 2006-2020 Free Software Foundation, Inc.
+        -:    4:
+        -:    5:   This program is free software: you can redistribute it and/or modify
+        -:    6:   it under the terms of the GNU General Public License as published by
+        -:    7:   the Free Software Foundation; either version 3 of the License, or
+        -:    8:   (at your option) any later version.
+        -:    9:
+        -:   10:   This program is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   13:   GNU General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU General Public License
+        -:   16:   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+        -:   17:
+        -:   18:   Written by Jim Meyering and Paul Eggert.  */
+        -:   19:
+        -:   20:#include <config.h>
+        -:   21:
+        -:   22:#include <opendirat.h>
+        -:   23:
+        -:   24:#include <errno.h>
+        -:   25:#include <fcntl--.h>
+        -:   26:#include <unistd.h>
+        -:   27:
+        -:   28:/* Relative to DIR_FD, open the directory DIR, passing EXTRA_FLAGS to
+        -:   29:   the underlying openat call.  On success, store into *PNEW_FD the
+        -:   30:   underlying file descriptor of the newly opened directory and return
+        -:   31:   the directory stream.  On failure, return NULL and set errno.
+        -:   32:
+        -:   33:   On success, *PNEW_FD is at least 3, so this is a "safer" function.  */
+        -:   34:
+        -:   35:DIR *
+function opendirat called 0 returned 0% blocks executed 0%
+    #####:   36:opendirat (int dir_fd, char const *dir, int extra_flags, int *pnew_fd)
+        -:   37:{
+    #####:   38:  int open_flags = (O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOCTTY
+        -:   39:                    | O_NONBLOCK | extra_flags);
+    #####:   40:  int new_fd = openat (dir_fd, dir, open_flags);
+call    0 never executed
+        -:   41:
+    #####:   42:  if (new_fd < 0)
+branch  0 never executed
+branch  1 never executed
+    #####:   43:    return NULL;
+    #####:   44:  DIR *dirp = fdopendir (new_fd);
+call    0 never executed
+    #####:   45:  if (dirp)
+branch  0 never executed
+branch  1 never executed
+    #####:   46:    *pnew_fd = new_fd;
+        -:   47:  else
+        -:   48:    {
+    #####:   49:      int fdopendir_errno = errno;
+    #####:   50:      close (new_fd);
+call    0 never executed
+    #####:   51:      errno = fdopendir_errno;
+        -:   52:    }
+    #####:   53:  return dirp;
+        -:   54:}

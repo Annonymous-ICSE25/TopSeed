@@ -1,0 +1,1350 @@
+        -:    0:Source:../../src/kwset.c
+        -:    0:Programs:50
+        -:    1:/* kwset.c - search for any of a set of keywords.
+        -:    2:   Copyright (C) 1989, 1998, 2000, 2005, 2007, 2009-2020 Free Software
+        -:    3:   Foundation, Inc.
+        -:    4:
+        -:    5:   This program is free software; you can redistribute it and/or modify
+        -:    6:   it under the terms of the GNU General Public License as published by
+        -:    7:   the Free Software Foundation; either version 3, or (at your option)
+        -:    8:   any later version.
+        -:    9:
+        -:   10:   This program is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   13:   GNU General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU General Public License
+        -:   16:   along with this program; if not, write to the Free Software
+        -:   17:   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+        -:   18:   02110-1301, USA.  */
+        -:   19:
+        -:   20:/* Written August 1989 by Mike Haertel.  */
+        -:   21:
+        -:   22:/* For the Aho-Corasick algorithm, see:
+        -:   23:   Aho AV, Corasick MJ. Efficient string matching: an aid to
+        -:   24:   bibliographic search. CACM 18, 6 (1975), 333-40
+        -:   25:   <https://dx.doi.org/10.1145/360825.360855>, which describes the
+        -:   26:   failure function used below.
+        -:   27:
+        -:   28:   For the Boyer-Moore algorithm, see: Boyer RS, Moore JS.
+        -:   29:   A fast string searching algorithm. CACM 20, 10 (1977), 762-72
+        -:   30:   <https://dx.doi.org/10.1145/359842.359859>.
+        -:   31:
+        -:   32:   For a survey of more-recent string matching algorithms that might
+        -:   33:   help improve performance, see: Faro S, Lecroq T. The exact online
+        -:   34:   string matching problem: a review of the most recent results.
+        -:   35:   ACM Computing Surveys 45, 2 (2013), 13
+        -:   36:   <https://dx.doi.org/10.1145/2431211.2431212>.  */
+        -:   37:
+        -:   38:#include <config.h>
+        -:   39:
+        -:   40:#include "kwset.h"
+        -:   41:
+        -:   42:#include <stdint.h>
+        -:   43:#include <sys/types.h>
+        -:   44:#include "system.h"
+        -:   45:#include "intprops.h"
+        -:   46:#include "memchr2.h"
+        -:   47:#include "obstack.h"
+        -:   48:#include "xalloc.h"
+        -:   49:#include "verify.h"
+        -:   50:
+        -:   51:#define obstack_chunk_alloc xmalloc
+        -:   52:#define obstack_chunk_free free
+        -:   53:
+        -:   54:static unsigned char
+function U called 20 returned 100% blocks executed 100%
+       20:   55:U (char ch)
+        -:   56:{
+       20:   57:  return to_uchar (ch);
+call    0 returned 100%
+        -:   58:}
+        -:   59:
+        -:   60:/* Balanced tree of edges and labels leaving a given trie node.  */
+        -:   61:struct tree
+        -:   62:{
+        -:   63:  struct tree *llink;		/* Left link; MUST be first field.  */
+        -:   64:  struct tree *rlink;		/* Right link (to larger labels).  */
+        -:   65:  struct trie *trie;		/* Trie node pointed to by this edge.  */
+        -:   66:  unsigned char label;		/* Label on this edge.  */
+        -:   67:  char balance;			/* Difference in depths of subtrees.  */
+        -:   68:};
+        -:   69:
+        -:   70:/* Node of a trie representing a set of keywords.  */
+        -:   71:struct trie
+        -:   72:{
+        -:   73:  /* If an accepting node, this is either 2*W + 1 where W is the word
+        -:   74:     index, or is SIZE_MAX if Aho-Corasick is in use and FAIL
+        -:   75:     specifies where to look for more info.  If not an accepting node,
+        -:   76:     this is zero.  */
+        -:   77:  size_t accepting;
+        -:   78:
+        -:   79:  struct tree *links;		/* Tree of edges leaving this node.  */
+        -:   80:  struct trie *parent;		/* Parent of this node.  */
+        -:   81:  struct trie *next;		/* List of all trie nodes in level order.  */
+        -:   82:  struct trie *fail;		/* Aho-Corasick failure function.  */
+        -:   83:  ptrdiff_t depth;		/* Depth of this node from the root.  */
+        -:   84:  ptrdiff_t shift;		/* Shift function for search failures.  */
+        -:   85:  ptrdiff_t maxshift;		/* Max shift of self and descendants.  */
+        -:   86:};
+        -:   87:
+        -:   88:/* Structure returned opaquely to the caller, containing everything.  */
+        -:   89:struct kwset
+        -:   90:{
+        -:   91:  struct obstack obstack;	/* Obstack for node allocation.  */
+        -:   92:  ptrdiff_t words;		/* Number of words in the trie.  */
+        -:   93:  struct trie *trie;		/* The trie itself.  */
+        -:   94:  ptrdiff_t mind;		/* Minimum depth of an accepting node.  */
+        -:   95:  ptrdiff_t maxd;		/* Maximum depth of any node.  */
+        -:   96:  unsigned char delta[NCHAR];	/* Delta table for rapid search.  */
+        -:   97:  struct trie *next[NCHAR];	/* Table of children of the root.  */
+        -:   98:  char *target;			/* Target string if there's only one.  */
+        -:   99:  ptrdiff_t *shift;		/* Used in Boyer-Moore search for one
+        -:  100:                                   string.  */
+        -:  101:  char const *trans;		/* Character translation table.  */
+        -:  102:
+        -:  103:  /* This helps to match a terminal byte, which is the first byte
+        -:  104:     for Aho-Corasick, and the last byte for Boyer-More.  If all the
+        -:  105:     patterns have the same terminal byte (after translation via TRANS
+        -:  106:     if TRANS is nonnull), then this is that byte as an unsigned char.
+        -:  107:     Otherwise this is -1 if there is disagreement among the strings
+        -:  108:     about terminal bytes, and -2 if there are no terminal bytes and
+        -:  109:     no disagreement because all the patterns are empty.  */
+        -:  110:  int gc1;
+        -:  111:
+        -:  112:  /* This helps to match a terminal byte.  If 0 <= GC1HELP, B is
+        -:  113:     terminal when B == GC1 || B == GC1HELP (note that GC1 == GCHELP
+        -:  114:     is common here).  This is typically faster than evaluating
+        -:  115:     to_uchar (TRANS[B]) == GC1.  */
+        -:  116:  int gc1help;
+        -:  117:
+        -:  118:  /* If the string has two or more bytes, this is the penultimate byte,
+        -:  119:     after translation via TRANS if TRANS is nonnull.  This variable
+        -:  120:     is used only by Boyer-Moore.  */
+        -:  121:  char gc2;
+        -:  122:
+        -:  123:  /* kwsexec implementation.  */
+        -:  124:  ptrdiff_t (*kwsexec) (kwset_t, char const *, ptrdiff_t,
+        -:  125:                        struct kwsmatch *, bool);
+        -:  126:};
+        -:  127:
+        -:  128:/* Use TRANS to transliterate C.  A null TRANS does no transliteration.  */
+        -:  129:static inline char
+function tr called 8 returned 100% blocks executed 67%
+        8:  130:tr (char const *trans, char c)
+        -:  131:{
+        8:  132:  return trans ? trans[U(c)] : c;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        -:  133:}
+        -:  134:
+        -:  135:static ptrdiff_t acexec (kwset_t, char const *, ptrdiff_t,
+        -:  136:                         struct kwsmatch *, bool);
+        -:  137:static ptrdiff_t bmexec (kwset_t, char const *, ptrdiff_t,
+        -:  138:                         struct kwsmatch *, bool);
+        -:  139:
+        -:  140:/* Return a newly allocated keyword set.  A nonnull TRANS specifies a
+        -:  141:   table of character translations to be applied to all pattern and
+        -:  142:   search text.  */
+        -:  143:kwset_t
+function kwsalloc called 27 returned 100% blocks executed 70%
+       27:  144:kwsalloc (char const *trans)
+        -:  145:{
+       27:  146:  struct kwset *kwset = xmalloc (sizeof *kwset);
+call    0 returned 100%
+        -:  147:
+       27:  148:  obstack_init (&kwset->obstack);
+call    0 returned 100%
+       27:  149:  kwset->words = 0;
+       27:  150:  kwset->trie = obstack_alloc (&kwset->obstack, sizeof *kwset->trie);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+       27:  151:  kwset->trie->accepting = 0;
+       27:  152:  kwset->trie->links = NULL;
+       27:  153:  kwset->trie->parent = NULL;
+       27:  154:  kwset->trie->next = NULL;
+       27:  155:  kwset->trie->fail = NULL;
+       27:  156:  kwset->trie->depth = 0;
+       27:  157:  kwset->trie->shift = 0;
+       27:  158:  kwset->mind = PTRDIFF_MAX;
+       27:  159:  kwset->maxd = -1;
+       27:  160:  kwset->target = NULL;
+       27:  161:  kwset->trans = trans;
+       27:  162:  kwset->kwsexec = acexec;
+        -:  163:
+       27:  164:  return kwset;
+        -:  165:}
+        -:  166:
+        -:  167:/* This upper bound is valid for CHAR_BIT >= 4 and
+        -:  168:   exact for CHAR_BIT in { 4..11, 13, 15, 17, 19 }.  */
+        -:  169:enum { DEPTH_SIZE = CHAR_BIT + CHAR_BIT / 2 };
+        -:  170:
+        -:  171:/* Add the given string to the contents of the keyword set.  */
+        -:  172:void
+function kwsincr called 30 returned 100% blocks executed 43%
+       30:  173:kwsincr (kwset_t kwset, char const *text, ptrdiff_t len)
+        -:  174:{
+       30:  175:  assume (0 <= len);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+       30:  176:  struct trie *trie = kwset->trie;
+       30:  177:  char const *trans = kwset->trans;
+       30:  178:  bool reverse = kwset->kwsexec == bmexec;
+        -:  179:
+       30:  180:  if (reverse)
+branch  0 taken 40% (fallthrough)
+branch  1 taken 60%
+       12:  181:    text += len;
+        -:  182:
+        -:  183:  /* Descend the trie (built of keywords) character-by-character,
+        -:  184:     installing new nodes when necessary.  */
+      145:  185:  while (len--)
+branch  0 taken 74%
+branch  1 taken 26% (fallthrough)
+        -:  186:    {
+       85:  187:      unsigned char uc = reverse ? *--text : *text++;
+branch  0 taken 44% (fallthrough)
+branch  1 taken 56%
+       85:  188:      unsigned char label = trans ? trans[uc] : uc;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  189:
+        -:  190:      /* Descend the tree of outgoing links for this trie node,
+        -:  191:         looking for the current character and keeping track
+        -:  192:         of the path followed.  */
+       85:  193:      struct tree *cur = trie->links;
+        -:  194:      struct tree *links[DEPTH_SIZE];
+        -:  195:      enum { L, R } dirs[DEPTH_SIZE];
+       85:  196:      links[0] = (struct tree *) &trie->links;
+       85:  197:      dirs[0] = L;
+       85:  198:      ptrdiff_t depth = 1;
+        -:  199:
+      170:  200:      while (cur && label != cur->label)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+        -:  201:        {
+    #####:  202:          links[depth] = cur;
+    #####:  203:          if (label < cur->label)
+branch  0 never executed
+branch  1 never executed
+    #####:  204:            dirs[depth++] = L, cur = cur->llink;
+        -:  205:          else
+    #####:  206:            dirs[depth++] = R, cur = cur->rlink;
+        -:  207:        }
+        -:  208:
+        -:  209:      /* The current character doesn't have an outgoing link at
+        -:  210:         this trie node, so build a new trie node and install
+        -:  211:         a link in the current trie node's tree.  */
+       85:  212:      if (!cur)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  213:        {
+       85:  214:          cur = obstack_alloc (&kwset->obstack, sizeof *cur);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+       85:  215:          cur->llink = NULL;
+       85:  216:          cur->rlink = NULL;
+       85:  217:          cur->trie = obstack_alloc (&kwset->obstack, sizeof *cur->trie);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+       85:  218:          cur->trie->accepting = 0;
+       85:  219:          cur->trie->links = NULL;
+       85:  220:          cur->trie->parent = trie;
+       85:  221:          cur->trie->next = NULL;
+       85:  222:          cur->trie->fail = NULL;
+       85:  223:          cur->trie->depth = trie->depth + 1;
+       85:  224:          cur->trie->shift = 0;
+       85:  225:          cur->label = label;
+       85:  226:          cur->balance = 0;
+        -:  227:
+        -:  228:          /* Install the new tree node in its parent.  */
+       85:  229:          if (dirs[--depth] == L)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       85:  230:            links[depth]->llink = cur;
+        -:  231:          else
+    #####:  232:            links[depth]->rlink = cur;
+        -:  233:
+        -:  234:          /* Back up the tree fixing the balance flags.  */
+      170:  235:          while (depth && !links[depth]->balance)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+        -:  236:            {
+    #####:  237:              if (dirs[depth] == L)
+branch  0 never executed
+branch  1 never executed
+    #####:  238:                --links[depth]->balance;
+        -:  239:              else
+    #####:  240:                ++links[depth]->balance;
+    #####:  241:              --depth;
+        -:  242:            }
+        -:  243:
+        -:  244:          /* Rebalance the tree by pointer rotations if necessary.  */
+       85:  245:          if (depth && ((dirs[depth] == L && --links[depth]->balance)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  246:                        || (dirs[depth] == R && ++links[depth]->balance)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  247:            {
+        -:  248:              struct tree *t, *r, *l, *rl, *lr;
+        -:  249:
+    #####:  250:              switch (links[depth]->balance)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  251:                {
+    #####:  252:                case (char) -2:
+    #####:  253:                  switch (dirs[depth + 1])
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  254:                    {
+    #####:  255:                    case L:
+    #####:  256:                      r = links[depth], t = r->llink, rl = t->rlink;
+    #####:  257:                      t->rlink = r, r->llink = rl;
+    #####:  258:                      t->balance = r->balance = 0;
+    #####:  259:                      break;
+    #####:  260:                    case R:
+    #####:  261:                      r = links[depth], l = r->llink, t = l->rlink;
+    #####:  262:                      rl = t->rlink, lr = t->llink;
+    #####:  263:                      t->llink = l, l->rlink = lr, t->rlink = r, r->llink = rl;
+    #####:  264:                      l->balance = t->balance != 1 ? 0 : -1;
+branch  0 never executed
+branch  1 never executed
+    #####:  265:                      r->balance = t->balance != (char) -1 ? 0 : 1;
+    #####:  266:                      t->balance = 0;
+    #####:  267:                      break;
+    #####:  268:                    default:
+    #####:  269:                      abort ();
+call    0 never executed
+        -:  270:                    }
+    #####:  271:                  break;
+    #####:  272:                case 2:
+    #####:  273:                  switch (dirs[depth + 1])
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  274:                    {
+    #####:  275:                    case R:
+    #####:  276:                      l = links[depth], t = l->rlink, lr = t->llink;
+    #####:  277:                      t->llink = l, l->rlink = lr;
+    #####:  278:                      t->balance = l->balance = 0;
+    #####:  279:                      break;
+    #####:  280:                    case L:
+    #####:  281:                      l = links[depth], r = l->rlink, t = r->llink;
+    #####:  282:                      lr = t->llink, rl = t->rlink;
+    #####:  283:                      t->llink = l, l->rlink = lr, t->rlink = r, r->llink = rl;
+    #####:  284:                      l->balance = t->balance != 1 ? 0 : -1;
+branch  0 never executed
+branch  1 never executed
+    #####:  285:                      r->balance = t->balance != (char) -1 ? 0 : 1;
+    #####:  286:                      t->balance = 0;
+    #####:  287:                      break;
+    #####:  288:                    default:
+    #####:  289:                      abort ();
+call    0 never executed
+        -:  290:                    }
+    #####:  291:                  break;
+    #####:  292:                default:
+    #####:  293:                  abort ();
+call    0 never executed
+        -:  294:                }
+        -:  295:
+    #####:  296:              if (dirs[depth - 1] == L)
+branch  0 never executed
+branch  1 never executed
+    #####:  297:                links[depth - 1]->llink = t;
+        -:  298:              else
+    #####:  299:                links[depth - 1]->rlink = t;
+        -:  300:            }
+        -:  301:        }
+        -:  302:
+       85:  303:      trie = cur->trie;
+        -:  304:    }
+        -:  305:
+        -:  306:  /* Mark the node finally reached as accepting, encoding the
+        -:  307:     index number of this word in the keyword set so far.  */
+       30:  308:  if (!trie->accepting)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  309:    {
+       30:  310:      size_t words = kwset->words;
+       30:  311:      trie->accepting = 2 * words + 1;
+        -:  312:    }
+       30:  313:  ++kwset->words;
+        -:  314:
+        -:  315:  /* Keep track of the longest and shortest string of the keyword set.  */
+       30:  316:  if (trie->depth < kwset->mind)
+branch  0 taken 90% (fallthrough)
+branch  1 taken 10%
+       27:  317:    kwset->mind = trie->depth;
+       30:  318:  if (trie->depth > kwset->maxd)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       30:  319:    kwset->maxd = trie->depth;
+       30:  320:}
+        -:  321:
+        -:  322:ptrdiff_t
+function kwswords called 3 returned 100% blocks executed 100%
+        3:  323:kwswords (kwset_t kwset)
+        -:  324:{
+        3:  325:  return kwset->words;
+        -:  326:}
+        -:  327:
+        -:  328:/* Enqueue the trie nodes referenced from the given tree in the
+        -:  329:   given queue.  */
+        -:  330:static void
+function enqueue called 282 returned 100% blocks executed 100%
+      282:  331:enqueue (struct tree *tree, struct trie **last)
+        -:  332:{
+      282:  333:  if (!tree)
+branch  0 taken 70% (fallthrough)
+branch  1 taken 30%
+      197:  334:    return;
+       85:  335:  enqueue (tree->llink, last);
+call    0 returned 100%
+       85:  336:  enqueue (tree->rlink, last);
+call    0 returned 100%
+       85:  337:  (*last) = (*last)->next = tree->trie;
+        -:  338:}
+        -:  339:
+        -:  340:/* Compute the Aho-Corasick failure function for the trie nodes referenced
+        -:  341:   from the given tree, given the failure function for their parent as
+        -:  342:   well as a last resort failure node.  */
+        -:  343:static void
+function treefails called 159 returned 100% blocks executed 71%
+      159:  344:treefails (struct tree const *tree, struct trie const *fail,
+        -:  345:           struct trie *recourse, bool reverse)
+        -:  346:{
+        -:  347:  struct tree *cur;
+        -:  348:
+      159:  349:  if (!tree)
+branch  0 taken 70% (fallthrough)
+branch  1 taken 30%
+      111:  350:    return;
+        -:  351:
+       48:  352:  treefails (tree->llink, fail, recourse, reverse);
+call    0 returned 100%
+       48:  353:  treefails (tree->rlink, fail, recourse, reverse);
+call    0 returned 100%
+        -:  354:
+        -:  355:  /* Find, in the chain of fails going back to the root, the first
+        -:  356:     node that has a descendant on the current label.  */
+       96:  357:  while (fail)
+branch  0 taken 69%
+branch  1 taken 31% (fallthrough)
+        -:  358:    {
+       33:  359:      cur = fail->links;
+       66:  360:      while (cur && tree->label != cur->label)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+    #####:  361:        if (tree->label < cur->label)
+branch  0 never executed
+branch  1 never executed
+    #####:  362:          cur = cur->llink;
+        -:  363:        else
+    #####:  364:          cur = cur->rlink;
+       33:  365:      if (cur)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  366:        {
+       33:  367:          tree->trie->fail = cur->trie;
+       33:  368:          if (!reverse && cur->trie->accepting && !tree->trie->accepting)
+branch  0 taken 24% (fallthrough)
+branch  1 taken 76%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 never executed
+branch  5 never executed
+    #####:  369:            tree->trie->accepting = SIZE_MAX;
+       33:  370:          return;
+        -:  371:        }
+    #####:  372:      fail = fail->fail;
+        -:  373:    }
+        -:  374:
+       15:  375:  tree->trie->fail = recourse;
+        -:  376:}
+        -:  377:
+        -:  378:/* Set delta entries for the links of the given tree such that
+        -:  379:   the preexisting delta value is larger than the current depth.  */
+        -:  380:static void
+function treedelta called 159 returned 100% blocks executed 100%
+      159:  381:treedelta (struct tree const *tree, ptrdiff_t depth, unsigned char delta[])
+        -:  382:{
+      159:  383:  if (!tree)
+branch  0 taken 70% (fallthrough)
+branch  1 taken 30%
+      111:  384:    return;
+       48:  385:  treedelta (tree->llink, depth, delta);
+call    0 returned 100%
+       48:  386:  treedelta (tree->rlink, depth, delta);
+call    0 returned 100%
+       48:  387:  if (depth < delta[tree->label])
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+       12:  388:    delta[tree->label] = depth;
+        -:  389:}
+        -:  390:
+        -:  391:/* Return true if A has every label in B.  */
+        -:  392:static bool _GL_ATTRIBUTE_PURE
+function hasevery called 331 returned 100% blocks executed 64%
+      331:  393:hasevery (struct tree const *a, struct tree const *b)
+        -:  394:{
+      331:  395:  if (!b)
+branch  0 taken 70% (fallthrough)
+branch  1 taken 30%
+      233:  396:    return true;
+       98:  397:  if (!hasevery (a, b->llink))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  398:    return false;
+       98:  399:  if (!hasevery (a, b->rlink))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  400:    return false;
+      196:  401:  while (a && b->label != a->label)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+    #####:  402:    if (b->label < a->label)
+branch  0 never executed
+branch  1 never executed
+    #####:  403:      a = a->llink;
+        -:  404:    else
+    #####:  405:      a = a->rlink;
+       98:  406:  return !!a;
+        -:  407:}
+        -:  408:
+        -:  409:/* Compute a vector, indexed by character code, of the trie nodes
+        -:  410:   referenced from the given tree.  */
+        -:  411:static void
+function treenext called 45 returned 100% blocks executed 100%
+       45:  412:treenext (struct tree const *tree, struct trie *next[])
+        -:  413:{
+       45:  414:  if (!tree)
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+       30:  415:    return;
+       15:  416:  treenext (tree->llink, next);
+call    0 returned 100%
+       15:  417:  treenext (tree->rlink, next);
+call    0 returned 100%
+       15:  418:  next[tree->label] = tree->trie;
+        -:  419:}
+        -:  420:
+        -:  421:/* Prepare a built keyword set for use.  */
+        -:  422:void
+function kwsprep called 15 returned 100% blocks executed 69%
+       15:  423:kwsprep (kwset_t kwset)
+        -:  424:{
+       15:  425:  char const *trans = kwset->trans;
+        -:  426:  ptrdiff_t i;
+        -:  427:  unsigned char deltabuf[NCHAR];
+       15:  428:  unsigned char *delta = trans ? deltabuf : kwset->delta;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  429:  struct trie *curr, *last;
+        -:  430:
+        -:  431:  /* Use Boyer-Moore if just one pattern, Aho-Corasick otherwise.  */
+       15:  432:  bool reverse = kwset->words == 1;
+        -:  433:
+       15:  434:  if (reverse)
+branch  0 taken 80% (fallthrough)
+branch  1 taken 20%
+        -:  435:    {
+        -:  436:      kwset_t new_kwset;
+        -:  437:
+        -:  438:      /* Enqueue the immediate descendants in the level order queue.  */
+       61:  439:      for (curr = last = kwset->trie; curr; curr = curr->next)
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+       49:  440:        enqueue (curr->links, &last);
+call    0 returned 100%
+        -:  441:
+        -:  442:      /* Looking for just one string.  Extract it from the trie.  */
+       12:  443:      kwset->target = obstack_alloc (&kwset->obstack, kwset->mind);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+       49:  444:      for (i = 0, curr = kwset->trie; i < kwset->mind; ++i)
+branch  0 taken 76%
+branch  1 taken 24% (fallthrough)
+        -:  445:        {
+       37:  446:          kwset->target[i] = curr->links->label;
+       37:  447:          curr = curr->next;
+        -:  448:        }
+        -:  449:
+       12:  450:      new_kwset = kwsalloc (kwset->trans);
+call    0 returned 100%
+       12:  451:      new_kwset->kwsexec = bmexec;
+       12:  452:      kwsincr (new_kwset, kwset->target, kwset->mind);
+call    0 returned 100%
+       12:  453:      obstack_free (&kwset->obstack, NULL);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+call    4 returned 100%
+       12:  454:      *kwset = *new_kwset;
+       12:  455:      free (new_kwset);
+        -:  456:    }
+        -:  457:
+        -:  458:  /* Initial values for the delta table; will be changed later.  The
+        -:  459:     delta entry for a given character is the smallest depth of any
+        -:  460:     node at which an outgoing edge is labeled by that character.  */
+       15:  461:  memset (delta, MIN (kwset->mind, UCHAR_MAX), sizeof deltabuf);
+        -:  462:
+        -:  463:  /* Traverse the nodes of the trie in level order, simultaneously
+        -:  464:     computing the delta table, failure function, and shift function.  */
+       78:  465:  for (curr = last = kwset->trie; curr; curr = curr->next)
+branch  0 taken 81%
+branch  1 taken 19% (fallthrough)
+        -:  466:    {
+        -:  467:      /* Enqueue the immediate descendants in the level order queue.  */
+       63:  468:      enqueue (curr->links, &last);
+call    0 returned 100%
+        -:  469:
+        -:  470:      /* Update the delta table for the descendants of this node.  */
+       63:  471:      treedelta (curr->links, curr->depth, delta);
+call    0 returned 100%
+        -:  472:
+        -:  473:      /* Compute the failure function for the descendants of this node.  */
+       63:  474:      treefails (curr->links, curr->fail, kwset->trie, reverse);
+call    0 returned 100%
+        -:  475:
+       63:  476:      if (reverse)
+branch  0 taken 78% (fallthrough)
+branch  1 taken 22%
+        -:  477:        {
+       49:  478:          curr->shift = kwset->mind;
+       49:  479:          curr->maxshift = kwset->mind;
+        -:  480:
+        -:  481:          /* Update the shifts at each node in the current node's chain
+        -:  482:             of fails back to the root.  */
+        -:  483:          struct trie *fail;
+      184:  484:          for (fail = curr->fail; fail; fail = fail->fail)
+branch  0 taken 73%
+branch  1 taken 27% (fallthrough)
+        -:  485:            {
+        -:  486:              /* If the current node has some outgoing edge that the fail
+        -:  487:                 doesn't, then the shift at the fail should be no larger
+        -:  488:                 than the difference of their depths.  */
+      135:  489:              if (!hasevery (fail->links, curr->links))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  490:                if (curr->depth - fail->depth < fail->shift)
+branch  0 never executed
+branch  1 never executed
+    #####:  491:                  fail->shift = curr->depth - fail->depth;
+        -:  492:
+        -:  493:              /* If the current node is accepting then the shift at the
+        -:  494:                 fail and its descendants should be no larger than the
+        -:  495:                 difference of their depths.  */
+      135:  496:              if (curr->accepting && fail->maxshift > curr->depth - fail->depth)
+branch  0 taken 27% (fallthrough)
+branch  1 taken 73%
+branch  2 taken 68% (fallthrough)
+branch  3 taken 32%
+       25:  497:                fail->maxshift = curr->depth - fail->depth;
+        -:  498:            }
+        -:  499:        }
+        -:  500:    }
+        -:  501:
+       15:  502:  if (reverse)
+branch  0 taken 80% (fallthrough)
+branch  1 taken 20%
+        -:  503:    {
+        -:  504:      /* Traverse the trie in level order again, fixing up all nodes whose
+        -:  505:         shift exceeds their inherited maxshift.  */
+       49:  506:      for (curr = kwset->trie->next; curr; curr = curr->next)
+branch  0 taken 76%
+branch  1 taken 24% (fallthrough)
+        -:  507:        {
+       37:  508:          if (curr->maxshift > curr->parent->maxshift)
+branch  0 taken 22% (fallthrough)
+branch  1 taken 78%
+        8:  509:            curr->maxshift = curr->parent->maxshift;
+       37:  510:          if (curr->shift > curr->maxshift)
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+       33:  511:            curr->shift = curr->maxshift;
+        -:  512:        }
+        -:  513:    }
+        -:  514:
+        -:  515:  /* Create a vector, indexed by character code, of the outgoing links
+        -:  516:     from the root node.  Accumulate GC1 and GC1HELP.  */
+        -:  517:  struct trie *nextbuf[NCHAR];
+       15:  518:  struct trie **next = trans ? nextbuf : kwset->next;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       15:  519:  memset (next, 0, sizeof nextbuf);
+       15:  520:  treenext (kwset->trie->links, next);
+call    0 returned 100%
+       15:  521:  int gc1 = -2;
+       15:  522:  int gc1help = -1;
+     3855:  523:  for (i = 0; i < NCHAR; i++)
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+        -:  524:    {
+     3840:  525:      int ti = i;
+     3840:  526:      if (trans)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  527:        {
+    #####:  528:          ti = U(trans[i]);
+call    0 never executed
+    #####:  529:          kwset->next[i] = next[ti];
+        -:  530:        }
+     3840:  531:      if (kwset->next[i])
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        -:  532:        {
+       15:  533:          if (gc1 < -1)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  534:            {
+       15:  535:              gc1 = ti;
+       15:  536:              gc1help = i;
+        -:  537:            }
+    #####:  538:          else if (gc1 == ti)
+branch  0 never executed
+branch  1 never executed
+    #####:  539:            gc1help = gc1help == ti ? i : -1;
+branch  0 never executed
+branch  1 never executed
+    #####:  540:          else if (i == ti && gc1 == gc1help)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  541:            gc1help = i;
+        -:  542:          else
+    #####:  543:            gc1 = -1;
+        -:  544:        }
+        -:  545:    }
+       15:  546:  kwset->gc1 = gc1;
+       15:  547:  kwset->gc1help = gc1help;
+        -:  548:
+       15:  549:  if (reverse)
+branch  0 taken 80% (fallthrough)
+branch  1 taken 20%
+        -:  550:    {
+        -:  551:      /* Looking for just one string.  Extract it from the trie.  */
+       12:  552:      kwset->target = obstack_alloc (&kwset->obstack, kwset->mind);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+       49:  553:      for (i = kwset->mind - 1, curr = kwset->trie; i >= 0; --i)
+branch  0 taken 76%
+branch  1 taken 24% (fallthrough)
+        -:  554:        {
+       37:  555:          kwset->target[i] = curr->links->label;
+       37:  556:          curr = curr->next;
+        -:  557:        }
+        -:  558:
+       12:  559:      if (kwset->mind > 1)
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -:  560:        {
+        -:  561:          /* Looking for the delta2 shift that might be made after a
+        -:  562:             backwards match has failed.  Extract it from the trie.  */
+        -:  563:          kwset->shift
+        8:  564:            = obstack_alloc (&kwset->obstack,
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+        -:  565:                             sizeof *kwset->shift * (kwset->mind - 1));
+       33:  566:          for (i = 0, curr = kwset->trie->next; i < kwset->mind - 1; ++i)
+branch  0 taken 76%
+branch  1 taken 24% (fallthrough)
+        -:  567:            {
+       25:  568:              kwset->shift[i] = curr->shift;
+       25:  569:              curr = curr->next;
+        -:  570:            }
+        -:  571:
+        -:  572:          /* The penultimate byte.  */
+        8:  573:          kwset->gc2 = tr (trans, kwset->target[kwset->mind - 2]);
+call    0 returned 100%
+        -:  574:        }
+        -:  575:    }
+        -:  576:
+        -:  577:  /* Fix things up for any translation table.  */
+       15:  578:  if (trans)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  579:    for (i = 0; i < NCHAR; ++i)
+branch  0 never executed
+branch  1 never executed
+    #####:  580:      kwset->delta[i] = delta[U(trans[i])];
+call    0 never executed
+       15:  581:}
+        -:  582:
+        -:  583:/* Delta2 portion of a Boyer-Moore search.  *TP is the string text
+        -:  584:   pointer; it is updated in place.  EP is the end of the string text,
+        -:  585:   and SP the end of the pattern.  LEN is the pattern length; it must
+        -:  586:   be at least 2.  TRANS, if nonnull, is the input translation table.
+        -:  587:   GC1 and GC2 are the last and second-from last bytes of the pattern,
+        -:  588:   transliterated by TRANS; the caller precomputes them for
+        -:  589:   efficiency.  If D1 is nonnull, it is a delta1 table for shifting *TP
+        -:  590:   when failing.  KWSET->shift says how much to shift.  */
+        -:  591:static inline bool
+function bm_delta2_search called 0 returned 0% blocks executed 0%
+    #####:  592:bm_delta2_search (char const **tpp, char const *ep, char const *sp,
+        -:  593:                  ptrdiff_t len,
+        -:  594:                  char const *trans, char gc1, char gc2,
+        -:  595:                  unsigned char const *d1, kwset_t kwset)
+        -:  596:{
+    #####:  597:  char const *tp = *tpp;
+    #####:  598:  ptrdiff_t d = len, skip = 0;
+        -:  599:
+        -:  600:  while (true)
+    #####:  601:    {
+    #####:  602:      ptrdiff_t i = 2;
+    #####:  603:      if (tr (trans, tp[-2]) == gc2)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  604:        {
+    #####:  605:          while (++i <= d)
+branch  0 never executed
+branch  1 never executed
+    #####:  606:            if (tr (trans, tp[-i]) != tr (trans, sp[-i]))
+call    0 never executed
+call    1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  607:              break;
+    #####:  608:          if (i > d)
+branch  0 never executed
+branch  1 never executed
+        -:  609:            {
+    #####:  610:              for (i = d + skip + 1; i <= len; ++i)
+branch  0 never executed
+branch  1 never executed
+    #####:  611:                if (tr (trans, tp[-i]) != tr (trans, sp[-i]))
+call    0 never executed
+call    1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  612:                  break;
+    #####:  613:              if (i > len)
+branch  0 never executed
+branch  1 never executed
+        -:  614:                {
+    #####:  615:                  *tpp = tp - len;
+    #####:  616:                  return true;
+        -:  617:                }
+        -:  618:            }
+        -:  619:        }
+        -:  620:
+    #####:  621:      tp += d = kwset->shift[i - 2];
+    #####:  622:      if (tp > ep)
+branch  0 never executed
+branch  1 never executed
+    #####:  623:        break;
+    #####:  624:      if (tr (trans, tp[-1]) != gc1)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  625:        {
+    #####:  626:          if (d1)
+branch  0 never executed
+branch  1 never executed
+    #####:  627:            tp += d1[U(tp[-1])];
+call    0 never executed
+    #####:  628:          break;
+        -:  629:        }
+    #####:  630:      skip = i - 1;
+        -:  631:    }
+        -:  632:
+    #####:  633:  *tpp = tp;
+    #####:  634:  return false;
+        -:  635:}
+        -:  636:
+        -:  637:/* Return the address of the first byte in the buffer S (of size N)
+        -:  638:   that matches the terminal byte specified by KWSET, or NULL if there
+        -:  639:   is no match.  KWSET->gc1 should be nonnegative.  */
+        -:  640:static char const *
+function memchr_kwset called 5 returned 100% blocks executed 50%
+        5:  641:memchr_kwset (char const *s, ptrdiff_t n, kwset_t kwset)
+        -:  642:{
+        5:  643:  char const *slim = s + n;
+        5:  644:  if (kwset->gc1help < 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  645:    {
+    #####:  646:      for (; s < slim; s++)
+branch  0 never executed
+branch  1 never executed
+    #####:  647:        if (kwset->next[U(*s)])
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  648:          return s;
+        -:  649:    }
+        -:  650:  else
+        -:  651:    {
+        5:  652:      int small_heuristic = 2;
+        5:  653:      size_t small_bytes = small_heuristic * sizeof (unsigned long int);
+       22:  654:      while (s < slim)
+branch  0 taken 71%
+branch  1 taken 29% (fallthrough)
+        -:  655:        {
+       12:  656:          if (kwset->next[U(*s)])
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  657:            return s;
+       12:  658:          s++;
+       12:  659:          if ((uintptr_t) s % small_bytes == 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  660:            return memchr2 (s, kwset->gc1, kwset->gc1help, slim - s);
+        -:  661:        }
+        -:  662:    }
+        5:  663:  return NULL;
+        -:  664:}
+        -:  665:
+        -:  666:/* Fast Boyer-Moore search (inlinable version).  */
+        -:  667:static inline ptrdiff_t _GL_ATTRIBUTE_PURE
+function bmexec_trans called 15 returned 100% blocks executed 39%
+       15:  668:bmexec_trans (kwset_t kwset, char const *text, ptrdiff_t size)
+        -:  669:{
+       15:  670:  assume (0 <= size);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        -:  671:  unsigned char const *d1;
+        -:  672:  char const *ep, *sp, *tp;
+        -:  673:  int d;
+       15:  674:  ptrdiff_t len = kwset->mind;
+       15:  675:  char const *trans = kwset->trans;
+        -:  676:
+       15:  677:  if (len == 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  678:    return 0;
+       15:  679:  if (len > size)
+branch  0 taken 53% (fallthrough)
+branch  1 taken 47%
+        8:  680:    return -1;
+        7:  681:  if (len == 1)
+branch  0 taken 71% (fallthrough)
+branch  1 taken 29%
+        -:  682:    {
+        5:  683:      tp = memchr_kwset (text, size, kwset);
+call    0 returned 100%
+        5:  684:      return tp ? tp - text : -1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  685:    }
+        -:  686:
+        2:  687:  d1 = kwset->delta;
+        2:  688:  sp = kwset->target + len;
+        2:  689:  tp = text + len;
+        2:  690:  char gc1 = kwset->gc1;
+        2:  691:  char gc2 = kwset->gc2;
+        -:  692:
+        -:  693:  /* Significance of 12: 1 (initial offset) + 10 (skip loop) + 1 (md2).  */
+        -:  694:  ptrdiff_t len12;
+        2:  695:  if (!INT_MULTIPLY_WRAPV (len, 12, &len12) && len12 < size)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:  696:    /* 11 is not a bug, the initial offset happens only once.  */
+    #####:  697:    for (ep = text + size - 11 * len; tp <= ep; )
+branch  0 never executed
+branch  1 never executed
+        -:  698:      {
+    #####:  699:        char const *tp0 = tp;
+    #####:  700:        d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  701:        d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  702:        if (d != 0)
+branch  0 never executed
+branch  1 never executed
+        -:  703:          {
+    #####:  704:            d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  705:            d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  706:            d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  707:            if (d != 0)
+branch  0 never executed
+branch  1 never executed
+        -:  708:              {
+    #####:  709:                d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  710:                d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  711:                d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  712:                if (d != 0)
+branch  0 never executed
+branch  1 never executed
+        -:  713:                  {
+    #####:  714:                    d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+    #####:  715:                    d = d1[U(tp[-1])], tp += d;
+call    0 never executed
+        -:  716:
+        -:  717:                    /* As a heuristic, prefer memchr to seeking by
+        -:  718:                       delta1 when the latter doesn't advance much.  */
+    #####:  719:                    int advance_heuristic = 16 * sizeof (long);
+    #####:  720:                    if (advance_heuristic <= tp - tp0)
+branch  0 never executed
+branch  1 never executed
+    #####:  721:                      continue;
+    #####:  722:                    tp--;
+    #####:  723:                    tp = memchr_kwset (tp, text + size - tp, kwset);
+call    0 never executed
+    #####:  724:                    if (! tp)
+branch  0 never executed
+branch  1 never executed
+    #####:  725:                      return -1;
+    #####:  726:                    tp++;
+    #####:  727:                    if (ep <= tp)
+branch  0 never executed
+branch  1 never executed
+    #####:  728:                      break;
+        -:  729:                  }
+        -:  730:              }
+        -:  731:          }
+    #####:  732:        if (bm_delta2_search (&tp, ep, sp, len, trans, gc1, gc2, d1, kwset))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  733:          return tp - text;
+        -:  734:      }
+        -:  735:
+        -:  736:  /* Now only a few characters are left to search.  Carefully avoid
+        -:  737:     ever producing an out-of-bounds pointer.  */
+        2:  738:  ep = text + size;
+        2:  739:  d = d1[U(tp[-1])];
+call    0 returned 100%
+       10:  740:  while (d <= ep - tp)
+branch  0 taken 75%
+branch  1 taken 25% (fallthrough)
+        -:  741:    {
+        6:  742:      d = d1[U((tp += d)[-1])];
+call    0 returned 100%
+        6:  743:      if (d != 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        6:  744:        continue;
+    #####:  745:      if (bm_delta2_search (&tp, ep, sp, len, trans, gc1, gc2, NULL, kwset))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  746:        return tp - text;
+        -:  747:    }
+        -:  748:
+        2:  749:  return -1;
+        -:  750:}
+        -:  751:
+        -:  752:/* Fast Boyer-Moore search.  */
+        -:  753:static ptrdiff_t
+function bmexec called 15 returned 100% blocks executed 80%
+       15:  754:bmexec (kwset_t kwset, char const *text, ptrdiff_t size,
+        -:  755:        struct kwsmatch *kwsmatch, bool longest)
+        -:  756:{
+        -:  757:  /* Help the compiler inline in two ways, depending on whether
+        -:  758:     kwset->trans is null.  */
+       15:  759:  ptrdiff_t ret = (IGNORE_DUPLICATE_BRANCH_WARNING
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  760:                   (kwset->trans
+        -:  761:                    ? bmexec_trans (kwset, text, size)
+        -:  762:                    : bmexec_trans (kwset, text, size)));
+       15:  763:  kwsmatch->index = 0;
+       15:  764:  kwsmatch->offset = ret;
+       15:  765:  kwsmatch->size = kwset->mind;
+       15:  766:  return ret;
+        -:  767:}
+        -:  768:
+        -:  769:/* Hairy multiple string search with the Aho-Corasick algorithm.
+        -:  770:   (inlinable version)  */
+        -:  771:static inline ptrdiff_t
+function acexec_trans called 3 returned 100% blocks executed 12%
+        3:  772:acexec_trans (kwset_t kwset, char const *text, ptrdiff_t len,
+        -:  773:              struct kwsmatch *kwsmatch, bool longest)
+        -:  774:{
+        -:  775:  struct trie const *trie, *accept;
+        -:  776:  char const *tp, *left, *lim;
+        -:  777:  struct tree const *tree;
+        -:  778:  char const *trans;
+        -:  779:
+        -:  780:  /* Initialize register copies and look for easy ways out.  */
+        3:  781:  if (len < kwset->mind)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  782:    return -1;
+        3:  783:  trans = kwset->trans;
+        3:  784:  trie = kwset->trie;
+        3:  785:  lim = text + len;
+        3:  786:  tp = text;
+        -:  787:
+        3:  788:  if (!trie->accepting)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  789:    {
+        -:  790:      unsigned char c;
+    #####:  791:      int gc1 = kwset->gc1;
+        -:  792:
+        -:  793:      while (true)
+        -:  794:        {
+    #####:  795:          if (gc1 < 0)
+branch  0 never executed
+branch  1 never executed
+        -:  796:            {
+    #####:  797:              while (! (trie = kwset->next[c = tr (trans, *tp++)]))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  798:                if (tp >= lim)
+branch  0 never executed
+branch  1 never executed
+    #####:  799:                  return -1;
+        -:  800:            }
+        -:  801:          else
+        -:  802:            {
+    #####:  803:              tp = memchr_kwset (tp, lim - tp, kwset);
+call    0 never executed
+    #####:  804:              if (!tp)
+branch  0 never executed
+branch  1 never executed
+    #####:  805:                return -1;
+    #####:  806:              c = tr (trans, *tp++);
+call    0 never executed
+    #####:  807:              trie = kwset->next[c];
+        -:  808:            }
+        -:  809:
+        -:  810:          while (true)
+        -:  811:            {
+    #####:  812:              if (trie->accepting)
+branch  0 never executed
+branch  1 never executed
+    #####:  813:                goto match;
+    #####:  814:              if (tp >= lim)
+branch  0 never executed
+branch  1 never executed
+    #####:  815:                return -1;
+    #####:  816:              c = tr (trans, *tp++);
+call    0 never executed
+        -:  817:
+    #####:  818:              for (tree = trie->links; c != tree->label; )
+branch  0 never executed
+branch  1 never executed
+        -:  819:                {
+    #####:  820:                  tree = c < tree->label ? tree->llink : tree->rlink;
+branch  0 never executed
+branch  1 never executed
+    #####:  821:                  if (! tree)
+branch  0 never executed
+branch  1 never executed
+        -:  822:                    {
+    #####:  823:                      trie = trie->fail;
+    #####:  824:                      if (!trie)
+branch  0 never executed
+branch  1 never executed
+        -:  825:                        {
+    #####:  826:                          trie = kwset->next[c];
+    #####:  827:                          if (trie)
+branch  0 never executed
+branch  1 never executed
+    #####:  828:                            goto have_trie;
+    #####:  829:                          if (tp >= lim)
+branch  0 never executed
+branch  1 never executed
+    #####:  830:                            return -1;
+    #####:  831:                          goto next_c;
+        -:  832:                        }
+    #####:  833:                      if (trie->accepting)
+branch  0 never executed
+branch  1 never executed
+        -:  834:                        {
+    #####:  835:                          --tp;
+    #####:  836:                          goto match;
+        -:  837:                        }
+    #####:  838:                      tree = trie->links;
+        -:  839:                    }
+        -:  840:                }
+    #####:  841:              trie = tree->trie;
+    #####:  842:            have_trie:;
+        -:  843:            }
+    #####:  844:        next_c:;
+        -:  845:        }
+        -:  846:    }
+        -:  847:
+        3:  848: match:
+        3:  849:  accept = trie;
+        6:  850:  while (accept->accepting == SIZE_MAX)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+    #####:  851:    accept = accept->fail;
+        3:  852:  left = tp - accept->depth;
+        -:  853:
+        -:  854:  /* Try left-most longest match.  */
+        3:  855:  if (longest)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  856:    {
+    #####:  857:      while (tp < lim)
+branch  0 never executed
+branch  1 never executed
+        -:  858:        {
+        -:  859:          struct trie const *accept1;
+        -:  860:          char const *left1;
+    #####:  861:          unsigned char c = tr (trans, *tp++);
+call    0 never executed
+        -:  862:
+        -:  863:          do
+        -:  864:            {
+    #####:  865:              tree = trie->links;
+    #####:  866:              while (tree && c != tree->label)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  867:                tree = c < tree->label ? tree->llink : tree->rlink;
+branch  0 never executed
+branch  1 never executed
+        -:  868:            }
+    #####:  869:          while (!tree && (trie = trie->fail) && accept->depth <= trie->depth);
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  870:
+    #####:  871:          if (!tree)
+branch  0 never executed
+branch  1 never executed
+    #####:  872:            break;
+    #####:  873:          trie = tree->trie;
+    #####:  874:          if (trie->accepting)
+branch  0 never executed
+branch  1 never executed
+        -:  875:            {
+    #####:  876:              accept1 = trie;
+    #####:  877:              while (accept1->accepting == SIZE_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####:  878:                accept1 = accept1->fail;
+    #####:  879:              left1 = tp - accept1->depth;
+    #####:  880:              if (left1 <= left)
+branch  0 never executed
+branch  1 never executed
+        -:  881:                {
+    #####:  882:                  left = left1;
+    #####:  883:                  accept = accept1;
+        -:  884:                }
+        -:  885:            }
+        -:  886:        }
+        -:  887:    }
+        -:  888:
+        3:  889:  kwsmatch->index = accept->accepting / 2;
+        3:  890:  kwsmatch->offset = left - text;
+        3:  891:  kwsmatch->size = accept->depth;
+        -:  892:
+        3:  893:  return left - text;
+        -:  894:}
+        -:  895:
+        -:  896:/* Hairy multiple string search with Aho-Corasick algorithm.  */
+        -:  897:static ptrdiff_t
+function acexec called 3 returned 100% blocks executed 71%
+        3:  898:acexec (kwset_t kwset, char const *text, ptrdiff_t size,
+        -:  899:        struct kwsmatch *kwsmatch, bool longest)
+        -:  900:{
+        3:  901:  assume (0 <= size);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        -:  902:  /* Help the compiler inline in two ways, depending on whether
+        -:  903:     kwset->trans is null.  */
+        3:  904:  return (IGNORE_DUPLICATE_BRANCH_WARNING
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 returned 100%
+        -:  905:          (kwset->trans
+        -:  906:           ? acexec_trans (kwset, text, size, kwsmatch, longest)
+        -:  907:           : acexec_trans (kwset, text, size, kwsmatch, longest)));
+        -:  908:}
+        -:  909:
+        -:  910:/* Find the first instance of a KWSET member in TEXT, which has SIZE bytes.
+        -:  911:   Return the offset (into TEXT) of the first byte of the matching substring,
+        -:  912:   or -1 if no match is found.  Upon a match, store details in
+        -:  913:   *KWSMATCH: index of matched keyword, start offset (same as the return
+        -:  914:   value), and length.  If LONGEST, find the longest match; otherwise
+        -:  915:   any match will do.  */
+        -:  916:ptrdiff_t
+function kwsexec called 18 returned 100% blocks executed 100%
+       18:  917:kwsexec (kwset_t kwset, char const *text, ptrdiff_t size,
+        -:  918:         struct kwsmatch *kwsmatch, bool longest)
+        -:  919:{
+       18:  920:  return kwset->kwsexec (kwset, text, size, kwsmatch, longest);
+call    0 returned 100%
+        -:  921:}
+        -:  922:
+        -:  923:/* Free the components of the given keyword set.  */
+        -:  924:void
+function kwsfree called 0 returned 0% blocks executed 0%
+    #####:  925:kwsfree (kwset_t kwset)
+        -:  926:{
+    #####:  927:  obstack_free (&kwset->obstack, NULL);
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+call    4 never executed
+    #####:  928:  free (kwset);
+    #####:  929:}

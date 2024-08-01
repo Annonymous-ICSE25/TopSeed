@@ -1,0 +1,2246 @@
+        -:    0:Source:../../src/tty.c
+        -:    0:Programs:20
+        -:    1:/*!
+        -:    2:*  \file tty.c
+        -:    3:*  \brief Screen support functions and major output function.
+        -:    4:*/
+        -:    5:/*
+        -:    6:*  Copyright (c) 1994, 95, 96, 1997, 2000, 2011 Thomas Esken
+        -:    7:*  Copyright (c) 2010, 2011, 2013 Free Software Foundation, Inc.
+        -:    8:*
+        -:    9:*  This software doesn't claim completeness, correctness or usability.
+        -:   10:*  On principle I will not be liable for ANY damages or losses (implicit
+        -:   11:*  or explicit), which result from using or handling my software.
+        -:   12:*  If you use this software, you agree without any exception to this
+        -:   13:*  agreement, which binds you LEGALLY !!
+        -:   14:*
+        -:   15:*  This program is free software; you can redistribute it and/or modify
+        -:   16:*  it under the terms of the `GNU General Public License' as published by
+        -:   17:*  the `Free Software Foundation'; either version 3, or (at your option)
+        -:   18:*  any later version.
+        -:   19:*
+        -:   20:*  You should have received a copy of the `GNU General Public License'
+        -:   21:*  along with this program; if not, write to the:
+        -:   22:*
+        -:   23:*/
+        -:   24:
+        -:   25:
+        -:   26:
+        -:   27:
+        -:   28:/*
+        -:   29:*  Include header files.
+        -:   30:*/
+        -:   31:#include "tailor.h"
+        -:   32:#if HAVE_CTYPE_H
+        -:   33:# include <ctype.h>
+        -:   34:#endif
+        -:   35:#if HAVE_SYS_TYPES_H
+        -:   36:# include <sys/types.h>
+        -:   37:#endif
+        -:   38:#if USE_PAGER || USE_HLS
+        -:   39:# if defined(UNIX) && !defined(DJG)
+        -:   40:#  if HAVE_TERMIOS_H && HAVE_TERMIOS_FUNCS
+        -:   41:#   include <termios.h>
+        -:   42:#   if HAVE_SYS_IOCTL_H && !defined(TIOCGWINSZ)
+        -:   43:#    include <sys/ioctl.h>
+        -:   44:#   endif
+        -:   45:#  else	/* !HAVE_TERMIOS_H || !HAVE_TERMIOS_FUNCS */
+        -:   46:#   if HAVE_TERMIO_H
+        -:   47:#    include <termio.h>
+        -:   48:#   else /* !HAVE_TERMIO_H */
+        -:   49:#    include <sgtty.h>
+        -:   50:#    if HAVE_SYS_IOCTL_H && (defined(WIOCGETD) || defined(TIOCGWINSZ) || defined(TCGETA) || defined(TIOCGETP))
+        -:   51:#     include <sys/ioctl.h>
+        -:   52:#    endif
+        -:   53:#   endif /* !HAVE_TERMIO_H */
+        -:   54:#  endif /* !HAVE_TERMIOS_H || !HAVE_TERMIOS_FUNCS */
+        -:   55:/*
+        -:   56:*  For the Unix PC (ATT 7300 & 3B1):  (taken from less-278 by Mark Nudelman)
+        -:   57:*  Since WIOCGETD is defined in sys/window.h, we can't use that to decide
+        -:   58:*  whether to include sys/window.h.  Use SIGPHONE from sys/signal.h instead.
+        -:   59:*/
+        -:   60:#  ifndef TIOCGWINSZ
+        -:   61:#   include <sys/signal.h>
+        -:   62:#   ifdef SIGPHONE
+        -:   63:#    include <sys/window.h>
+        -:   64:#   endif
+        -:   65:#  endif
+        -:   66:#  if HAVE_SYS_STREAM_H
+        -:   67:#   include <sys/stream.h>
+        -:   68:#  endif
+        -:   69:#  if HAVE_SYS_PTEM_H
+        -:   70:#   include <sys/ptem.h>
+        -:   71:#  endif
+        -:   72:# endif	/* UNIX && !DJG */
+        -:   73:# ifdef DJG
+        -:   74:#  include <pc.h>
+        -:   75:# else /* !DJG */
+        -:   76:#  if defined(UNIX) || (defined(OS2) && defined(__GNUC__))
+        -:   77:#   if HAVE_TERMCAP_H && HAVE_TTYLIBS
+        -:   78:#    if HAVE_TERMIOS_H && HAVE_TERMIOS_FUNCS && defined(OS2) && defined(__GNUC__)
+        -:   79:#     include <termios.h>
+        -:   80:#    endif
+        -:   81:#    include <termcap.h>
+        -:   82:#   endif /* HAVE_TERMCAP_H && HAVE_TTYLIBS */
+        -:   83:#  endif /* UNIX || (OS2 && __GNUC__) */
+        -:   84:# endif	/* !DJG */
+        -:   85:#endif /* USE_PAGER || USE_HLS */
+        -:   86:#include "common.h"
+        -:   87:#include "globals.h"
+        -:   88:#include "utils.h"
+        -:   89:#include "tty.h"
+        -:   90:
+        -:   91:
+        -:   92:
+        -:   93:/*
+        -:   94:*  static functions prototypes.
+        -:   95:*/
+        -:   96:__BEGIN_DECLARATIONS
+        -:   97:/*
+        -:   98:************************************************** Defined in `tty.c'.
+        -:   99:*/
+        -:  100:#if defined(GCAL_TCAP) && USE_HLS
+        -:  101:static char *skip_leading_padding_info __P_ ((char *sequence_str));
+        -:  102:#endif
+        -:  103:#if USE_HLS || USE_PAGER
+        -:  104:# ifdef GCAL_TCAP
+        -:  105:static Bool open_termcap __P_ ((void));
+        -:  106:#  if USE_HLS
+        -:  107:static void get_ospeed __P_ ((void));
+        -:  108:static int outchar __P_ ((int ch));
+        -:  109:static Bool get_termcap_hls __P_ ((Bool * hls1_set, Bool * hls2_set));
+        -:  110:#  endif /* USE_HLS */
+        -:  111:#  if USE_PAGER
+        -:  112:static Bool get_termcap_scr_attrib __P_ ((int *rows, int *cols));
+        -:  113:#  endif /* USE_PAGER */
+        -:  114:# else /* !GCAL_TCAP */
+        -:  115:#  if defined(MSDOS) && USE_PAGER
+        -:  116:static Uchar peek_byte __P_ ((Uint segment, Uint offset));
+        -:  117:#  endif
+        -:  118:# endif	/* GCAL_TCAP */
+        -:  119:#endif /* USE_HLS || USE_PAGER */
+        -:  120:static void
+        -:  121:  get_hl_seq __P_ ((const char *sequence_str,
+        -:  122:		    Bool * hls1_set, Bool * hls2_set));
+        -:  123:#if !HAVE_STRTOL
+        -:  124:static int sbyte2int __P_ ((const char *string, const int base));
+        -:  125:#endif
+        -:  126:__END_DECLARATIONS
+        -:  127:/*
+        -:  128:*  static variables definitions.
+        -:  129:*/
+        -:  130:#if USE_PAGER || USE_HLS
+        -:  131:# ifdef GCAL_TCAP
+        -:  132:/*! Module global Termcap buffer. */
+        -:  133:static char tc_buf[TC_BUFLEN];
+        -:  134:
+        -:  135:/*! Termcap access error occurred. */
+        -:  136:static Bool tc_no_error = TRUE;
+        -:  137:
+        -:  138:#  if USE_HLS
+        -:  139:/*! Module global file which is used by the `tputs()' function. */
+        -:  140:static FILE *fp_outchar = (FILE *) NULL;
+        -:  141:
+        -:  142:/*! Stores whether padding is used or not. */
+        -:  143:static Bool is_padding = FALSE;
+        -:  144:#  endif
+        -:  145:# endif	/* GCAL_TCAP */
+        -:  146:
+        -:  147:# if USE_PAGER
+        -:  148:/*! Terminal has automatic margins. */
+        -:  149:static Bool tty_am = TRUE;
+        -:  150:
+        -:  151:/*! Terminal ignores newline after wrap. */
+        -:  152:static Bool tty_xn = FALSE;
+        -:  153:# endif	/* USE_PAGER */
+        -:  154:#endif /* USE_PAGER || USE_HLS */
+        -:  155:
+        -:  156:
+        -:  157:
+        -:  158:/*
+        -:  159:*  Function implementations.
+        -:  160:*/
+        -:  161:void
+function print_text called 10 returned 100% blocks executed 3%
+       10:  162:print_text (fp, text_line)
+        -:  163:     FILE *fp;
+        -:  164:     char *text_line;
+        -:  165:/*!
+        -:  166:   This is the central tty output function, which works according to
+        -:  167:     actual display mode.  It prints a line of text given in `text_line'
+        -:  168:     with newline to file `fp' with paging option (very poor and simple
+        -:  169:     paging, only used if preprocessor symbol USE_PAGER is defined) and
+        -:  170:     ALWAYS "deletes" the delivered `text_line' automatically after printing
+        -:  171:     (*text_line = '\0').
+        -:  172:*/
+        -:  173:{
+        -:  174:#if USE_PAGER || (defined(GCAL_TCAP) && USE_HLS)
+       10:  175:  if (is_tty
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  176:# if USE_PAGER && (!defined(GCAL_TCAP) || !USE_HLS)
+        -:  177:      && pager_flag
+        -:  178:# endif
+    #####:  179:      && is_tty1 && is_tty2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  180:    {
+    #####:  181:      register int hls_pos = SPECIAL_VALUE;
+    #####:  182:      register int hls1_pos = SPECIAL_VALUE;
+    #####:  183:      register int hls2_pos = SPECIAL_VALUE;
+    #####:  184:      register int hls_chars = 0;
+    #####:  185:      register int i = 0;
+        -:  186:      register int nl;
+        -:  187:      register int j;
+        -:  188:# if USE_PAGER
+        -:  189:      register int k;
+    #####:  190:      register int final_nl = 0;
+        -:  191:      static int lines_printed = 0;
+        -:  192:# endif
+    #####:  193:      auto char *ptr_1hls = (char *) NULL;
+    #####:  194:      auto char *ptr_2hls = (char *) NULL;
+        -:  195:      auto Bool hls_start;
+        -:  196:# if USE_PAGER
+    #####:  197:      auto Bool print_hls = (Bool) (is_tty && highlight_flag && !emu_hls);
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  198:# endif
+    #####:  199:      auto Bool nl_found = FALSE;
+    #####:  200:      auto Bool buf_highlight_flag = highlight_flag;
+        -:  201:
+        -:  202:
+        -:  203:# if defined(GCAL_TCAP) && USE_HLS
+    #####:  204:      fp_outchar = fp;
+        -:  205:# endif
+        -:  206:      LOOP
+        -:  207:      {
+        -:  208:# if USE_PAGER
+    #####:  209:	if (final_nl != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  210:	  final_nl = 0;
+        -:  211:# endif
+    #####:  212:	hls_chars = nl = j = 0;
+    #####:  213:	if (highlight_flag && !emu_hls)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  214:	  {
+        -:  215:	    /*
+        -:  216:	       Try to detect a highlighting sequence,
+        -:  217:	       store its position and point to it...
+        -:  218:	     */
+    #####:  219:	    hls_pos = hls1_pos = hls2_pos = SPECIAL_VALUE;
+    #####:  220:	    if (*(text_line + i))
+branch  0 never executed
+branch  1 never executed
+        -:  221:	      {
+    #####:  222:		if (tty_cols != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+        -:  223:		  {
+    #####:  224:		    ptr_1hls = strstr (text_line + i, ehls1s.seq);
+    #####:  225:		    if (ptr_1hls != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  226:		      hls1_pos = i + (int) (ptr_1hls - (text_line + i));
+    #####:  227:		    ptr_2hls = strstr (text_line + i, ehls2s.seq);
+    #####:  228:		    if (ptr_2hls != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  229:		      hls2_pos = i + (int) (ptr_2hls - (text_line + i));
+        -:  230:		  }
+    #####:  231:		if ((hls1_pos != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  232:		    && (hls2_pos != SPECIAL_VALUE))
+branch  0 never executed
+branch  1 never executed
+        -:  233:		  {
+    #####:  234:		    if (hls1_pos > hls2_pos)
+branch  0 never executed
+branch  1 never executed
+    #####:  235:		      hls_pos = hls2_pos;
+        -:  236:		    else
+    #####:  237:		      hls_pos = hls1_pos;
+        -:  238:		  }
+    #####:  239:		else if (hls1_pos != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  240:		  hls_pos = hls1_pos;
+    #####:  241:		else if (hls2_pos != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  242:		  hls_pos = hls2_pos;
+        -:  243:	      }
+    #####:  244:	    if (hls_pos == SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  245:	      highlight_flag = FALSE;
+        -:  246:	  }
+        -:  247:	/*
+        -:  248:	   No real highlighting sequence found AND
+        -:  249:	   either: no '\n'-NEWLINE character found
+        -:  250:	   or: no "pager_flag" given
+        -:  251:	   or: "pager_flag" given but we use an external paging program
+        -:  252:	   --> Let's print the complete line as a whole!
+        -:  253:	 */
+    #####:  254:	if ((strchr (text_line + i, '\n') == (char *) NULL
+branch  0 never executed
+branch  1 never executed
+        -:  255:# if USE_PAGER
+    #####:  256:	     || !pager_flag
+branch  0 never executed
+branch  1 never executed
+        -:  257:#  ifdef GCAL_EPAGER
+    #####:  258:	     || (pager_flag && (ext_pager != (char *) NULL))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  259:#  endif
+        -:  260:# endif
+    #####:  261:	    ) && (hls_pos == SPECIAL_VALUE))
+branch  0 never executed
+branch  1 never executed
+        -:  262:	  {
+    #####:  263:	    fprintf (fp, "%s\n", text_line + i);
+call    0 never executed
+    #####:  264:	    i = (int) strlen (text_line);
+        -:  265:	  }
+        -:  266:	else
+        -:  267:	  {
+        -:  268:	    /*
+        -:  269:	       Otherwise we have to inspect each character of the line
+        -:  270:	       whether it's part of a real highlighting sequence or not
+        -:  271:	       (because of managing a potential padding) and to count
+        -:  272:	       the NEWLINES so we are able to paginate the output internally.
+        -:  273:	     */
+    #####:  274:	    hls_start = TRUE;
+    #####:  275:	    while (*(text_line + i))
+branch  0 never executed
+branch  1 never executed
+        -:  276:	      {
+        -:  277:		/*
+        -:  278:		   `\n'-NEWLINE character found (actual line must be a RC
+        -:  279:		   fixed date => TILDE-character expansion was performed):
+        -:  280:		   Print this NEWLINE character.
+        -:  281:		 */
+    #####:  282:		if (*(text_line + i) == '\n')
+branch  0 never executed
+branch  1 never executed
+        -:  283:		  {
+    #####:  284:		    i++;
+    #####:  285:		    if (j)
+branch  0 never executed
+branch  1 never executed
+    #####:  286:		      nl++;
+    #####:  287:		    nl_found = TRUE;
+        -:  288:# if USE_PAGER
+    #####:  289:		    if (final_nl != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  290:		      final_nl = 1;
+        -:  291:# endif
+    #####:  292:		    break;
+        -:  293:		  }
+        -:  294:		/*
+        -:  295:		   Look for a real highlighting sequence;
+        -:  296:		   if found, store its length in `hls_chars'
+        -:  297:		   and print it explicitly by means of tputs().
+        -:  298:		 */
+    #####:  299:		if (highlight_flag && !emu_hls && (i == hls_pos))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  300:		  {
+    #####:  301:		    if (hls_pos == hls1_pos)
+branch  0 never executed
+branch  1 never executed
+        -:  302:		      {
+    #####:  303:			if (hls_start)
+branch  0 never executed
+branch  1 never executed
+        -:  304:			  {
+        -:  305:# if defined(GCAL_TCAP) && USE_HLS
+    #####:  306:			    tputs ((char *) ehls1s.seq, 1, outchar);
+call    0 never executed
+        -:  307:# else /* !GCAL_TCAP || !USE_HLS */
+        -:  308:			    fputs (ehls1s.seq, fp);
+        -:  309:# endif	/* !GCAL_TCAP || !USE_HLS */
+    #####:  310:			    hls_chars += ehls1s.len;
+    #####:  311:			    i += ehls1s.len;
+    #####:  312:			    if (tty_cols != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  313:			      ptr_1hls = strstr (text_line + i, ehls1e.seq);
+    #####:  314:			    if (ptr_1hls != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  315:			      hls_pos = hls1_pos =
+    #####:  316:				i + (int) (ptr_1hls - (text_line + i));
+        -:  317:			    else
+    #####:  318:			      hls_pos = hls2_pos;
+    #####:  319:			    hls_start = FALSE;
+        -:  320:			  }
+        -:  321:			else
+        -:  322:			  {
+        -:  323:# if defined(GCAL_TCAP) && USE_HLS
+    #####:  324:			    tputs ((char *) ehls1e.seq, 1, outchar);
+call    0 never executed
+        -:  325:# else /* !GCAL_TCAP || !USE_HLS */
+        -:  326:			    fputs (ehls1e.seq, fp);
+        -:  327:# endif	/* !GCAL_TCAP || !USE_HLS */
+    #####:  328:			    hls_chars += ehls1e.len;
+    #####:  329:			    i += ehls1e.len;
+    #####:  330:			    if (tty_cols != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  331:			      ptr_1hls = strstr (text_line + i, ehls1s.seq);
+    #####:  332:			    if (ptr_1hls != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  333:			      hls_pos = hls1_pos =
+    #####:  334:				i + (int) (ptr_1hls - (text_line + i));
+        -:  335:			    else
+    #####:  336:			      hls_pos = hls2_pos;
+    #####:  337:			    hls_start = TRUE;
+        -:  338:			  }
+    #####:  339:			if (*(text_line + i))
+branch  0 never executed
+branch  1 never executed
+    #####:  340:			  fputc (*(text_line + i), fp);
+call    0 never executed
+        -:  341:			else
+    #####:  342:			  break;
+        -:  343:		      }
+    #####:  344:		    else if (hls_pos == hls2_pos)
+branch  0 never executed
+branch  1 never executed
+        -:  345:		      {
+    #####:  346:			if (hls_start)
+branch  0 never executed
+branch  1 never executed
+        -:  347:			  {
+        -:  348:# if defined(GCAL_TCAP) && USE_HLS
+    #####:  349:			    tputs ((char *) ehls2s.seq, 1, outchar);
+call    0 never executed
+        -:  350:# else /* !GCAL_TCAP || !USE_HLS */
+        -:  351:			    fputs (ehls2s.seq, fp);
+        -:  352:# endif	/* !GCAL_TCAP || !USE_HLS */
+    #####:  353:			    hls_chars += ehls2s.len;
+    #####:  354:			    i += ehls2s.len;
+    #####:  355:			    if (tty_cols != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  356:			      ptr_2hls = strstr (text_line + i, ehls2e.seq);
+    #####:  357:			    if (ptr_2hls != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  358:			      hls_pos = hls2_pos =
+    #####:  359:				i + (int) (ptr_2hls - (text_line + i));
+        -:  360:			    else
+    #####:  361:			      hls_pos = hls1_pos;
+    #####:  362:			    hls_start = FALSE;
+        -:  363:			  }
+        -:  364:			else
+        -:  365:			  {
+        -:  366:# if defined(GCAL_TCAP) && USE_HLS
+    #####:  367:			    tputs ((char *) ehls2e.seq, 1, outchar);
+call    0 never executed
+        -:  368:# else /* !GCAL_TCAP || !USE_HLS */
+        -:  369:			    fputs (ehls2e.seq, fp);
+        -:  370:# endif	/* !GCAL_TCAP || !USE_HLS */
+    #####:  371:			    hls_chars += ehls2e.len;
+    #####:  372:			    i += ehls2e.len;
+    #####:  373:			    if (tty_cols != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####:  374:			      ptr_2hls = strstr (text_line + i, ehls2s.seq);
+    #####:  375:			    if (ptr_2hls != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  376:			      hls_pos = hls2_pos =
+    #####:  377:				i + (int) (ptr_2hls - (text_line + i));
+        -:  378:			    else
+    #####:  379:			      hls_pos = hls1_pos;
+    #####:  380:			    hls_start = TRUE;
+        -:  381:			  }
+    #####:  382:			if (*(text_line + i))
+branch  0 never executed
+branch  1 never executed
+    #####:  383:			  fputc (*(text_line + i), fp);
+call    0 never executed
+        -:  384:			else
+    #####:  385:			  break;
+        -:  386:		      }
+        -:  387:		  }
+        -:  388:		else
+        -:  389:		  /*
+        -:  390:		     Otherwise, print the actual character in the string.
+        -:  391:		   */
+    #####:  392:		  fputc (*(text_line + i), fp);
+call    0 never executed
+    #####:  393:		j++;
+    #####:  394:		i++;
+        -:  395:	      }
+    #####:  396:	    S_NEWLINE (fp);
+call    0 never executed
+        -:  397:	  }
+        -:  398:# if USE_PAGER
+    #####:  399:	if (pager_flag
+branch  0 never executed
+branch  1 never executed
+        -:  400:#  ifdef GCAL_EPAGER
+    #####:  401:	    && (ext_pager == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -:  402:#  endif
+        -:  403:	  )
+        -:  404:	  {
+        -:  405:	    /*
+        -:  406:	       Must we prompt the user?
+        -:  407:	     */
+    #####:  408:	    if (!tty_am)
+branch  0 never executed
+branch  1 never executed
+    #####:  409:	      j = 0;
+        -:  410:	    else
+        -:  411:	      {
+    #####:  412:		k = ((nl_found) ? j : i) - nl - hls_chars;
+branch  0 never executed
+branch  1 never executed
+    #####:  413:		j = k / tty_cols;
+    #####:  414:		if (j && tty_xn && !(k % tty_cols))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  415:		  j--;
+        -:  416:	      }
+    #####:  417:	    if (lines_printed + j >= tty_rows - 1)
+branch  0 never executed
+branch  1 never executed
+        -:  418:	      {
+    #####:  419:		if (print_hls)
+branch  0 never executed
+branch  1 never executed
+        -:  420:#  if defined(GCAL_TCAP) && USE_HLS
+    #####:  421:		  tputs ((char *) ehls1s.seq, 1, outchar);
+call    0 never executed
+        -:  422:#  else	/* !GCAL_TCAP || !USE_HLS */
+        -:  423:		  fputs (ehls1s.seq, fp);
+        -:  424:#  endif /* !GCAL_TCAP || !USE_HLS */
+    #####:  425:		fprintf (fp, _("%s: <Return> for more, <%s> to quit..."),
+call    0 never executed
+        -:  426:			 prgr_name, PAGER_QUIT);
+    #####:  427:		if (print_hls)
+branch  0 never executed
+branch  1 never executed
+        -:  428:#  if defined(GCAL_TCAP) && USE_HLS
+    #####:  429:		  tputs ((char *) ehls1e.seq, 1, outchar);
+call    0 never executed
+        -:  430:#  else	/* !GCAL_TCAP || !USE_HLS */
+        -:  431:		  fputs (ehls1e.seq, fp);
+        -:  432:#  endif /* !GCAL_TCAP || !USE_HLS */
+    #####:  433:		k = fgetc (stdin);
+call    0 never executed
+        -:  434:		/*
+        -:  435:		   Quit the pager by the quit "key" command.
+        -:  436:		 */
+    #####:  437:		if (tolower (k) == (int) *PAGER_QUIT)
+branch  0 never executed
+branch  1 never executed
+        -:  438:		  {
+        -:  439:		    /*
+        -:  440:		       In case a leading "quit" character and other text is in the STDIN buffer:
+        -:  441:		       Clean the whole buffer.
+        -:  442:		     */
+    #####:  443:		    while (((k = fgetc (stdin)) != '\n') && (k != EOF))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -:  444:		      ;		/* Void */
+    #####:  445:		    k = EOF;
+        -:  446:		  }
+        -:  447:		else
+        -:  448:		  /*
+        -:  449:		     In case a "quit" character is not leading (anywhere) in the STDIN buffer:
+        -:  450:		     Clean the buffer until the "quit" character isn't found.
+        -:  451:		   */
+    #####:  452:		if (k != '\n')
+branch  0 never executed
+branch  1 never executed
+    #####:  453:		  while (((k = fgetc (stdin)) != '\n')
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  454:			 && (tolower (k) != (int) *PAGER_QUIT) && (k != EOF))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  455:		    ;		/* Void */
+        -:  456:		/*
+        -:  457:		   In case the "quit" character is found in the STDIN buffer now:
+        -:  458:		   Clean up the rest of buffer (until its end).
+        -:  459:		 */
+    #####:  460:		if (tolower (k) == (int) *PAGER_QUIT)
+branch  0 never executed
+branch  1 never executed
+        -:  461:		  {
+    #####:  462:		    while (((k = fgetc (stdin)) != '\n') && (k != EOF))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -:  463:		      ;		/* Void */
+    #####:  464:		    k = EOF;
+        -:  465:		  }
+        -:  466:		/*
+        -:  467:		   Exit the program with success if the PAGER_QUIT character
+        -:  468:		   was found in the STDIN buffer.
+        -:  469:		 */
+    #####:  470:		if (k == EOF)
+branch  0 never executed
+branch  1 never executed
+    #####:  471:		  my_exit (EXIT_SUCCESS);
+call    0 never executed
+        -:  472:		/*
+        -:  473:		   Begin scrolling of the next page.
+        -:  474:		 */
+    #####:  475:		lines_printed = 0;
+        -:  476:	      }
+        -:  477:	    else
+    #####:  478:	      lines_printed += (j + 1);
+    #####:  479:	    if (!*(text_line + i))
+branch  0 never executed
+branch  1 never executed
+        -:  480:	      {
+    #####:  481:		if (final_nl && (final_nl != SPECIAL_VALUE))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  482:		  {
+        -:  483:		    /*
+        -:  484:		       Respect an implicit NEWLINE character in case
+        -:  485:		       a TILDE-expansion was performed at the end of a line!
+        -:  486:		     */
+    #####:  487:		    final_nl = SPECIAL_VALUE;
+    #####:  488:		    i--;
+        -:  489:		  }
+        -:  490:		else
+        -:  491:		  break;
+        -:  492:	      }
+        -:  493:	  }
+        -:  494:	else
+        -:  495:# endif	/* USE_PAGER */
+    #####:  496:	if (!*(text_line + i))
+branch  0 never executed
+branch  1 never executed
+    #####:  497:	  break;
+        -:  498:      }
+    #####:  499:      highlight_flag = buf_highlight_flag;
+        -:  500:    }
+        -:  501:  else
+        -:  502:#endif /* USE_PAGER || (GCAL_TCAP && USE_HLS) */
+        -:  503:    {
+        -:  504:      /*
+        -:  505:         If the mailing option is selected,
+        -:  506:         print the output to the temporary file.
+        -:  507:       */
+       10:  508:      if ((fp != (FILE *) stderr)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  509:#ifdef GCAL_EMAIL
+       10:  510:	  && (tfp != (FILE *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  511:#endif
+        -:  512:	)
+    #####:  513:	fprintf (tfp, "%s\n", text_line);
+call    0 never executed
+        -:  514:      else
+       10:  515:	fprintf (fp, "%s\n", text_line);
+call    0 returned 100%
+        -:  516:    }
+       10:  517:  *text_line = '\0';
+       10:  518:}
+        -:  519:
+        -:  520:
+        -:  521:
+        -:  522:void
+function get_tty_hls called 1 returned 100% blocks executed 27%
+        1:  523:get_tty_hls (sequence_str)
+        -:  524:     const char *sequence_str;
+        -:  525:/*!
+        -:  526:   Reads the colors/highlighting sequences from Termcap and assigns them
+        -:  527:     to the according variables.  If Termcap isn't present, defaults are used.
+        -:  528:*/
+        -:  529:{
+        -:  530:#if USE_HLS
+        -:  531:# if !defined(AMIGA) || defined(__GNUC__)
+        1:  532:  auto char *ptr_env = getenv (ENV_VAR_GCALANSI);
+call    0 returned 100%
+        -:  533:# else /* AMIGA && !__GNUC__ */
+        -:  534:  auto char *ptr_env = (char *) NULL;
+        -:  535:# endif	/* AMIGA && !__GNUC__ */
+        -:  536:# ifdef GCAL_TCAP
+        1:  537:  auto Bool check_again = FALSE;
+        -:  538:# endif
+        -:  539:#endif
+        1:  540:  auto Bool hls1_set = FALSE;
+        1:  541:  auto Bool hls2_set = FALSE;
+        -:  542:
+        -:  543:
+        -:  544:  /*
+        -:  545:     Check whether highlighting must be disabled
+        -:  546:     (`-H<no>' given in the command line).
+        -:  547:   */
+        1:  548:  if (!highlight_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  549:    {
+    #####:  550:      emu_hls = TRUE;
+    #####:  551:      ehls1s.seq = NO_HLS;
+    #####:  552:      ehls1e.seq = NO_HLS;
+    #####:  553:      ehls2s.seq = NO_HLS;
+    #####:  554:      ehls2e.seq = NO_HLS;
+        -:  555:    }
+        -:  556:  else
+        -:  557:    {
+        -:  558:      /*
+        -:  559:         If output is not directed to a tty,
+        -:  560:         emulate the highlighting sequences by using marking characters.
+        -:  561:       */
+        1:  562:      if (!is_tty && !emu_hls && highlight_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        1:  563:	emu_hls = TRUE;
+        -:  564:      /*
+        -:  565:         Check whether user defined highlighting sequences are given
+        -:  566:         in the command line (`-H<LIST_OF_HL_SEQUENCES>').
+        -:  567:       */
+        1:  568:      if (sequence_str != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  569:	{
+    #####:  570:	  get_hl_seq (sequence_str, &hls1_set, &hls2_set);
+call    0 never executed
+        -:  571:#if USE_HLS && defined(GCAL_TCAP)
+    #####:  572:	  if ((hls1_set
+branch  0 never executed
+branch  1 never executed
+    #####:  573:	       && (ehls1s.len > 1
+branch  0 never executed
+branch  1 never executed
+    #####:  574:		   || ehls1e.len > 1))
+branch  0 never executed
+branch  1 never executed
+    #####:  575:	      || (hls2_set && (ehls2s.len > 1 || ehls2e.len > 1)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  576:	    check_again = TRUE;
+        -:  577:#endif
+        -:  578:	}
+        -:  579:      /*
+        -:  580:         No or partitial highlighting sequences are given in command line
+        -:  581:         -> Complete them (or if a padding was given, init the necessary
+        -:  582:         functions for managing it).
+        -:  583:       */
+        1:  584:      if (!hls1_set
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  585:#if USE_HLS && defined(GCAL_TCAP)
+    #####:  586:	  || check_again
+branch  0 never executed
+branch  1 never executed
+        -:  587:#endif
+    #####:  588:	  || !hls2_set)
+branch  0 never executed
+branch  1 never executed
+        -:  589:	{
+        -:  590:#if USE_HLS
+        -:  591:# ifdef GCAL_TCAP
+        1:  592:	  if (!emu_hls)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  593:	    {
+        -:  594:	      /*
+        -:  595:	         Try to open the `[/etc/]termcap' file.
+        -:  596:	       */
+    #####:  597:	      tc_no_error = open_termcap ();
+call    0 never executed
+    #####:  598:	      if (tc_no_error)
+branch  0 never executed
+branch  1 never executed
+    #####:  599:		get_termcap_hls (&hls1_set, &hls2_set);
+call    0 never executed
+    #####:  600:	      if (check_again)
+branch  0 never executed
+branch  1 never executed
+        -:  601:		{
+    #####:  602:		  get_hl_seq (sequence_str, &hls1_set, &hls2_set);
+call    0 never executed
+    #####:  603:		  if (tc_no_error)
+branch  0 never executed
+branch  1 never executed
+    #####:  604:		    get_termcap_hls (&hls1_set, &hls2_set);
+call    0 never executed
+        -:  605:		}
+    #####:  606:	      if (ptr_env != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -:  607:		{
+        -:  608:		  /*
+        -:  609:		     Some or all Termcap highlighting sequences are missing:
+        -:  610:		     Use according "default" ANSI highlighting sequences
+        -:  611:		     if the environment variable $GCALANSI is set.
+        -:  612:		   */
+    #####:  613:		  if (!hls1_set)
+branch  0 never executed
+branch  1 never executed
+        -:  614:		    {
+    #####:  615:		      ehls1s.seq = HLS1S;
+    #####:  616:		      ehls1e.seq = HLS1E;
+        -:  617:		    }
+    #####:  618:		  if (!hls2_set)
+branch  0 never executed
+branch  1 never executed
+        -:  619:		    {
+    #####:  620:		      ehls2s.seq = HLS2S;
+    #####:  621:		      ehls2e.seq = HLS2E;
+        -:  622:		    }
+        -:  623:		}
+    #####:  624:	      else if (!hls1_set || !hls2_set)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  625:		{
+        -:  626:		  /*
+        -:  627:		     Some or all Termcap highlighting sequences are missing:
+        -:  628:		     Emulate ALL highlighting sequences by marking character
+        -:  629:		     pairs if the environment variable $GCALANSI isn't set.
+        -:  630:		   */
+    #####:  631:		  emu_hls = TRUE;
+    #####:  632:		  ehls1s.seq = BUF_HLS1S;
+    #####:  633:		  ehls1e.seq = BUF_HLS1E;
+    #####:  634:		  ehls2s.seq = BUF_HLS2S;
+    #####:  635:		  ehls2e.seq = BUF_HLS2E;
+        -:  636:		}
+        -:  637:	    }
+        -:  638:	  else
+        -:  639:# endif	/* GCAL_TCAP */
+        -:  640:	    {
+        1:  641:	      if (emu_hls)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  642:		{
+        -:  643:		  /*
+        -:  644:		     Use emulation of highlighting sequences
+        -:  645:		     in case output is not directed to a tty and the
+        -:  646:		     highlighting sequences are not explicit disabled
+        -:  647:		     in the command line by `-H<no>'.
+        -:  648:		   */
+        1:  649:		  if (!hls1_set)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  650:		    {
+        1:  651:		      ehls1s.seq = BUF_HLS1S;
+        1:  652:		      ehls1e.seq = BUF_HLS1E;
+        -:  653:		    }
+        1:  654:		  if (!hls2_set)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  655:		    {
+        1:  656:		      ehls2s.seq = BUF_HLS2S;
+        1:  657:		      ehls2e.seq = BUF_HLS2E;
+        -:  658:		    }
+        -:  659:		}
+        -:  660:	      else
+        -:  661:		{
+        -:  662:		  /*
+        -:  663:		     Use highlighting sequences directly in all other cases.
+        -:  664:		   */
+    #####:  665:		  if (ptr_env != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -:  666:		    {
+        -:  667:		      /*
+        -:  668:		         If environment variable $GCALANSI is set:
+        -:  669:		         Use the according "default" ANSI highlighting sequences.
+        -:  670:		       */
+    #####:  671:		      if (!hls1_set)
+branch  0 never executed
+branch  1 never executed
+        -:  672:			{
+    #####:  673:			  ehls1s.seq = HLS1S;
+    #####:  674:			  ehls1e.seq = HLS1E;
+        -:  675:			}
+    #####:  676:		      if (!hls2_set)
+branch  0 never executed
+branch  1 never executed
+        -:  677:			{
+    #####:  678:			  ehls2s.seq = HLS2S;
+    #####:  679:			  ehls2e.seq = HLS2E;
+        -:  680:			}
+        -:  681:		    }
+    #####:  682:		  else if (!hls1_set || !hls2_set)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  683:		    {
+        -:  684:		      /*
+        -:  685:		         If environment variable $GCALANSI is not set:
+        -:  686:		         Emulate ALL highlighting sequences by marking character pairs.
+        -:  687:		       */
+    #####:  688:		      emu_hls = TRUE;
+    #####:  689:		      ehls1s.seq = BUF_HLS1S;
+    #####:  690:		      ehls1e.seq = BUF_HLS1E;
+    #####:  691:		      ehls2s.seq = BUF_HLS2S;
+    #####:  692:		      ehls2e.seq = BUF_HLS2E;
+        -:  693:		    }
+        -:  694:		}
+        -:  695:	    }
+        -:  696:#else /* !USE_HLS */
+        -:  697:	  /*
+        -:  698:	     Use the default highlighting sequences.
+        -:  699:	   */
+        -:  700:	  if (!hls1_set)
+        -:  701:	    {
+        -:  702:	      ehls1s.seq = HLS1S;
+        -:  703:	      ehls1e.seq = HLS1E;
+        -:  704:	    }
+        -:  705:	  if (!hls2_set)
+        -:  706:	    {
+        -:  707:	      ehls2s.seq = HLS2S;
+        -:  708:	      ehls2e.seq = HLS2E;
+        -:  709:	    }
+        -:  710:#endif /* !USE_HLS */
+        -:  711:	}
+        -:  712:    }
+        -:  713:  /*
+        -:  714:     Detect and store length of the highlighting sequences.
+        -:  715:   */
+        -:  716:#if defined(GCAL_TCAP) && USE_HLS
+        -:  717:  /*
+        -:  718:     If padding is specified in Termcap and output is not connected to a tty,
+        -:  719:     avoid to emit the padding information itself in the output, because
+        -:  720:     it's senseless to redirect/pipe such an information to the consumser,
+        -:  721:     who doesn't interpret it!
+        -:  722:   */
+        1:  723:  if (is_padding && (!is_tty || !is_tty1 || !is_tty2))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -:  724:    {
+    #####:  725:      ehls1s.seq =
+    #####:  726:	(const char *) skip_leading_padding_info ((char *) ehls1s.seq);
+call    0 never executed
+    #####:  727:      ehls1e.seq =
+    #####:  728:	(const char *) skip_leading_padding_info ((char *) ehls1e.seq);
+call    0 never executed
+    #####:  729:      ehls2s.seq =
+    #####:  730:	(const char *) skip_leading_padding_info ((char *) ehls2s.seq);
+call    0 never executed
+    #####:  731:      ehls2e.seq =
+    #####:  732:	(const char *) skip_leading_padding_info ((char *) ehls2e.seq);
+call    0 never executed
+        -:  733:    }
+        -:  734:#endif /* !GCAL_TCAP || !USE_HLS */
+        1:  735:  ehls1s.len = (int) strlen (ehls1s.seq);
+        1:  736:  ehls1e.len = (int) strlen (ehls1e.seq);
+        1:  737:  ehls2s.len = (int) strlen (ehls2s.seq);
+        1:  738:  ehls2e.len = (int) strlen (ehls2e.seq);
+        1:  739:}
+        -:  740:
+        -:  741:
+        -:  742:
+        -:  743:#if USE_PAGER
+        -:  744:void
+function get_tty_scr_size called 0 returned 0% blocks executed 0%
+    #####:  745:get_tty_scr_size (rows, cols)
+        -:  746:     int *rows;
+        -:  747:     int *cols;
+        -:  748:/*!
+        -:  749:   Detects the number of rows and columns of a tty
+        -:  750:     and stores the values found in `&rows' and `&cols'.
+        -:  751:*/
+        -:  752:{
+        -:  753:# if !defined(AMIGA) || defined(__GNUC__)
+    #####:  754:  register int li = 0;
+    #####:  755:  register int co = 0;
+        -:  756:  auto char *ptr_env;
+        -:  757:
+        -:  758:
+        -:  759:  /*
+        -:  760:     First look into the environment variable pair $GCAL_LINES and
+        -:  761:     $GCAL_COLUMNS resp., $LINES and $COLUMNS in case these are defined
+        -:  762:     and have valid settings: Use these settings.
+        -:  763:   */
+    #####:  764:  ptr_env = getenv (ENV_VAR_LI);
+call    0 never executed
+    #####:  765:  if (ptr_env != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  766:    if (*ptr_env)
+branch  0 never executed
+branch  1 never executed
+        -:  767:      {
+    #####:  768:	li = my_atoi (ptr_env);
+call    0 never executed
+    #####:  769:	ptr_env = getenv (ENV_VAR_CO);
+call    0 never executed
+    #####:  770:	if (ptr_env != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  771:	  if (*ptr_env)
+branch  0 never executed
+branch  1 never executed
+    #####:  772:	    co = my_atoi (ptr_env);
+call    0 never executed
+        -:  773:      }
+    #####:  774:  if ((li > 0) && (co > 0))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  775:    {
+    #####:  776:      *rows = li;
+    #####:  777:      *cols = co;
+        -:  778:    }
+        -:  779:  else
+        -:  780:    {
+    #####:  781:      ptr_env = getenv (ENV_VAR_LI2);
+call    0 never executed
+    #####:  782:      if (ptr_env != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  783:	if (*ptr_env)
+branch  0 never executed
+branch  1 never executed
+        -:  784:	  {
+    #####:  785:	    li = my_atoi (ptr_env);
+call    0 never executed
+    #####:  786:	    ptr_env = getenv (ENV_VAR_CO2);
+call    0 never executed
+    #####:  787:	    if (ptr_env != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:  788:	      if (*ptr_env)
+branch  0 never executed
+branch  1 never executed
+    #####:  789:		co = my_atoi (ptr_env);
+call    0 never executed
+        -:  790:	  }
+    #####:  791:      if ((li > 0) && (co > 0))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  792:	{
+    #####:  793:	  *rows = li;
+    #####:  794:	  *cols = co;
+        -:  795:	}
+        -:  796:      else
+        -:  797:	{
+        -:  798:#  if defined(OS2) && defined(__GNUC__)
+        -:  799:	  auto int info[2];
+        -:  800:#  endif /* OS2 && __GNUC__ */
+        -:  801:#  if defined(UNIX) && !defined(DJG)
+        -:  802:#   ifdef TIOCGWINSZ
+        -:  803:	  auto struct winsize wsz;
+        -:  804:#   else /* !TIOCGWINSZ */
+        -:  805:#    ifdef WIOCGETD
+        -:  806:	  auto struct uwdata wsz;
+        -:  807:#    endif
+        -:  808:#   endif /* !TIOCGWINSZ */
+        -:  809:#  endif /* UNIX && !DJG */
+        -:  810:
+        -:  811:
+        -:  812:#  if !defined(DJG) && !defined(MSDOS) && !defined(OS2) && !defined(UNIX)
+        -:  813:	  /*
+        -:  814:	     For these machines: Defaults only!
+        -:  815:	   */
+        -:  816:	  *rows = SCREEN_ROWS;
+        -:  817:	  *cols = SCREEN_COLS;
+        -:  818:#  else	/* DJG || MSDOS || OS2 || UNIX */
+        -:  819:#   ifdef DJG
+        -:  820:	  /*
+        -:  821:	     Get the actual number of lines and columns of the video by
+        -:  822:	     using the DJGPP-GCC `ScreenRows()' and `ScreenCols()' functions.
+        -:  823:	   */
+        -:  824:	  *rows = ScreenRows ();
+        -:  825:	  *cols = ScreenCols ();
+        -:  826:#   else /* !DJG */
+        -:  827:#    if defined(MSDOS)
+        -:  828:	  /*
+        -:  829:	     Look directly into the PC-BIOS and get the actual number
+        -:  830:	     of lines and columns of the video.
+        -:  831:	   */
+        -:  832:	  *rows = peek_byte (0x40, 0x84) + 1;
+        -:  833:	  /*
+        -:  834:	     Get lower part of 2-byte word.
+        -:  835:	   */
+        -:  836:	  *cols = peek_byte (0x40, 0x4b);
+        -:  837:	  *cols <<= 0x08;
+        -:  838:	  /*
+        -:  839:	     Add higher part of 2-byte word.
+        -:  840:	   */
+        -:  841:	  *cols += peek_byte (0x40, 0x4a);
+        -:  842:#    else /* !MSDOS */
+        -:  843:#     if defined(OS2) && defined(__GNUC__)
+        -:  844:	  /*
+        -:  845:	     Get the actual number of lines and columns of the
+        -:  846:	     video by using the EMX-GCC `_scrsize()' function.
+        -:  847:	   */
+        -:  848:	  _scrsize (info);
+        -:  849:	  *cols = s1[0];
+        -:  850:	  *rows = s1[1];
+        -:  851:#     else /* !OS2 || !__GNUC__ */
+        -:  852:#      if defined(UNIX)
+        -:  853:	  /*
+        -:  854:	     Get the actual number of lines and columns of the
+        -:  855:	     video by using the `ioctl()' function.
+        -:  856:	   */
+        -:  857:#       ifdef TIOCGWINSZ
+    #####:  858:	  if (!ioctl (1, TIOCGWINSZ, &wsz) && (wsz.ws_row > 0))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -:  859:	    {
+    #####:  860:	      *rows = wsz.ws_row;
+    #####:  861:	      if (!ioctl (1, TIOCGWINSZ, &wsz) && (wsz.ws_col > 0))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####:  862:		*cols = wsz.ws_col;
+        -:  863:	      else
+    #####:  864:		*rows = SPECIAL_VALUE;
+        -:  865:	    }
+        -:  866:#       else /* !TIOCGWINSZ */
+        -:  867:#        ifdef WIOCGETD
+        -:  868:	  if (!ioctl (1, WIOCGETD, &wsz) && (wsz.uw_height > 0))
+        -:  869:	    {
+        -:  870:	      *rows = wsz.uw_height / wsz.uw_vs;
+        -:  871:	      if (!ioctl (1, WIOCGETD, &wsz) && (wsz.uw_width > 0))
+        -:  872:		*cols = wsz.uw_width / wsz.uw_hs;
+        -:  873:	      else
+        -:  874:		*rows = SPECIAL_VALUE;
+        -:  875:	    }
+        -:  876:#        endif
+        -:  877:#       endif /* !TIOCGWINSZ */
+        -:  878:#      endif /* UNIX */
+        -:  879:#     endif /* !OS2 || !__GNUC__ */
+        -:  880:#    endif /* !MSDOS */
+        -:  881:#   endif /* !DJG */
+    #####:  882:	  if ((*rows == SPECIAL_VALUE) && (*cols == SPECIAL_VALUE))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  883:	    {
+        -:  884:#   if HAVE_TTYLIBS
+        -:  885:	      /*
+        -:  886:	         If the previous actions have failed,
+        -:  887:	         try to open the `[/etc/]termcap' file.
+        -:  888:	       */
+    #####:  889:	      tc_no_error = open_termcap ();
+call    0 never executed
+    #####:  890:	      if (tc_no_error)
+branch  0 never executed
+branch  1 never executed
+        -:  891:		{
+    #####:  892:		  if (!get_termcap_scr_attrib (rows, cols))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  893:		    {
+        -:  894:		      /*
+        -:  895:		         No valid Termcap entries: Defaults only!
+        -:  896:		       */
+    #####:  897:		      *rows = SCREEN_ROWS;
+    #####:  898:		      *cols = SCREEN_COLS;
+        -:  899:		    }
+        -:  900:		}
+        -:  901:	      else
+        -:  902:		{
+        -:  903:		  /*
+        -:  904:		     Access to `[/etc/]termcap' file has failed: Defaults only!
+        -:  905:		   */
+    #####:  906:		  *rows = SCREEN_ROWS;
+    #####:  907:		  *cols = SCREEN_COLS;
+        -:  908:		}
+        -:  909:#   else /* !HAVE_TTYLIBS */
+        -:  910:	      /*
+        -:  911:	         No `[/etc/]termcap' file available: Defaults only!
+        -:  912:	       */
+        -:  913:	      *rows = SCREEN_ROWS;
+        -:  914:	      *cols = SCREEN_COLS;
+        -:  915:#   endif /* !HAVE_TTYLIBS */
+        -:  916:	    }
+        -:  917:#  endif /* DJG || MSDOS || OS2 || UNIX */
+        -:  918:	}
+        -:  919:    }
+        -:  920:# else /* AMIGA && !__GNUC__ */
+        -:  921:#  ifdef AMIGA
+        -:  922:  /*
+        -:  923:     Amiga gets the window size by asking the `console.device'.
+        -:  924:   */
+        -:  925:  {
+        -:  926:    auto long len;
+        -:  927:    auto char buf[30];
+        -:  928:
+        -:  929:
+        -:  930:    Write (Output (), "\2330 q", 4);
+        -:  931:    len = Read (Input (), buf, 29);
+        -:  932:    buf[len] = '\0';
+        -:  933:    sscanf (&buf[5], "%d;%d", rows, cols);
+        -:  934:  }
+        -:  935:#  else	/* !AMIGA */
+        -:  936:  /*
+        -:  937:     All other systems: Defaults only.
+        -:  938:   */
+        -:  939:  *rows = SCREEN_ROWS;
+        -:  940:  *cols = SCREEN_COLS;
+        -:  941:#  endif /* !AMIGA */
+        -:  942:# endif	/* AMIGA && !__GNUC__ */
+    #####:  943:  if (*rows > 1)
+branch  0 never executed
+branch  1 never executed
+    #####:  944:    (*rows)--;
+    #####:  945:}
+        -:  946:#endif /* USE_PAGER */
+        -:  947:
+        -:  948:
+        -:  949:
+        -:  950:#if defined(GCAL_TCAP) && USE_HLS
+        -:  951:static char *
+function skip_leading_padding_info called 0 returned 0% blocks executed 0%
+    #####:  952:skip_leading_padding_info (sequence_str)
+        -:  953:     char *sequence_str;
+        -:  954:/*!
+        -:  955:   Skips the leading padding information part of a highlighting sequence.
+        -:  956:*/
+        -:  957:{
+    #####:  958:  if (isdigit (*sequence_str))
+branch  0 never executed
+branch  1 never executed
+        -:  959:    {
+    #####:  960:      is_padding = TRUE;
+    #####:  961:      while (isdigit (*sequence_str))
+branch  0 never executed
+branch  1 never executed
+    #####:  962:	sequence_str++;
+    #####:  963:      if (*sequence_str == '.')
+branch  0 never executed
+branch  1 never executed
+        -:  964:	{
+    #####:  965:	  sequence_str++;
+    #####:  966:	  if (isdigit (*sequence_str))
+branch  0 never executed
+branch  1 never executed
+    #####:  967:	    sequence_str++;
+        -:  968:	}
+    #####:  969:      if (*sequence_str == '*')
+branch  0 never executed
+branch  1 never executed
+    #####:  970:	sequence_str++;
+        -:  971:    }
+        -:  972:
+    #####:  973:  return (sequence_str);
+        -:  974:}
+        -:  975:#endif /* GCAL_TCAP && USE_HLS */
+        -:  976:
+        -:  977:
+        -:  978:
+        -:  979:#if USE_PAGER || USE_HLS
+        -:  980:# ifdef GCAL_TCAP
+        -:  981:static Bool
+function open_termcap called 0 returned 0% blocks executed 0%
+    #####:  982:open_termcap ()
+        -:  983:/*!
+        -:  984:   Tries to open the Termcap library and returns the terminal entry found
+        -:  985:     in the module global vector `tc_buf[]'.  I cannot rely that we use the
+        -:  986:     access functions of the GNU Termcap library --- which allows to pass
+        -:  987:     a NULL pointer to `tgetent()' --- so this function can check itself
+        -:  988:     how large `tc_buf[]' must be and allocates it automatically.  So I set
+        -:  989:     `tc_buf' to a size of 4096 (TC_BUFLEN) bytes hoping that this will be
+        -:  990:     enough for save program operation...
+        -:  991:     May be called only once.
+        -:  992:     Returns FALSE if an error occurs, otherwise TRUE.
+        -:  993:*/
+        -:  994:{
+        -:  995:#  if defined(OS2) && defined(__GNUC__)
+        -:  996:  auto char *ptr_env = getenv (ENV_VAR_TCAP);
+        -:  997:  auto char *ptr_tc;
+        -:  998:#  endif /* OS2 && __GNUC__ */
+    #####:  999:  auto char *term = getenv (ENV_VAR_TERM);
+call    0 never executed
+        -: 1000:  static Bool func_accessed = FALSE;
+    #####: 1001:  auto Bool is_error = FALSE;
+        -: 1002:
+        -: 1003:
+    #####: 1004:  if (!func_accessed)
+branch  0 never executed
+branch  1 never executed
+        -: 1005:    {
+    #####: 1006:      func_accessed = TRUE;
+        -: 1007:#  if defined(OS2) && defined(__GNUC__)
+        -: 1008:      /*
+        -: 1009:         Under OS/2 with GNU-C, we use the default terminal type (ANSI)
+        -: 1010:         and access the Termcap library instead of printing an informational
+        -: 1011:         message and using burned-in defaults if the $TERM environment
+        -: 1012:         variable isn't set.
+        -: 1013:       */
+        -: 1014:      if (term == (char *) NULL || !*term)
+        -: 1015:	term = DFLT_TERM;
+        -: 1016:#  else	/* !OS2 || !__GNUC__ */
+    #####: 1017:      if (term == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1018:	{
+    #####: 1019:	  if (warning_level >= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1020:	    sprintf (s1, _("environment variable `%s' not found"),
+        -: 1021:		     ENV_VAR_TERM);
+    #####: 1022:	  is_error = TRUE;
+        -: 1023:	}
+    #####: 1024:      else if (!*term)
+branch  0 never executed
+branch  1 never executed
+        -: 1025:	{
+    #####: 1026:	  if (warning_level >= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1027:	    sprintf (s1, _("environment variable `%s' not set"),
+        -: 1028:		     ENV_VAR_TERM);
+    #####: 1029:	  is_error = TRUE;
+        -: 1030:	}
+        -: 1031:      else
+        -: 1032:#  endif /* !OS2 || !__GNUC__ */
+        -: 1033:	{
+        -: 1034:#  if defined(OS2) && defined(__GNUC__)
+        -: 1035:	  /*
+        -: 1036:	     Ensure the Termcap database is available,
+        -: 1037:	     i.e. store its access path in the environment explicitly
+        -: 1038:	     so we are able to refer it.
+        -: 1039:	   */
+        -: 1040:	  if (ptr_env == NULL || !*ptr_env)
+        -: 1041:	    {
+        -: 1042:	      ptr_env = (char *) my_malloc (256, ERR_NO_MEMORY_AVAILABLE,
+        -: 1043:					    __FILE__, ((long) __LINE__) - 1L,
+        -: 1044:					    "ptr_env", 0);
+        -: 1045:	      _searchenv (FNAME_TCAP, "INIT", ptr_env);
+        -: 1046:	      if (!*ptr_env)
+        -: 1047:		_searchenv (FNAME_TCAP, ENV_VAR_PATH, ptr_env);
+        -: 1048:	      if (!*ptr_env)
+        -: 1049:		_searchenv (FNAME_TCAP, ENV_VAR_GCALPATH, ptr_env);
+        -: 1050:	      if (*ptr_env)
+        -: 1051:		{
+        -: 1052:		  ptr_tc = (char *) my_malloc (strlen (ptr_env) + 9,
+        -: 1053:					       ERR_NO_MEMORY_AVAILABLE,
+        -: 1054:					       __FILE__,
+        -: 1055:					       ((long) __LINE__) - 2L,
+        -: 1056:					       "ptr_tc", 0);
+        -: 1057:		  sprintf (ptr_tc, "%s=%s", ENV_VAR_TCAP, ptr_env);
+        -: 1058:		  putenv (ptr_tc);
+        -: 1059:		}
+        -: 1060:	      free (ptr_env);
+        -: 1061:	    }
+        -: 1062:#  endif /* OS2 && __GNUC__ */
+    #####: 1063:	  switch (tgetent (tc_buf, term))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1064:	    {
+    #####: 1065:	    case -1:
+    #####: 1066:	      if (warning_level >= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1067:		strcpy (s1, _("`termcap' file not found"));
+    #####: 1068:	      is_error = TRUE;
+    #####: 1069:	      break;
+    #####: 1070:	    case 0:
+    #####: 1071:	      if (warning_level >= 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1072:		sprintf (s1, _("unknown terminal type defined in `%s'"),
+        -: 1073:			 ENV_VAR_TERM);
+    #####: 1074:	      is_error = TRUE;
+    #####: 1075:	      break;
+    #####: 1076:	    default:
+        -: 1077:	      ;			/* Void, Termcap access ok */
+        -: 1078:	    }
+        -: 1079:	}
+    #####: 1080:      if (is_error && (warning_level >= 0))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1081:	fprintf (stderr, _("\n%s: warning, %s.\n\n"), prgr_name, s1);
+call    0 never executed
+    #####: 1082:      return ((Bool) ! is_error);
+        -: 1083:    }
+        -: 1084:
+    #####: 1085:  return (tc_no_error);
+        -: 1086:}
+        -: 1087:
+        -: 1088:
+        -: 1089:
+        -: 1090:#  if USE_HLS
+        -: 1091:static void
+function get_ospeed called 0 returned 0% blocks executed 0%
+    #####: 1092:get_ospeed ()
+        -: 1093:/*!
+        -: 1094:   Tries to detect the terminal speed and store its value to
+        -: 1095:     Termcap's global `ospeed' variable.
+        -: 1096:*/
+        -: 1097:{
+        -: 1098:#   if HAVE_TERMIOS_H && HAVE_TERMIOS_FUNCS
+        -: 1099:  auto struct termios buf;
+        -: 1100:
+        -: 1101:
+        -: 1102:  /*
+        -: 1103:     Get the terminal mode.
+        -: 1104:   */
+    #####: 1105:  tcgetattr (1, &buf);
+call    0 never executed
+        -: 1106:  /*
+        -: 1107:     Get ospeed!
+        -: 1108:   */
+        -: 1109:#    if HAVE_OSPEED
+    #####: 1110:  switch (cfgetospeed (&buf))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+branch 10 never executed
+branch 11 never executed
+branch 12 never executed
+branch 13 never executed
+branch 14 never executed
+branch 15 never executed
+branch 16 never executed
+branch 17 never executed
+branch 18 never executed
+branch 19 never executed
+        -: 1111:    {
+        -: 1112:#     ifdef B0
+    #####: 1113:    case B0:
+    #####: 1114:      ospeed = 0;
+    #####: 1115:      break;
+        -: 1116:#     endif
+        -: 1117:#     ifdef B50
+    #####: 1118:    case B50:
+    #####: 1119:      ospeed = 1;
+    #####: 1120:      break;
+        -: 1121:#     endif
+        -: 1122:#     ifdef B75
+    #####: 1123:    case B75:
+    #####: 1124:      ospeed = 2;
+    #####: 1125:      break;
+        -: 1126:#     endif
+        -: 1127:#     ifdef B110
+    #####: 1128:    case B110:
+    #####: 1129:      ospeed = 3;
+    #####: 1130:      break;
+        -: 1131:#     endif
+        -: 1132:#     ifdef B134
+    #####: 1133:    case B134:
+    #####: 1134:      ospeed = 4;
+    #####: 1135:      break;
+        -: 1136:#     endif
+        -: 1137:#     ifdef B150
+    #####: 1138:    case B150:
+    #####: 1139:      ospeed = 5;
+    #####: 1140:      break;
+        -: 1141:#     endif
+        -: 1142:#     ifdef B200
+    #####: 1143:    case B200:
+    #####: 1144:      ospeed = 6;
+    #####: 1145:      break;
+        -: 1146:#     endif
+        -: 1147:#     ifdef B300
+    #####: 1148:    case B300:
+    #####: 1149:      ospeed = 7;
+    #####: 1150:      break;
+        -: 1151:#     endif
+        -: 1152:#     ifdef B600
+    #####: 1153:    case B600:
+    #####: 1154:      ospeed = 8;
+    #####: 1155:      break;
+        -: 1156:#     endif
+        -: 1157:#     ifdef B1200
+    #####: 1158:    case B1200:
+    #####: 1159:      ospeed = 9;
+    #####: 1160:      break;
+        -: 1161:#     endif
+        -: 1162:#     ifdef B1800
+    #####: 1163:    case B1800:
+    #####: 1164:      ospeed = 10;
+    #####: 1165:      break;
+        -: 1166:#     endif
+        -: 1167:#     ifdef B2400
+    #####: 1168:    case B2400:
+    #####: 1169:      ospeed = 11;
+    #####: 1170:      break;
+        -: 1171:#     endif
+        -: 1172:#     ifdef B4800
+    #####: 1173:    case B4800:
+    #####: 1174:      ospeed = 12;
+    #####: 1175:      break;
+        -: 1176:#     endif
+        -: 1177:#     ifdef B9600
+    #####: 1178:    case B9600:
+    #####: 1179:      ospeed = 13;
+    #####: 1180:      break;
+        -: 1181:#     endif
+        -: 1182:#     ifdef EXTA
+    #####: 1183:    case EXTA:
+    #####: 1184:      ospeed = 14;
+    #####: 1185:      break;
+        -: 1186:#     endif
+        -: 1187:#     ifdef EXTB
+    #####: 1188:    case EXTB:
+    #####: 1189:      ospeed = 15;
+    #####: 1190:      break;
+        -: 1191:#     endif
+        -: 1192:#     ifdef B57600
+    #####: 1193:    case B57600:
+    #####: 1194:      ospeed = 16;
+    #####: 1195:      break;
+        -: 1196:#     endif
+        -: 1197:#     ifdef B115200
+    #####: 1198:    case B115200:
+    #####: 1199:      ospeed = 17;
+    #####: 1200:      break;
+        -: 1201:#     endif
+    #####: 1202:    default:
+        -: 1203:      ;				/* Void */
+        -: 1204:    }
+        -: 1205:#    endif /* HAVE_OSPEED */
+        -: 1206:#   else /* !HAVE_TERMIOS_H || !HAVE_TERMIOS_FUNC */
+        -: 1207:#    if TCGETA
+        -: 1208:  auto struct termio buf;
+        -: 1209:
+        -: 1210:
+        -: 1211:  /*
+        -: 1212:     Get the terminal mode.
+        -: 1213:   */
+        -: 1214:  ioctl (1, TCGETA, &buf);
+        -: 1215:  /*
+        -: 1216:     Get ospeed!
+        -: 1217:   */
+        -: 1218:#     if HAVE_OSPEED
+        -: 1219:  ospeed = buf.c_cflag & CBAUD;
+        -: 1220:#     endif
+        -: 1221:#    else /* !TCGETA */
+        -: 1222:  auto struct sgttyb buf;
+        -: 1223:
+        -: 1224:
+        -: 1225:  /*
+        -: 1226:     Get the terminal mode.
+        -: 1227:   */
+        -: 1228:  ioctl (1, TIOCGETP, &buf);
+        -: 1229:  /*
+        -: 1230:     Get ospeed!
+        -: 1231:   */
+        -: 1232:#     if HAVE_OSPEED
+        -: 1233:  ospeed = buf.sg_ospeed;
+        -: 1234:#     endif
+        -: 1235:#    endif /* !TCGETA */
+        -: 1236:#   endif /* !HAVE_TERMIOS_H || !HAVE_TERMIOS_FUNC */
+    #####: 1237:}
+        -: 1238:
+        -: 1239:
+        -: 1240:
+        -: 1241:static int
+function outchar called 0 returned 0% blocks executed 0%
+    #####: 1242:outchar (ch)
+        -: 1243:     int ch;
+        -: 1244:/*!
+        -: 1245:   Termcap's `tputs()' function prints a character to the module local defined
+        -: 1246:     file `fp_outchar', which must be assigned before using `tputs()' itself.
+        -: 1247:*/
+        -: 1248:{
+    #####: 1249:  return (fputc (ch, fp_outchar));
+call    0 never executed
+        -: 1250:}
+        -: 1251:
+        -: 1252:
+        -: 1253:
+        -: 1254:static Bool
+function get_termcap_hls called 0 returned 0% blocks executed 0%
+    #####: 1255:get_termcap_hls (hls1_set, hls2_set)
+        -: 1256:     Bool *hls1_set;
+        -: 1257:     Bool *hls2_set;
+        -: 1258:/*!
+        -: 1259:   Inspects the Termcap buffer `tc_buf' to detect the tty color/highlighting
+        -: 1260:     sequences.  The module global vector `tc_buf[]' must be filled previously.
+        -: 1261:     May be called only once.
+        -: 1262:     Returns FALSE if an error occurs, otherwise TRUE.
+        -: 1263:*/
+        -: 1264:{
+    #####: 1265:  register int i = (*hls1_set) ? 2 : 0;
+branch  0 never executed
+branch  1 never executed
+    #####: 1266:  register int j = (*hls2_set) ? TC_MC_MAX - 2 : TC_MC_MAX;
+branch  0 never executed
+branch  1 never executed
+        -: 1267:  static char *tc[TC_MC_MAX] = {
+        -: 1268:    TC_MC_HL1S,
+        -: 1269:    TC_MC_HL1E,
+        -: 1270:    TC_MC_HL2S,
+        -: 1271:    TC_MC_HL2E
+        -: 1272:  };
+        -: 1273:#   if HAVE_OSPEED
+        -: 1274:  static char *padding;
+        -: 1275:#   endif
+        -: 1276:  static char *area;
+        -: 1277:  auto char *ptr_char;
+        -: 1278:  auto char *ptr_area;
+        -: 1279:  static Bool func_accessed = FALSE;
+    #####: 1280:  auto Bool is_error = FALSE;
+        -: 1281:
+        -: 1282:
+    #####: 1283:  if (!func_accessed)
+branch  0 never executed
+branch  1 never executed
+        -: 1284:    {
+    #####: 1285:      func_accessed = TRUE;
+    #####: 1286:      area = (char *) my_malloc (TC_BUFLEN, ERR_NO_MEMORY_AVAILABLE,
+call    0 never executed
+        -: 1287:				 __FILE__, ((long) __LINE__) - 1L, "area", 0);
+    #####: 1288:      ptr_area = area;
+        -: 1289:#   if HAVE_OSPEED
+        -: 1290:      /*
+        -: 1291:         Get the padding sequence.
+        -: 1292:       */
+    #####: 1293:      padding = tgetstr ("pc", &ptr_area);
+call    0 never executed
+    #####: 1294:      PC = (padding) ? *padding : '\0';
+branch  0 never executed
+branch  1 never executed
+        -: 1295:      /*
+        -: 1296:         Get the terminal speed.
+        -: 1297:       */
+    #####: 1298:      get_ospeed ();
+call    0 never executed
+        -: 1299:#   endif
+    #####: 1300:      for (; (i < j) && !is_error; i++)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1301:	{
+    #####: 1302:	  ptr_char = tgetstr (tc[i], &ptr_area);
+call    0 never executed
+    #####: 1303:	  if (ptr_char != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1304:	    {
+    #####: 1305:	      switch (i)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 1306:		{
+    #####: 1307:		case 0:
+    #####: 1308:		  ehls1s.seq = ptr_char;
+    #####: 1309:		  break;
+    #####: 1310:		case 1:
+    #####: 1311:		  ehls1e.seq = ptr_char;
+    #####: 1312:		  *hls1_set = TRUE;
+    #####: 1313:		  break;
+    #####: 1314:		case 2:
+    #####: 1315:		  ehls2s.seq = ptr_char;
+    #####: 1316:		  break;
+    #####: 1317:		case 3:
+    #####: 1318:		  ehls2e.seq = ptr_char;
+    #####: 1319:		  *hls2_set = TRUE;
+    #####: 1320:		  break;
+    #####: 1321:		default:
+        -: 1322:		  /*
+        -: 1323:		     Error, more then 2 highlight sequence pairs given.
+        -: 1324:		   */
+    #####: 1325:		  is_error = TRUE;
+        -: 1326:		}
+        -: 1327:	    }
+        -: 1328:	  else
+        -: 1329:	    /*
+        -: 1330:	       Error, no terminal capability string found for mode `tc[i]'.
+        -: 1331:	     */
+    #####: 1332:	    is_error = TRUE;
+        -: 1333:	}
+        -: 1334:    }
+        -: 1335:
+    #####: 1336:  return ((Bool) ! is_error);
+        -: 1337:}
+        -: 1338:#  endif /* USE_HLS */
+        -: 1339:
+        -: 1340:
+        -: 1341:
+        -: 1342:#  if USE_PAGER
+        -: 1343:static Bool
+function get_termcap_scr_attrib called 0 returned 0% blocks executed 0%
+    #####: 1344:get_termcap_scr_attrib (rows, cols)
+        -: 1345:     int *rows;
+        -: 1346:     int *cols;
+        -: 1347:/*!
+        -: 1348:   Inspects the Termcap buffer `tc_buf' to detect first the amount of rows and
+        -: 1349:     columns of the tty, next whether the terminal wraps the line automatically
+        -: 1350:     at right margin.  If Termcap isn't present, internal default values are
+        -: 1351:     used.  The module global vector `tc_buf[]' must be filled previously.
+        -: 1352:     May be called only once.
+        -: 1353:     Returns FALSE if an error occurs, otherwise TRUE.
+        -: 1354:*/
+        -: 1355:{
+        -: 1356:  static Bool func_accessed = FALSE;
+        -: 1357:
+        -: 1358:
+    #####: 1359:  if (!func_accessed)
+branch  0 never executed
+branch  1 never executed
+        -: 1360:    {
+    #####: 1361:      func_accessed = TRUE;
+        -: 1362:      /*
+        -: 1363:         Get the amount of tty rows and columns.
+        -: 1364:       */
+    #####: 1365:      if (tgetnum ("li") == SPECIAL_VALUE || tgetnum ("co") == SPECIAL_VALUE)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+call    3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1366:	return (FALSE);
+        -: 1367:      else
+        -: 1368:	{
+    #####: 1369:	  *rows = tgetnum ("li");
+call    0 never executed
+    #####: 1370:	  *cols = tgetnum ("co");
+call    0 never executed
+        -: 1371:	  /*
+        -: 1372:	     Check whether tty wraps the line automatically
+        -: 1373:	     at right margin and ignores newline after wrapping.
+        -: 1374:	   */
+    #####: 1375:	  tty_am = tgetflag ("am");
+call    0 never executed
+    #####: 1376:	  tty_xn = tgetflag ("xn");
+call    0 never executed
+        -: 1377:	}
+        -: 1378:    }
+        -: 1379:
+    #####: 1380:  return (TRUE);
+        -: 1381:}
+        -: 1382:#  endif /* USE_PAGER */
+        -: 1383:# else /* !GCAL_TCAP */
+        -: 1384:#  if defined(MSDOS) && USE_PAGER
+        -: 1385:static Uchar
+        -: 1386:peek_byte (segment, offset)
+        -: 1387:     Uint segment;
+        -: 1388:     Uint offset;
+        -: 1389:/*!
+        -: 1390:   Gets a byte of IBM/PC-memory from address (segment:offset).
+        -: 1391:*/
+        -: 1392:{
+        -: 1393:  auto Ulint long_tmp;
+        -: 1394:  auto Uchar far *ptr_char;
+        -: 1395:
+        -: 1396:
+        -: 1397:  long_tmp = (Ulint) segment;
+        -: 1398:  long_tmp <<= 0x10;
+        -: 1399:  long_tmp += (Ulint) offset;
+        -: 1400:  ptr_char = (Uchar far *) long_tmp;
+        -: 1401:
+        -: 1402:  return (*ptr_char);
+        -: 1403:}
+        -: 1404:#  endif /* MSDOS && USE_PAGER */
+        -: 1405:# endif	/* !GCAL_TCAP */
+        -: 1406:#endif /* USE_PAGER || USE_HLS */
+        -: 1407:
+        -: 1408:
+        -: 1409:
+        -: 1410:static void
+function get_hl_seq called 0 returned 0% blocks executed 0%
+    #####: 1411:get_hl_seq (sequence_str, hls1_set, hls2_set)
+        -: 1412:     const char *sequence_str;
+        -: 1413:     Bool *hls1_set;
+        -: 1414:     Bool *hls2_set;
+        -: 1415:/*!
+        -: 1416:   Highlighting sequences/marking characters are given in command line
+        -: 1417:   (`-H<seq1_start:seq1_end:seq2_start:seq2_end>' option set),
+        -: 1418:   i.e.:  the colon separated string `sequence_str', which should contain
+        -: 1419:          highlighting sequence/marking character pairs (2 pairs maximum,
+        -: 1420:          first for actual day, second for holiday; seq?_start enables,
+        -: 1421:          seq?_end disables), is delivered,
+        -: 1422:          e.g.:   \x20:\x20:\x1:#
+        -: 1423:                    marks holiday date like:  \x1`date'#   using given marking characters.
+        -: 1424:          e.g.:   \x1b[34;42m:\x1b[0;40m   or
+        -: 1425:                  \033[34;42m:\033[0;40m   or
+        -: 1426:                  \E[34;42m:\E[0;40m
+        -: 1427:                    thus all defines starting (ANSI)escape highlighting sequence
+        -: 1428:                    \x1b[34;42m used for actual day and ending (ANSI)escape
+        -: 1429:                    highlighting sequence \x1b[0;40m with no given highlighting
+        -: 1430:                    sequence for holiday, so default highlighting sequences
+        -: 1431:                    for holiday are used (unnotated entries are always skipped).
+        -: 1432:          Control code definitions may contain any printable characters.
+        -: 1433:          Non-printable characters may be encoded in octal or hexadecimal
+        -: 1434:          notation.  The abbreviation \E resp., \e directly encodes the escape
+        -: 1435:          character (\x1B resp., \033).
+        -: 1436:          A character can be encoded octal by typing \NNN (BACKSLASH-octal
+        -: 1437:          digit(s)), where N must be a valid octal digit (0...7).  Normally,
+        -: 1438:          3 octal digits must be given.  If the octal character code consists
+        -: 1439:          of 1 or 2 octal digits, leading zeroes must be added; except the case,
+        -: 1440:          the encoded octal character is given last in single sequence.
+        -: 1441:          A character can be encoded hexadecimal by typing \xNN (BACKSLASH-x-
+        -: 1442:          hexadecimal digit(s)), where N must be a valid hexadecimal digit
+        -: 1443:          (0...9A...Fa...f).  Normally, 2 hexadecimal digits must be given.
+        -: 1444:          If the hexadecimal character code consists of 1 hexadecimal digit,
+        -: 1445:          a leading zero must be added; except the case, the encoded
+        -: 1446:          hexadecimal character is given last in a single sequence.
+        -: 1447:          If the sequence separator character, the colon `:' character
+        -: 1448:          itself is used for marking character, it must be specified
+        -: 1449:          either octal by \072 or hexadecimal by \x3A.
+        -: 1450:   Gets, converts and stores them in the global hls structs.
+        -: 1451:*/
+        -: 1452:{
+    #####: 1453:  register int i = 0;
+        -: 1454:  register int n;
+        -: 1455:  register int j;
+        -: 1456:  register int k;
+        -: 1457:  register int diff;
+    #####: 1458:  register int seq_no = 0;
+        -: 1459:  static char *buf_hls[TC_MC_MAX];
+    #####: 1460:  auto const char *ptr_char = sequence_str;
+    #####: 1461:  auto char *ptr_err = (char *) NULL;
+        -: 1462:  static char str4[5];
+    #####: 1463:  auto Bool is_error = FALSE;
+        -: 1464:  auto Bool is_hex;
+        -: 1465:  auto Bool is_oct;
+        -: 1466:  auto Bool is_esc;
+        -: 1467:
+        -: 1468:
+    #####: 1469:  (*hls1_set) = (*hls2_set) = FALSE;
+    #####: 1470:  while (*ptr_char && !is_error && (seq_no < TC_MC_MAX))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1471:    {
+        -: 1472:      /*
+        -: 1473:         Copy highlighting sequence/marking character to temporary
+        -: 1474:         sequence string (until colon character found).
+        -: 1475:       */
+    #####: 1476:      while (*ptr_char && (*ptr_char != *SEP))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1477:	{
+    #####: 1478:	  if ((Uint) i >= maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 1479:	    resize_all_strings (maxlen_max << 1, FALSE, __FILE__,
+call    0 never executed
+        -: 1480:				(long) __LINE__);
+    #####: 1481:	  s1[i++] = *ptr_char++;
+        -: 1482:	}
+    #####: 1483:      if ((Uint) i == maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 1484:	resize_all_strings (maxlen_max << 1, FALSE, __FILE__,
+call    0 never executed
+        -: 1485:			    (long) __LINE__);
+    #####: 1486:      if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+    #####: 1487:	ptr_char++;
+    #####: 1488:      if (i)
+branch  0 never executed
+branch  1 never executed
+        -: 1489:	{
+    #####: 1490:	  s1[i] = '\0';
+    #####: 1491:	  i = n = 0;
+        -: 1492:	  /*
+        -: 1493:	     Convert all textual:
+        -: 1494:	     HEX character sequences \xNN
+        -: 1495:	     OCT character sequences \NNN
+        -: 1496:	     ESC character sequences \E or \e
+        -: 1497:	     found in sequence string to real characters
+        -: 1498:	   */
+    #####: 1499:	  while (s1[i + n])
+branch  0 never executed
+branch  1 never executed
+        -: 1500:	    {
+    #####: 1501:	      is_hex = is_oct = is_esc = FALSE;
+    #####: 1502:	      diff = 0;
+    #####: 1503:	      if (s1[i + n] == '\\')
+branch  0 never executed
+branch  1 never executed
+        -: 1504:		{
+    #####: 1505:		  is_esc = (Bool) (tolower (s1[i + n + 1]) == 'e');
+    #####: 1506:		  is_hex = (Bool) (tolower (s1[i + n + 1]) == 'x');
+    #####: 1507:		  is_oct = (Bool) isdigit (s1[i + n + 1]);
+        -: 1508:		}
+    #####: 1509:	      if (is_esc)
+branch  0 never executed
+branch  1 never executed
+        -: 1510:		{
+    #####: 1511:		  s1[i] = '\033';	/* \x1b */
+    #####: 1512:		  n++;
+        -: 1513:		}
+    #####: 1514:	      else if (is_hex || is_oct)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1515:		{
+    #####: 1516:		  k = 0;
+    #####: 1517:		  if (is_hex)
+branch  0 never executed
+branch  1 never executed
+        -: 1518:		    {
+    #####: 1519:		      str4[k++] = '0';
+    #####: 1520:		      str4[k++] = 'x';
+        -: 1521:		    }
+        -: 1522:		  else
+        -: 1523:		    {
+    #####: 1524:		      if (s1[i + n + 1] != '0')
+branch  0 never executed
+branch  1 never executed
+    #####: 1525:			str4[k++] = '0';
+        -: 1526:		      else
+    #####: 1527:			diff = 1;
+    #####: 1528:		      str4[k++] = s1[i + n + 1];
+        -: 1529:		    }
+        -: 1530:		  /*
+        -: 1531:		     Copy hex/oct digits to prefix.
+        -: 1532:		   */
+    #####: 1533:		  j = i + n + 2;
+    #####: 1534:		  while (s1[j] && (s1[j] != *SEP) && (k < 4 - diff))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1535:		    str4[k++] = s1[j++];
+    #####: 1536:		  str4[k] = '\0';
+        -: 1537:		  /*
+        -: 1538:		     Convert textual hex/oct character to a decimal value.
+        -: 1539:		   */
+        -: 1540:#if HAVE_STRTOL
+    #####: 1541:		  j = (int) strtol (str4, &ptr_err, 0);
+call    0 never executed
+        -: 1542:#else /* !HAVE_STRTOL */
+        -: 1543:		  ptr_err = str4 + 1;
+        -: 1544:		  if (is_hex)
+        -: 1545:		    ptr_err++;
+        -: 1546:		  j = sbyte2int (ptr_err, (is_hex) ? 16 : 8);
+        -: 1547:#endif /* !HAVE_STRTOL */
+        -: 1548:		  /*
+        -: 1549:		     If conversion error occurs (invalid chars in hex/oct
+        -: 1550:		     character sequence), don't store ALL sequences,
+        -: 1551:		     which are previously decoded!
+        -: 1552:		   */
+    #####: 1553:		  if (j == -1
+branch  0 never executed
+branch  1 never executed
+        -: 1554:#if HAVE_STRTOL
+    #####: 1555:		      || *ptr_err
+branch  0 never executed
+branch  1 never executed
+        -: 1556:#endif
+        -: 1557:		    )
+        -: 1558:		    {
+    #####: 1559:		      is_error = TRUE;
+    #####: 1560:		      break;
+        -: 1561:		    }
+        -: 1562:		  /*
+        -: 1563:		     Put converted character code back to the sequence string.
+        -: 1564:		   */
+    #####: 1565:		  s1[i] = (char) j;
+    #####: 1566:		  n += (k - 2 + diff) + 1;
+        -: 1567:		}
+    #####: 1568:	      i++;
+    #####: 1569:	      s1[i] = s1[i + n];
+        -: 1570:	    }
+    #####: 1571:	  if (!is_error)
+branch  0 never executed
+branch  1 never executed
+        -: 1572:	    {
+        -: 1573:	      /*
+        -: 1574:	         Store highlighting sequence/marker character
+        -: 1575:	         in according global highlighting sequence
+        -: 1576:	         struct_variable using static buffer `buf_hls[]'.
+        -: 1577:	       */
+    #####: 1578:	      n = (int) strlen (s1);
+    #####: 1579:	      buf_hls[seq_no] =
+    #####: 1580:		(char *) my_malloc (n + 1, ERR_NO_MEMORY_AVAILABLE, __FILE__,
+call    0 never executed
+        -: 1581:				    ((long) __LINE__) - 1L, "buf_hls[seq_no]",
+        -: 1582:				    seq_no);
+    #####: 1583:	      strcpy (buf_hls[seq_no], s1);
+    #####: 1584:	      switch (seq_no)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 1585:		{
+    #####: 1586:		case 0:
+    #####: 1587:		  ehls1s.seq = buf_hls[seq_no];
+    #####: 1588:		  ehls1s.len = n;
+    #####: 1589:		  break;
+    #####: 1590:		case 1:
+    #####: 1591:		  ehls1e.seq = buf_hls[seq_no];
+    #####: 1592:		  ehls1e.len = n;
+    #####: 1593:		  *hls1_set = TRUE;
+    #####: 1594:		  break;
+    #####: 1595:		case 2:
+    #####: 1596:		  ehls2s.seq = buf_hls[seq_no];
+    #####: 1597:		  ehls2s.len = n;
+    #####: 1598:		  break;
+    #####: 1599:		case 3:
+    #####: 1600:		  ehls2e.seq = buf_hls[seq_no];
+    #####: 1601:		  ehls2e.len = n;
+    #####: 1602:		  *hls2_set = TRUE;
+    #####: 1603:		  break;
+    #####: 1604:		default:
+        -: 1605:		  ;		/* Void */
+        -: 1606:		}
+        -: 1607:	    }
+        -: 1608:	}
+    #####: 1609:      i = 0;
+    #####: 1610:      seq_no++;
+        -: 1611:    }
+        -: 1612:  /*
+        -: 1613:     Either real highlighting sequences (ESC-char..., length>1) only
+        -: 1614:     or marking characters (length==1) only can be managed:
+        -: 1615:     Avoid mixture of both!
+        -: 1616:   */
+        -: 1617:#if USE_HLS
+    #####: 1618:  if (*hls1_set)
+branch  0 never executed
+branch  1 never executed
+    #####: 1619:    if (((ehls1s.len == 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1620:	 && (ehls1e.len != 1)) || ((ehls1s.len != 1) && (ehls1e.len == 1)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1621:      *hls1_set = FALSE;
+    #####: 1622:  if (*hls2_set)
+branch  0 never executed
+branch  1 never executed
+    #####: 1623:    if (((ehls2s.len == 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1624:	 && (ehls2e.len != 1)) || ((ehls2s.len != 1) && (ehls2e.len == 1)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1625:      *hls2_set = FALSE;
+    #####: 1626:  if (*hls1_set)
+branch  0 never executed
+branch  1 never executed
+        -: 1627:    {
+    #####: 1628:      if ((ehls1s.len == 1) && (ehls1e.len == 1))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1629:	{
+    #####: 1630:	  if (*hls2_set)
+branch  0 never executed
+branch  1 never executed
+        -: 1631:	    {
+    #####: 1632:	      if ((ehls2s.len == 1) && (ehls2e.len == 1))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1633:		emu_hls = TRUE;
+        -: 1634:	      else
+        -: 1635:		{
+    #####: 1636:		  if (emu_hls)
+branch  0 never executed
+branch  1 never executed
+    #####: 1637:		    *hls2_set = FALSE;
+        -: 1638:		  else
+    #####: 1639:		    *hls1_set = FALSE;
+        -: 1640:		}
+        -: 1641:	    }
+    #####: 1642:	  else if (!emu_hls)
+branch  0 never executed
+branch  1 never executed
+    #####: 1643:	    *hls1_set = FALSE;
+        -: 1644:	}
+        -: 1645:      else
+        -: 1646:	{
+    #####: 1647:	  if (*hls2_set)
+branch  0 never executed
+branch  1 never executed
+        -: 1648:	    {
+    #####: 1649:	      if ((ehls2s.len != 1) && (ehls2e.len != 1))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1650:		;		/* Void, ok */
+        -: 1651:	      else
+        -: 1652:		{
+    #####: 1653:		  if (emu_hls)
+branch  0 never executed
+branch  1 never executed
+    #####: 1654:		    *hls1_set = FALSE;
+        -: 1655:		  else
+    #####: 1656:		    *hls2_set = FALSE;
+        -: 1657:		}
+        -: 1658:	    }
+    #####: 1659:	  else if (emu_hls)
+branch  0 never executed
+branch  1 never executed
+    #####: 1660:	    *hls1_set = FALSE;
+        -: 1661:	}
+        -: 1662:    }
+    #####: 1663:  if (!*hls1_set && *hls2_set)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1664:    {
+    #####: 1665:      if ((ehls2s.len == 1) && (ehls2e.len == 1))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1666:	{
+    #####: 1667:	  if (!emu_hls)
+branch  0 never executed
+branch  1 never executed
+    #####: 1668:	    *hls2_set = FALSE;
+        -: 1669:	}
+    #####: 1670:      else if (emu_hls)
+branch  0 never executed
+branch  1 never executed
+    #####: 1671:	*hls2_set = FALSE;
+        -: 1672:    }
+    #####: 1673:  if (*hls1_set && *hls2_set)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1674:    if (emu_hls && (ehls1s.len > 1) && (ehls2s.len > 1))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1675:      (*hls1_set) = (*hls2_set) = FALSE;
+        -: 1676:#else /* !USE_HLS */
+        -: 1677:  if (*hls1_set)
+        -: 1678:    if (ehls1s.len != 1 || ehls1e.len != 1)
+        -: 1679:      *hls1_set = FALSE;
+        -: 1680:  if (*hls2_set)
+        -: 1681:    if (ehls2s.len != 1 || ehls2e.len != 1)
+        -: 1682:      *hls2_set = FALSE;
+        -: 1683:#endif /* !USE_HLS */
+    #####: 1684:}
+        -: 1685:
+        -: 1686:
+        -: 1687:
+        -: 1688:#if !HAVE_STRTOL
+        -: 1689:static int
+        -: 1690:sbyte2int (string, base)
+        -: 1691:     const char *string;
+        -: 1692:     const int base;
+        -: 1693:/*!
+        -: 1694:   Converts a textual b-adic string `string', which contains the absolute
+        -: 1695:     textual representation of a byte given in number base `base' (2-16)
+        -: 1696:     to decimal base, and returns its decimal value.
+        -: 1697:     If an error occurs, SPECIAL_VALUE is returned.
+        -: 1698:*/
+        -: 1699:{
+        -: 1700:  register int val;
+        -: 1701:  register int res = 0;
+        -: 1702:  register int mul = 1;
+        -: 1703:  register int len = (int) strlen (string);
+        -: 1704:  register int len_base_str;
+        -: 1705:  static const char base_str[] = "0123456789abcdef";
+        -: 1706:  auto const char *ptr_char = string + (len - 1);
+        -: 1707:
+        -: 1708:
+        -: 1709:  len_base_str = (int) strlen (base_str);
+        -: 1710:  if (!len || base < 2 || base > len_base_str)
+        -: 1711:    return (SPECIAL_VALUE);
+        -: 1712:  for (; len; len--)
+        -: 1713:    {
+        -: 1714:      if (strchr (base_str, tolower (*ptr_char)) == (char *) NULL)
+        -: 1715:	return (SPECIAL_VALUE);
+        -: 1716:      val = len_base_str - (int) strlen (strchr (base_str, *ptr_char--));
+        -: 1717:      if (val > base)
+        -: 1718:	return (SPECIAL_VALUE);
+        -: 1719:      res += (val * mul);
+        -: 1720:      mul *= base;
+        -: 1721:    }
+        -: 1722:
+        -: 1723:  return (res);
+        -: 1724:}
+        -: 1725:#endif /* !HAVE_STRTOL */

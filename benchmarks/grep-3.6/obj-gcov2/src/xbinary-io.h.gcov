@@ -1,0 +1,56 @@
+        -:    0:Source:../../lib/xbinary-io.h
+        -:    0:Programs:50
+        -:    1:/* Binary mode I/O with checking
+        -:    2:   Copyright 2017-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:#ifndef _XBINARY_IO_H
+        -:   18:#define _XBINARY_IO_H
+        -:   19:
+        -:   20:#include "binary-io.h"
+        -:   21:
+        -:   22:#ifndef _GL_INLINE_HEADER_BEGIN
+        -:   23: #error "Please include config.h first."
+        -:   24:#endif
+        -:   25:_GL_INLINE_HEADER_BEGIN
+        -:   26:#ifndef XBINARY_IO_INLINE
+        -:   27:# define XBINARY_IO_INLINE _GL_INLINE
+        -:   28:#endif
+        -:   29:
+        -:   30:#if O_BINARY
+        -:   31:extern _Noreturn void xset_binary_mode_error (void);
+        -:   32:#else
+function xset_binary_mode_error called 0 returned 0% blocks executed 0%
+    #####:   33:XBINARY_IO_INLINE void xset_binary_mode_error (void) {}
+        -:   34:#endif
+        -:   35:
+        -:   36:/* Set the mode of FD to MODE, which should be either O_TEXT or O_BINARY.
+        -:   37:   Report an error and exit if this fails.  */
+        -:   38:
+        -:   39:XBINARY_IO_INLINE void
+function xset_binary_mode called 0 returned 0% blocks executed 0%
+    #####:   40:xset_binary_mode (int fd, int mode)
+        -:   41:{
+    #####:   42:  if (set_binary_mode (fd, mode) < 0)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:   43:    xset_binary_mode_error ();
+call    0 never executed
+    #####:   44:}
+        -:   45:
+        -:   46:_GL_INLINE_HEADER_END
+        -:   47:
+        -:   48:#endif /* _XBINARY_IO_H */

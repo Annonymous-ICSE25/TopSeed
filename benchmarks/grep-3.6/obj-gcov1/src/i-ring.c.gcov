@@ -1,0 +1,83 @@
+        -:    0:Source:../../lib/i-ring.c
+        -:    0:Programs:50
+        -:    1:/* a simple ring buffer
+        -:    2:   Copyright (C) 2006, 2009-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:/* written by Jim Meyering */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:#include "i-ring.h"
+        -:   21:
+        -:   22:#include <stdlib.h>
+        -:   23:
+        -:   24:void
+function i_ring_init called 0 returned 0% blocks executed 0%
+    #####:   25:i_ring_init (I_ring *ir, int default_val)
+        -:   26:{
+        -:   27:  int i;
+    #####:   28:  ir->ir_empty = true;
+    #####:   29:  ir->ir_front = 0;
+    #####:   30:  ir->ir_back = 0;
+    #####:   31:  for (i = 0; i < I_RING_SIZE; i++)
+branch  0 never executed
+branch  1 never executed
+    #####:   32:    ir->ir_data[i] = default_val;
+    #####:   33:  ir->ir_default_val = default_val;
+    #####:   34:}
+        -:   35:
+        -:   36:bool
+function i_ring_empty called 0 returned 0% blocks executed 0%
+    #####:   37:i_ring_empty (I_ring const *ir)
+        -:   38:{
+    #####:   39:  return ir->ir_empty;
+        -:   40:}
+        -:   41:
+        -:   42:int
+function i_ring_push called 0 returned 0% blocks executed 0%
+    #####:   43:i_ring_push (I_ring *ir, int val)
+        -:   44:{
+    #####:   45:  unsigned int dest_idx = (ir->ir_front + !ir->ir_empty) % I_RING_SIZE;
+    #####:   46:  int old_val = ir->ir_data[dest_idx];
+    #####:   47:  ir->ir_data[dest_idx] = val;
+    #####:   48:  ir->ir_front = dest_idx;
+    #####:   49:  if (dest_idx == ir->ir_back)
+branch  0 never executed
+branch  1 never executed
+    #####:   50:    ir->ir_back = (ir->ir_back + !ir->ir_empty) % I_RING_SIZE;
+    #####:   51:  ir->ir_empty = false;
+    #####:   52:  return old_val;
+        -:   53:}
+        -:   54:
+        -:   55:int
+function i_ring_pop called 0 returned 0% blocks executed 0%
+    #####:   56:i_ring_pop (I_ring *ir)
+        -:   57:{
+        -:   58:  int top_val;
+    #####:   59:  if (i_ring_empty (ir))
+branch  0 never executed
+branch  1 never executed
+    #####:   60:    abort ();
+call    0 never executed
+    #####:   61:  top_val = ir->ir_data[ir->ir_front];
+    #####:   62:  ir->ir_data[ir->ir_front] = ir->ir_default_val;
+    #####:   63:  if (ir->ir_front == ir->ir_back)
+branch  0 never executed
+branch  1 never executed
+    #####:   64:    ir->ir_empty = true;
+        -:   65:  else
+    #####:   66:    ir->ir_front = ((ir->ir_front + I_RING_SIZE - 1) % I_RING_SIZE);
+    #####:   67:  return top_val;
+        -:   68:}

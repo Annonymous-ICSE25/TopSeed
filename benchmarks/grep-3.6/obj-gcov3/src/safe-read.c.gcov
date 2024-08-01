@@ -1,0 +1,83 @@
+        -:    0:Source:../../lib/safe-read.c
+        -:    0:Programs:50
+        -:    1:/* An interface to read and write that retries after interrupts.
+        -:    2:
+        -:    3:   Copyright (C) 1993-1994, 1998, 2002-2006, 2009-2020 Free Software
+        -:    4:   Foundation, Inc.
+        -:    5:
+        -:    6:   This program is free software: you can redistribute it and/or modify
+        -:    7:   it under the terms of the GNU General Public License as published by
+        -:    8:   the Free Software Foundation; either version 3 of the License, or
+        -:    9:   (at your option) any later version.
+        -:   10:
+        -:   11:   This program is distributed in the hope that it will be useful,
+        -:   12:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:   GNU General Public License for more details.
+        -:   15:
+        -:   16:   You should have received a copy of the GNU General Public License
+        -:   17:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:
+        -:   21:/* Specification.  */
+        -:   22:#ifdef SAFE_WRITE
+        -:   23:# include "safe-write.h"
+        -:   24:#else
+        -:   25:# include "safe-read.h"
+        -:   26:#endif
+        -:   27:
+        -:   28:/* Get ssize_t.  */
+        -:   29:#include <sys/types.h>
+        -:   30:#include <unistd.h>
+        -:   31:
+        -:   32:#include <errno.h>
+        -:   33:
+        -:   34:#ifdef EINTR
+        -:   35:# define IS_EINTR(x) ((x) == EINTR)
+        -:   36:#else
+        -:   37:# define IS_EINTR(x) 0
+        -:   38:#endif
+        -:   39:
+        -:   40:#include "sys-limits.h"
+        -:   41:
+        -:   42:#ifdef SAFE_WRITE
+        -:   43:# define safe_rw safe_write
+        -:   44:# define rw write
+        -:   45:#else
+        -:   46:# define safe_rw safe_read
+        -:   47:# define rw read
+        -:   48:# undef const
+        -:   49:# define const /* empty */
+        -:   50:#endif
+        -:   51:
+        -:   52:/* Read(write) up to COUNT bytes at BUF from(to) descriptor FD, retrying if
+        -:   53:   interrupted.  Return the actual number of bytes read(written), zero for EOF,
+        -:   54:   or SAFE_READ_ERROR(SAFE_WRITE_ERROR) upon error.  */
+        -:   55:size_t
+function safe_read called 11 returned 100% blocks executed 36%
+       11:   56:safe_rw (int fd, void const *buf, size_t count)
+        -:   57:{
+        -:   58:  for (;;)
+    #####:   59:    {
+       11:   60:      ssize_t result = rw (fd, buf, count);
+call    0 returned 100%
+        -:   61:
+       11:   62:      if (0 <= result)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       11:   63:        return result;
+    #####:   64:      else if (IS_EINTR (errno))
+branch  0 never executed
+branch  1 never executed
+    #####:   65:        continue;
+    #####:   66:      else if (errno == EINVAL && SYS_BUFSIZE_MAX < count)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:   67:        count = SYS_BUFSIZE_MAX;
+        -:   68:      else
+    #####:   69:        return result;
+        -:   70:    }
+        -:   71:}

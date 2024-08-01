@@ -1,0 +1,3873 @@
+        -:    0:Source:../../src/rc-use.c
+        -:    0:Programs:20
+        -:    1:/*!
+        -:    2:*  \file rc-use.c
+        -:    3:*  \brief Central function, manages the resource file handling
+        -:    4:*             and displays the results.
+        -:    5:*/
+        -:    6:/*
+        -:    7:*  Copyright (c) 1994, 95, 96, 1997, 2000, 2011 Thomas Esken
+        -:    8:*  Copyright (c) 2010, 2011, 2013, 2014 Free Software Foundation, Inc.
+        -:    9:*
+        -:   10:*  This software doesn't claim completeness, correctness or usability.
+        -:   11:*  On principle I will not be liable for ANY damages or losses (implicit
+        -:   12:*  or explicit), which result from using or handling my software.
+        -:   13:*  If you use this software, you agree without any exception to this
+        -:   14:*  agreement, which binds you LEGALLY !!
+        -:   15:*
+        -:   16:*  This program is free software; you can redistribute it and/or modify
+        -:   17:*  it under the terms of the `GNU General Public License' as published by
+        -:   18:*  the `Free Software Foundation'; either version 3, or (at your option)
+        -:   19:*  any later version.
+        -:   20:*
+        -:   21:*  You should have received a copy of the `GNU General Public License'
+        -:   22:*  along with this program; if not, write to the:
+        -:   23:*
+        -:   24:*/
+        -:   25:
+        -:   26:
+        -:   27:
+        -:   28:/*
+        -:   29:*  Include definition header file to see whether USE_RC is defined there.
+        -:   30:*    Compile this module only if USE_RC is defined, otherwise skip it.
+        -:   31:*/
+        -:   32:#include "tailor.h"
+        -:   33:
+        -:   34:
+        -:   35:
+        -:   36:#if USE_RC
+        -:   37:
+        -:   38:
+        -:   39:/*
+        -:   40:*  Include header files.
+        -:   41:*/
+        -:   42:# if HAVE_ASSERT_H
+        -:   43:#  include <assert.h>
+        -:   44:# endif
+        -:   45:# if HAVE_CTYPE_H
+        -:   46:#  include <ctype.h>
+        -:   47:# endif
+        -:   48:# if HAVE_LIMITS_H
+        -:   49:#  include <limits.h>
+        -:   50:# endif
+        -:   51:# include "common.h"
+        -:   52:# include "rc-defs.h"
+        -:   53:# include "globals.h"
+        -:   54:# include "file-io.h"
+        -:   55:# include "hd-defs.h"
+        -:   56:# include "hd-use.h"
+        -:   57:# include "rc-astro.h"
+        -:   58:# include "rc-check.h"
+        -:   59:# include "rc-insert.h"
+        -:   60:# include "rc-utils.h"
+        -:   61:# include "tty.h"
+        -:   62:# include "utils.h"
+        -:   63:# include "rc-use.h"
+        -:   64:
+        -:   65:
+        -:   66:
+        -:   67:/*
+        -:   68:*  static functions prototypes.
+        -:   69:*/
+        -:   70:__BEGIN_DECLARATIONS
+        -:   71:/*
+        -:   72:************************************************** Defined in `rc-use.c'.
+        -:   73:*/
+        -:   74:static void try_to_include_file __P_ ((int ed, int wd));
+        -:   75:static void
+        -:   76:  display_table __P_ ((const int tmp_ad,
+        -:   77:		       const int tmp_am,
+        -:   78:		       const int tmp_ay, int day, int ed, int wd));
+        -:   79:static int fn_asc_sort __P_ ((const char **a, const char **b));
+        -:   80:static int fn_des_sort __P_ ((const char **a, const char **b));
+        -:   81:__END_DECLARATIONS
+        -:   82:/*
+        -:   83:*  GLOBAL variables definitions.
+        -:   84:*/
+        -:   85:/*! Date variables a[=MMDD]...z[] (YYYY@{a|b|...|z}[[-]N]). */
+        -:   86:  Dvar_struct rc_dvar[RC_DVAR_MAX];
+        -:   87:
+        -:   88:/*! Text variables $a[=TEXT]...$z[]. */
+        -:   89:Tvar_struct rc_tvar[RC_TVAR_MAX];
+        -:   90:
+        -:   91:/*! Local co-ordinates used by both the %distance and %sun* special texts. */
+        -:   92:Coor_struct lcoor1;
+        -:   93:
+        -:   94:/*! Points to the local co-ordinates 1. */
+        -:   95:Coor_struct *coor1 = &lcoor1;
+        -:   96:
+        -:   97:/*! Local co-ordinates used by the %distance special text. */
+        -:   98:Coor_struct lcoor2;
+        -:   99:
+        -:  100:/*! Points to the local co-ordinates 2. */
+        -:  101:Coor_struct *coor2 = &lcoor2;
+        -:  102:
+        -:  103:/*! Pointers to different parts of a (resource file) line. */
+        -:  104:Line_struct *lineptrs = (Line_struct *) NULL;
+        -:  105:
+        -:  106:/*! Pointers to different parts of a (resource file) line. */
+        -:  107:Line_struct *lptrs = (Line_struct *) NULL;
+        -:  108:
+        -:  109:/*! Pointers to different parts of a (resource file) line. */
+        -:  110:Line_struct *lptrs2 = (Line_struct *) NULL;
+        -:  111:
+        -:  112:/*! Pointers to different parts of a (resource file) line. */
+        -:  113:Line_struct *lptrs3 = (Line_struct *) NULL;
+        -:  114:
+        -:  115:/*! Temporary file used when a command is assigned to a TVAR. */
+        -:  116:FILE *rc_tvar_tfp = (FILE *) NULL;
+        -:  117:
+        -:  118:/*! Temporary file used for managing `--here=ARG' options. */
+        -:  119:FILE *rc_here_fp = (FILE *) NULL;
+        -:  120:
+        -:  121:/*! Time displacement value in days used by %sun* and %moon*
+        -:  122:   (also used as cycle-starting time value for %sun* and %moon* special texts). */
+        -:  123:double time_offset = 0.0;
+        -:  124:
+        -:  125:/*! Atmospheric pressure in millibar (`--atmosphere=PRESSURE,TEMPERATURE'). */
+        -:  126:double atm_pressure = DEFAULT_PRESSURE;
+        -:  127:
+        -:  128:/*! Atmospheric temperature in degrees Celsius (`--atmosphere=PRESSURE,TEMPERATURE'). */
+        -:  129:double atm_temperature = DEFAULT_TEMPERATURE;
+        -:  130:
+        -:  131:/*! Adjust rise/set-based reference altitude resp. shadow length factor (`--adjust-value=NUMBER'). */
+        -:  132:double adjust_value = DEGS_PER_24_HOURS;
+        -:  133:
+        -:  134:/*! Actual size of `rc_elems_table[]'. */
+        -:  135:Uint rc_elems_max = RC_ELEMS_MAX;
+        -:  136:
+        -:  137:/*! Amount of period of fixed dates. */
+        -:  138:int rc_period = 0;
+        -:  139:
+        -:  140:/*! Amount of resource file entries. */
+        -:  141:int rc_elems = 0;
+        -:  142:
+        -:  143:/*! Starting index of dummy resource file entries in table. */
+        -:  144:int rc_zero_pos = 0;
+        -:  145:
+        -:  146:/*! `-cd'. */
+        -:  147:int rc_have_today_in_list = 0;
+        -:  148:
+        -:  149:/*! Length of a single axis of a biorhythm text graphics bar. */
+        -:  150:int rc_bio_axis_len = BIO_AXIS_DEF;
+        -:  151:
+        -:  152:/*! Number of lines of a Moon phase text graphics image. */
+        -:  153:int rc_moonimage_lines = MOONIMAGE_DEF;
+        -:  154:
+        -:  155:/*! Filler length of week number text. */
+        -:  156:int len_fil_wt = 0;
+        -:  157:
+        -:  158:/*! Actual size of text buffer of "text"-part of a line. */
+        -:  159:int len_the_text = 0;
+        -:  160:
+        -:  161:/*! Cycle-ending time value in minutes for %sun* and %moon* special texts. */
+        -:  162:int loop_end = SPECIAL_VALUE;
+        -:  163:
+        -:  164:/*! Cycle-timestep value in minutes for %sun* and %moon* special texts. */
+        -:  165:int loop_step = DEFAULT_CYCLE_STEP;
+        -:  166:
+        -:  167:/*! Actual GMT minute. */
+        -:  168:int gmt_min = 0;
+        -:  169:
+        -:  170:/*! Actual GMT hour. */
+        -:  171:int gmt_hour = 0;
+        -:  172:
+        -:  173:/*! Buffer of actual GMT day. */
+        -:  174:int buf_gd = 0;
+        -:  175:
+        -:  176:/*! Buffer of actual GMT month. */
+        -:  177:int buf_gm = 0;
+        -:  178:
+        -:  179:/*! Buffer of actual GMT year. */
+        -:  180:int buf_gy = 0;
+        -:  181:
+        -:  182:/*! Day difference of GMT and local date. */
+        -:  183:int gmt_loc_diff = 0;
+        -:  184:
+        -:  185:/*! Indicates whether event also appears in next year. */
+        -:  186:int incr_year = 0;
+        -:  187:
+        -:  188:/*! Indicates whether event also appears in previous year. */
+        -:  189:int decr_year = 0;
+        -:  190:
+        -:  191:/*! Day of event found in line. */
+        -:  192:int d = 0;
+        -:  193:
+        -:  194:/*! Month of event found in line. */
+        -:  195:int m = 0;
+        -:  196:
+        -:  197:/*! Year of event found in line. */
+        -:  198:int y = 0;
+        -:  199:
+        -:  200:/*! Buffered day of event. */
+        -:  201:int d_buf = 0;
+        -:  202:
+        -:  203:/*! Buffered month of event. */
+        -:  204:int m_buf = 0;
+        -:  205:
+        -:  206:/*! The `N'th weekday of month' displacement value. */
+        -:  207:int hn = 0;
+        -:  208:
+        -:  209:/*! The weekday number of `N'th weekday of month'. */
+        -:  210:int hwd = 0;
+        -:  211:
+        -:  212:/*! Name of tempfile used when a command is assigned to a TVAR. */
+        -:  213:char *rc_tvar_tfn = (char *) NULL;
+        -:  214:
+        -:  215:/*! Name of tempfile used for managing `--here=ARG' options. */
+        -:  216:char *rc_here_fn = (char *) NULL;
+        -:  217:
+        -:  218:/*! Text buffer of "text"-part of a line. */
+        -:  219:char *the_text = (char *) NULL;
+        -:  220:
+        -:  221:/*! General purpose text buffer 5. */
+        -:  222:char *s5 = (char *) NULL;
+        -:  223:
+        -:  224:/*! General purpose text buffer 6. */
+        -:  225:char *s6 = (char *) NULL;
+        -:  226:
+        -:  227:/*! General purpose text buffer 7. */
+        -:  228:char *s7 = (char *) NULL;
+        -:  229:
+        -:  230:/*! Text buffer of a line read from a resource file. */
+        -:  231:char *line_buffer = (char *) NULL;
+        -:  232:
+        -:  233:/*! Stores the valid fixed date texts. */
+        -:  234:char **rc_elems_table = (char **) NULL;
+        -:  235:
+        -:  236:/*! Text of modified actual date %DATE. */
+        -:  237:char *rc_adate = (char *) NULL;
+        -:  238:
+        -:  239:/*! Name of alternative resource file(s) `-f|F<NAME[+...]>'. */
+        -:  240:char *rc_filename = (char *) NULL;
+        -:  241:
+        -:  242:/*! Argument used for filtering fixed date days. */
+        -:  243:char *rc_filter_day = (char *) NULL;
+        -:  244:
+        -:  245:/*! Argument used for filtering fixed date periods. */
+        -:  246:char *rc_filter_period = (char *) NULL;
+        -:  247:
+        -:  248:/*! REGEX used for filtering fixed date texts. */
+        -:  249:char *rc_filter_text = (char *) NULL;
+        -:  250:
+        -:  251:/*! Fixed date list grouping separator `-cg[TEXT]'. */
+        -:  252:char *rc_grp_sep = (char *) NULL;
+        -:  253:
+        -:  254:/*! Fixed date list heading text `--heading-text=TEXT'. */
+        -:  255:char *rc_heading_text = (char *) NULL;
+        -:  256:
+        -:  257:/*! The biorhythm's "Emo" text. */
+        -:  258:char *rc_bio_emo_lit = (char *) NULL;
+        -:  259:
+        -:  260:/*! The biorhythm's "Int" text. */
+        -:  261:char *rc_bio_int_lit = (char *) NULL;
+        -:  262:
+        -:  263:/*! The biorhythm's "Phy" text. */
+        -:  264:char *rc_bio_phy_lit = (char *) NULL;
+        -:  265:
+        -:  266:/*! The mode specifying character. */
+        -:  267:char hc = '\0';
+        -:  268:
+        -:  269:/*! `-jc'. */
+        -:  270:Bool rc_special_flag = FALSE;
+        -:  271:
+        -:  272:/*! `-jcb'. */
+        -:  273:Bool rc_both_dates_flag = FALSE;
+        -:  274:
+        -:  275:/*! `-c'. */
+        -:  276:Bool rc_use_flag = FALSE;
+        -:  277:
+        -:  278:/*! `-C[]' or `-C[][T|W|M|Y]' or `-c[][T|W|M|Y]' or `-F<>'. */
+        -:  279:Bool rc_all_dates_flag = FALSE;
+        -:  280:
+        -:  281:/*! `-c-'. */
+        -:  282:Bool rc_sort_des_flag = FALSE;
+        -:  283:
+        -:  284:/*! `-ca'. */
+        -:  285:Bool rc_enable_fn_flag = FALSE;
+        -:  286:
+        -:  287:/*! `-cA'. */
+        -:  288:Bool rc_alternative_format_flag = FALSE;
+        -:  289:
+        -:  290:/*! `--execute-command'. */
+        -:  291:Bool rc_execute_command = FALSE;
+        -:  292:
+        -:  293:/*! `-ce'. */
+        -:  294:Bool rc_enable_hda_flag = FALSE;
+        -:  295:
+        -:  296:/*! `-cE'. */
+        -:  297:Bool rc_enable_hdl_flag = FALSE;
+        -:  298:
+        -:  299:/*! `-ck'. */
+        -:  300:Bool rc_week_number_flag = FALSE;
+        -:  301:
+        -:  302:/*! `-cl'. */
+        -:  303:Bool rc_period_list = FALSE;
+        -:  304:
+        -:  305:/*! `-co'. */
+        -:  306:Bool rc_omit_date_flag = FALSE;
+        -:  307:
+        -:  308:/*! `-cU'. */
+        -:  309:Bool rc_suppr_date_part_flag = FALSE;
+        -:  310:
+        -:  311:/*! `-cQ'. */
+        -:  312:Bool rc_suppr_list_sep_flag = FALSE;
+        -:  313:
+        -:  314:/*! `-cJ'. */
+        -:  315:Bool rc_suppr_text_part_flag = FALSE;
+        -:  316:
+        -:  317:/*! `-cx'. */
+        -:  318:Bool rc_title_flag = TRUE;
+        -:  319:
+        -:  320:/*! `-cz'. */
+        -:  321:Bool rc_count_flag = FALSE;
+        -:  322:
+        -:  323:/*! `-cZ'. */
+        -:  324:Bool rc_zero_dates_flag = FALSE;
+        -:  325:
+        -:  326:/*! `-cN[d|w|+|-]|MMDD|MMWW[W]N'. */
+        -:  327:Bool rc_period_flag = FALSE;
+        -:  328:
+        -:  329:/*! `-c]t'. */
+        -:  330:Bool rc_tomorrow_flag = FALSE;
+        -:  331:
+        -:  332:/*! `-c]w'. */
+        -:  333:Bool rc_week_flag = FALSE;
+        -:  334:
+        -:  335:/*! `-c]m'. */
+        -:  336:Bool rc_month_flag = FALSE;
+        -:  337:
+        -:  338:/*! `-c]y'. */
+        -:  339:Bool rc_year_flag = FALSE;
+        -:  340:
+        -:  341:/*! `-cNw'. */
+        -:  342:Bool rc_week_year_flag = FALSE;
+        -:  343:
+        -:  344:/*! `-c<N|w|m|y>+'. */
+        -:  345:Bool rc_forwards_flag = FALSE;
+        -:  346:
+        -:  347:/*! Buffers the state of `rc_forwards_flag'. */
+        -:  348:Bool rc_fwdf_buffer = FALSE;
+        -:  349:
+        -:  350:/*! `-c<N|w|m|y>-'. */
+        -:  351:Bool rc_backwards_flag = FALSE;
+        -:  352:
+        -:  353:/*! Buffers the state of `rc_backwards_flag'. */
+        -:  354:Bool rc_bwdf_buffer = FALSE;
+        -:  355:
+        -:  356:/*! `--leap-day=february'. */
+        -:  357:Bool rc_feb_29_to_feb_28 = FALSE;
+        -:  358:
+        -:  359:/*! `--leap-day=march'. */
+        -:  360:Bool rc_feb_29_to_mar_01 = FALSE;
+        -:  361:
+        -:  362:/*! `--precise' to display precise, non-rounded, times and data. */
+        -:  363:Bool rc_precise = FALSE;
+        -:  364:
+        -:  365:/*! `--export-date-variables'. */
+        -:  366:Bool rc_export_ldvar_flag = FALSE;
+        -:  367:
+        -:  368:/*! `--export-text-variables'. */
+        -:  369:Bool rc_export_ltvar_flag = FALSE;
+        -:  370:
+        -:  371:/*! `--ignore-case' to ignore case distinctions in PATTERN. */
+        -:  372:Bool rc_ignore_case_flag = FALSE;
+        -:  373:
+        -:  374:/*! `--limit' to calculate rise/set times limited to the current day only. */
+        -:  375:Bool rc_limit = FALSE;
+        -:  376:
+        -:  377:/*! `--revert-match' to select non-matching PATTERN lines. */
+        -:  378:Bool rc_revert_match_flag = FALSE;
+        -:  379:
+        -:  380:/*! Is a command (explicit date) given in the command line? */
+        -:  381:Bool is_date_given = FALSE;
+        -:  382:
+        -:  383:/*! Does the command enables a year implicitly? */
+        -:  384:Bool date_enables_year = FALSE;
+        -:  385:
+        -:  386:/*! Stores whether a %shell escape special text is run. */
+        -:  387:Bool shell_escape_done = FALSE;
+        -:  388:
+        -:  389:/*! `-cNw' and complete week is in month. */
+        -:  390:Bool is_1month_mode = FALSE;
+        -:  391:
+        -:  392:/*! `-cNw' and only part of week is in month. */
+        -:  393:Bool is_2month_mode = FALSE;
+        -:  394:
+        -:  395:/*! Reference to a date variable found in line. */
+        -:  396:Bool is_2dvar = FALSE;
+        -:  397:
+        -:  398:/*! Reference to Easter Sundays date found in line. */
+        -:  399:Bool is_2easter = FALSE;
+        -:  400:
+        -:  401:/*! `-cNw' and actual date modified. */
+        -:  402:Bool adate_set = FALSE;
+        -:  403:
+        -:  404:/*! Remove highlighting sequences before searching PATTERN? */
+        -:  405:Bool remove_hls_in_regex = FALSE;
+        -:  406:
+        -:  407:
+        -:  408:
+        -:  409:/*
+        -:  410:*  The REGEX stuff; global variables that represent the "remembered" search PATTERN.
+        -:  411:*/
+        -:  412:# if HAVE_GNU_RE_COMPILE_PATTERN
+        -:  413:struct re_pattern_buffer regpattern;
+        -:  414:char *gnu_fastmap_table = (char *) NULL;
+        -:  415:unsigned char *gnu_translate_table = (unsigned char *) NULL;
+        -:  416:# endif
+        -:  417:
+        -:  418:# if HAVE_POSIX_REGCOMP
+        -:  419:regex_t regpattern;
+        -:  420:# endif
+        -:  421:
+        -:  422:# if HAVE_RE_COMP
+        -:  423:int re_pattern = 0;
+        -:  424:# endif
+        -:  425:
+        -:  426:
+        -:  427:/*
+        -:  428:*  static variables definitions.
+        -:  429:*/
+        -:  430:/*! Table of resource/include file buffers. */
+        -:  431:static File_struct **rc_files_table = (File_struct **) NULL;
+        -:  432:
+        -:  433:/*! Actual size of `rc_files_table[]'. */
+        -:  434:static Uint rc_files_max = RC_FILES_MAX;
+        -:  435:
+        -:  436:/*! Amount of resource file buffers. */
+        -:  437:static int rc_files = 0;
+        -:  438:
+        -:  439:/*! Number of characters in `line_buffer'. */
+        -:  440:static int line_length = 0;
+        -:  441:
+        -:  442:/*! An include statement is found in file. */
+        -:  443:static Bool is_include = FALSE;
+        -:  444:
+        -:  445:/*! A date variable statement is found in file. */
+        -:  446:static Bool is_dvar = FALSE;
+        -:  447:
+        -:  448:/*! A text variable statement is found in file. */
+        -:  449:static Bool is_tvar = FALSE;
+        -:  450:
+        -:  451:/*! File contains an invalid include file name? */
+        -:  452:static Bool bad_sys_include = FALSE;
+        -:  453:
+        -:  454:
+        -:  455:
+        -:  456:/*
+        -:  457:*  Function implementations.
+        -:  458:*/
+        -:  459:void
+function rc_use called 3 returned 100% blocks executed 25%
+        3:  460:rc_use ()
+        -:  461:/*!
+        -:  462:   Processes a standard/special resource file and displays the valid fixed
+        -:  463:   dates found resp., the valid fixed dates of eternal holiday list.
+        -:  464:*/
+        -:  465:{
+        3:  466:  register int wd = weekday_of_date (act_day, act_month, act_year);
+call    0 returned 100%
+        -:  467:  register int ed;
+        -:  468:  register int i;
+        -:  469:  register int j;
+        3:  470:  register int tmp_month = month;
+        3:  471:  register int tmp_fiscal_month = fiscal_month;
+        3:  472:  register int tmp_start_day = start_day;
+        3:  473:  register int tmp_ad = act_day;
+        3:  474:  register int tmp_am = act_month;
+        3:  475:  register int tmp_ay = act_year;
+        3:  476:  register int tindex = 0;
+        -:  477:  auto char *ptr_char;
+        -:  478:# if HAVE_ASSERT_H
+        -:  479:  static Bool is_table_range_checked = FALSE;
+        -:  480:# endif
+        -:  481:  static Bool tables_initialized = FALSE;
+        -:  482:
+        -:  483:
+        -:  484:  /*
+        -:  485:     Initialize some important module global variables.
+        -:  486:   */
+        3:  487:  len_fil_wt = rc_elems = rc_files = 0;
+        3:  488:  len_the_text = (int) maxlen_max;
+        -:  489:# if HAVE_ASSERT_H
+        -:  490:  /*
+        -:  491:     Check if the value for the maximum number of table entries
+        -:  492:     fits to the positive range of a signed int (INT_MAX/SHRT_MAX)!
+        -:  493:   */
+        3:  494:  if (!is_table_range_checked)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  495:    {
+        3:  496:      assert (rc_elems_max > 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  497:      assert (rc_elems_max <= testval);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  498:      assert (rc_files_max > 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  499:      assert (rc_files_max <= testval);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  500:      assert (len_the_text > 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  501:      assert (len_the_text <= testval);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  502:      is_table_range_checked = TRUE;
+        -:  503:    }
+        -:  504:# endif
+        3:  505:  if (!tables_initialized)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  506:    {
+        -:  507:      /*
+        -:  508:         Initialize the biorhythms phase texts consisting of 3 characters each.
+        -:  509:       */
+        -:  510:      /*
+        -:  511:       *** Translators, please translate this as a fixed 3-character text.
+        -:  512:       *** This text should be a proper abbreviation of "Emotional".
+        -:  513:       */
+        3:  514:      rc_bio_emo_lit = _("Emo");
+        -:  515:      /*
+        -:  516:       *** Translators, please translate this as a fixed 3-character text.
+        -:  517:       *** This text should be a proper abbreviation of "Intellectual".
+        -:  518:       */
+        3:  519:      rc_bio_int_lit = _("Int");
+        -:  520:      /*
+        -:  521:       *** Translators, please translate this as a fixed 3-character text.
+        -:  522:       *** This text should be a proper abbreviation of "Physical".
+        -:  523:       */
+        3:  524:      rc_bio_phy_lit = _("Phy");
+        -:  525:      /*
+        -:  526:         Initial memory allocation for an element of the `Line_struct' record
+        -:  527:         which is needed if we have to parse and evaluate a line.
+        -:  528:       */
+        3:  529:      lptrs = (Line_struct *) my_malloc (sizeof (Line_struct),
+call    0 returned 100%
+        -:  530:					 ERR_NO_MEMORY_AVAILABLE,
+        -:  531:					 __FILE__, ((long) __LINE__) - 2L,
+        -:  532:					 "lptrs", 0);
+        -:  533:      /*
+        -:  534:         Initial memory allocation for an element of the `Line_struct' record
+        -:  535:         which is needed if we have to evaluate %?... special texts.
+        -:  536:       */
+        3:  537:      lptrs2 = (Line_struct *) my_malloc (sizeof (Line_struct),
+call    0 returned 100%
+        -:  538:					  ERR_NO_MEMORY_AVAILABLE,
+        -:  539:					  __FILE__, ((long) __LINE__) - 2L,
+        -:  540:					  "lptrs2", 0);
+        -:  541:      /*
+        -:  542:         Initial memory allocation for `rc_files_table[]'.
+        -:  543:       */
+        3:  544:      rc_files_table =
+        3:  545:	(File_struct **) my_malloc (RC_FILES_MAX * sizeof (File_struct *),
+call    0 returned 100%
+        -:  546:				    ERR_NO_MEMORY_AVAILABLE, __FILE__,
+        -:  547:				    ((long) __LINE__) - 2L,
+        -:  548:				    "rc_files_table[RC_FILES_MAX]",
+        -:  549:				    RC_FILES_MAX);
+        -:  550:      /*
+        -:  551:         Initial memory allocation for `rc_elems_table[]'.
+        -:  552:       */
+        3:  553:      rc_elems_table = (char **) my_malloc (RC_ELEMS_MAX * sizeof (char *),
+call    0 returned 100%
+        -:  554:					    ERR_NO_MEMORY_AVAILABLE,
+        -:  555:					    __FILE__, ((long) __LINE__) - 2L,
+        -:  556:					    "rc_elems_table[RC_ELEMS_MAX]",
+        -:  557:					    RC_ELEMS_MAX);
+        -:  558:      /*
+        -:  559:         Initial memory allocation for `the_text'.
+        -:  560:       */
+        3:  561:      the_text = (char *) my_malloc (len_the_text, ERR_NO_MEMORY_AVAILABLE,
+call    0 returned 100%
+        -:  562:				     __FILE__, ((long) __LINE__) - 1L,
+        -:  563:				     "the_text", 0);
+        -:  564:      /*
+        -:  565:         The REGEX stuff in case `--filter-text=PATTERN' is given.
+        -:  566:       */
+        3:  567:      if (rc_filter_text != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  568:	{
+        -:  569:	  /*
+        -:  570:	     Compile `rc_filter_text' PATTERN.
+        -:  571:	   */
+        -:  572:# if !HAVE_GNU_RE_COMPILE_PATTERN
+    #####:  573:	  if (rc_ignore_case_flag)
+branch  0 never executed
+branch  1 never executed
+        -:  574:	    {
+        -:  575:	      /*
+        -:  576:	         Set PATTERN to lower-case letters
+        -:  577:	         if we have to ignore case distinctions.
+        -:  578:	       */
+    #####:  579:	      ptr_char = rc_filter_text;
+    #####:  580:	      for (; *ptr_char; ptr_char++)
+branch  0 never executed
+branch  1 never executed
+    #####:  581:		*ptr_char = (char) tolower (*ptr_char);
+        -:  582:	    }
+        -:  583:# else /* HAVE_GNU_RE_COMPILE_PATTERN */
+        -:  584:	  /*
+        -:  585:	     Compute the GNU Regex table size.
+        -:  586:	   */
+        -:  587:#  ifndef CHAR_BIT
+        -:  588:	  auto Uchar bit;
+        -:  589:
+        -:  590:
+        -:  591:	  for (i = 0, bit = 2; bit; bit <<= 1, i++)
+        -:  592:	    ;			/* Void, nothing to do here! */
+        -:  593:#  else	/* CHAR_BIT */
+        -:  594:	  i = CHAR_BIT - 1;
+        -:  595:#  endif /* CHAR_BIT */
+        -:  596:	  j = ((1 << i) - 1) + (1 << i);
+        -:  597:	  /*
+        -:  598:	     Initial memory allocation of GNU Regex fastmap table.
+        -:  599:	   */
+        -:  600:	  gnu_fastmap_table =
+        -:  601:	    (char *) my_malloc (j + 1, ERR_NO_MEMORY_AVAILABLE, __FILE__,
+        -:  602:				((long) __LINE__) - 1L, "gnu_fastmap_table",
+        -:  603:				0);
+        -:  604:	  /*
+        -:  605:	     Initial memory allocation and initialization of GNU Regex translate table.
+        -:  606:	   */
+        -:  607:	  gnu_translate_table =
+        -:  608:	    (unsigned char *) my_malloc (j + 1, ERR_NO_MEMORY_AVAILABLE,
+        -:  609:					 __FILE__, ((long) __LINE__) - 1L,
+        -:  610:					 "gnu_translate_table", 0);
+        -:  611:	  if (rc_ignore_case_flag)
+        -:  612:	    /*
+        -:  613:	       Set PATTERN to lower-case letters
+        -:  614:	       if we have to ignore case distinctions.
+        -:  615:	     */
+        -:  616:	    for (i = 0; i <= j; i++)
+        -:  617:	      gnu_translate_table[i] = (unsigned char) tolower (i);
+        -:  618:	  else
+        -:  619:	    for (i = 0; i <= j; i++)
+        -:  620:	      gnu_translate_table[i] = (unsigned char) i;
+        -:  621:	  (void)
+        -:  622:	    re_set_syntax ((RE_SYNTAX_POSIX_EXTENDED |
+        -:  623:			    RE_BACKSLASH_ESCAPE_IN_LISTS) &
+        -:  624:			   ~(RE_DOT_NOT_NULL));
+        -:  625:	  regpattern.fastmap = gnu_fastmap_table;
+        -:  626:	  regpattern.translate = gnu_translate_table;
+        -:  627:	  if (re_compile_pattern
+        -:  628:	      (rc_filter_text, (int) strlen (rc_filter_text),
+        -:  629:	       &regpattern) != (char *) NULL)
+        -:  630:	    my_error (ERR_INVALID_REGEX_PATTERN, "", 0L, rc_filter_text, 0);
+        -:  631:# endif	/* HAVE_GNU_RE_COMPILE_PATTERN */
+        -:  632:# if HAVE_POSIX_REGCOMP
+        -:  633:	  if (regcomp (&regpattern, rc_filter_text, REGCOMP_FLAG))
+        -:  634:	    my_error (ERR_INVALID_REGEX_PATTERN, "", 0L, rc_filter_text, 0);
+        -:  635:# endif
+        -:  636:# if HAVE_RE_COMP
+        -:  637:	  if (re_comp (rc_filter_text) != (char *) NULL)
+        -:  638:	    my_error (ERR_INVALID_REGEX_PATTERN, "", 0L, rc_filter_text, 0);
+        -:  639:	  re_pattern = 1;
+        -:  640:# endif
+        -:  641:	  /*
+        -:  642:	     Is it necessary to remove highlighting sequences
+        -:  643:	     in each text before searching the PATTERN?
+        -:  644:	   */
+    #####:  645:	  remove_hls_in_regex = highlight_flag;
+        -:  646:	}
+        3:  647:      tables_initialized = TRUE;
+        -:  648:    }
+        -:  649:  /*
+        -:  650:     Depending on fixed date mode,
+        -:  651:     compute last valid day `ed' a fixed date may occur.
+        -:  652:   */
+        3:  653:  ed = day = day_of_year (act_day, act_month, act_year);
+call    0 returned 100%
+        3:  654:  if (is_date_given)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  655:    {
+        -:  656:      /*
+        -:  657:         NOT in simple month/year mode (an explicit date is given in the command line):
+        -:  658:         Compute the starting/ending loop values of the requested period.
+        -:  659:       */
+    #####:  660:      ed = DAY_LAST + is_leap_year + 1;
+    #####:  661:      if (!month)
+branch  0 never executed
+branch  1 never executed
+    #####:  662:	day = DAY_MIN;
+        -:  663:      else
+        -:  664:	{
+    #####:  665:	  day = day_of_year (DAY_MIN, month, year);
+call    0 never executed
+    #####:  666:	  if (month < MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####:  667:	    ed = day_of_year (DAY_MIN, month + 1, year);
+call    0 never executed
+        -:  668:	}
+        -:  669:      /*
+        -:  670:         Then clean all flags which are related to the fixed date period.
+        -:  671:       */
+    #####:  672:      rc_clean_flags ();
+call    0 never executed
+    #####:  673:      if (date_enables_year)
+branch  0 never executed
+branch  1 never executed
+    #####:  674:	rc_year_flag = TRUE;
+        -:  675:    }
+        -:  676:  else
+        -:  677:    {
+        -:  678:      auto int dd;
+        -:  679:      auto int mm;
+        3:  680:      auto int yy = act_year;
+        3:  681:      auto int greg_missing_days = (greg->last_day - greg->first_day + 1);
+        3:  682:      auto Bool greg_correction = FALSE;
+        3:  683:      auto Bool swap_flag = FALSE;
+        -:  684:
+        -:  685:
+        3:  686:      if (rc_tomorrow_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  687:	{
+        -:  688:	  /*
+        -:  689:	     `-ct' option found.
+        -:  690:	   */
+    #####:  691:	  rc_period_list = FALSE;
+    #####:  692:	  ed += 2;
+    #####:  693:	  if ((act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  694:	      && (act_month == greg->month)
+branch  0 never executed
+branch  1 never executed
+    #####:  695:	      && (act_day == greg->first_day - 1))
+branch  0 never executed
+branch  1 never executed
+    #####:  696:	    ed += greg_missing_days;
+        -:  697:	}
+        3:  698:      else if (rc_week_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  699:	{
+        -:  700:	  /*
+        -:  701:	     `-cw[+|-]' option found.
+        -:  702:	   */
+    #####:  703:	  rc_period_list = FALSE;
+    #####:  704:	  if (!rc_forwards_flag && !rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  705:	    day += (-DAY_MAX + SDAY (DAY_MAX - wd + 1, start_day));
+    #####:  706:	  else if (rc_forwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####:  707:	    day += !rc_have_today_in_list;
+        -:  708:	  else
+    #####:  709:	    day += rc_have_today_in_list;
+    #####:  710:	  if (rc_backwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####:  711:	      || (!rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####:  712:		  && !rc_backwards_flag && (start_day > wd)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  713:	    {
+    #####:  714:	      swap_flag = TRUE;
+    #####:  715:	      ed -= DAY_MAX;
+        -:  716:	    }
+    #####:  717:	  ed += SDAY (DAY_MAX - wd + 1, start_day);
+branch  0 never executed
+branch  1 never executed
+    #####:  718:	  if (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  719:	    greg_correction = TRUE;
+        -:  720:	}
+        3:  721:      else if (rc_month_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  722:	{
+        -:  723:	  /*
+        -:  724:	     `-cm[+|-]' option found.
+        -:  725:	   */
+    #####:  726:	  rc_period_list = FALSE;
+    #####:  727:	  if (!rc_forwards_flag && !rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  728:	    day = day_of_year (DAY_MIN, act_month, act_year);
+call    0 never executed
+    #####:  729:	  else if (rc_forwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####:  730:	    day += !rc_have_today_in_list;
+        -:  731:	  else
+    #####:  732:	    day += rc_have_today_in_list;
+    #####:  733:	  if (rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####:  734:	    ed = day_of_year (DAY_MIN, act_month, act_year);
+call    0 never executed
+        -:  735:	  else
+        -:  736:	    {
+    #####:  737:	      if (act_month < MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####:  738:		ed = day_of_year (DAY_MIN, act_month + 1, act_year);
+call    0 never executed
+        -:  739:	      else
+    #####:  740:		ed = DAY_LAST + is_leap_year + 1;
+        -:  741:	    }
+        -:  742:	}
+        3:  743:      else if (rc_year_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  744:	{
+        -:  745:	  /*
+        -:  746:	     `-cy[+|-]' option found.
+        -:  747:	   */
+    #####:  748:	  rc_period_list = FALSE;
+    #####:  749:	  if (!rc_forwards_flag && !rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  750:	    day = DAY_MIN;
+    #####:  751:	  else if (rc_forwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####:  752:	    day += !rc_have_today_in_list;
+        -:  753:	  else
+    #####:  754:	    day += rc_have_today_in_list;
+    #####:  755:	  if (rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+    #####:  756:	    ed = DAY_MIN;
+        -:  757:	  else
+    #####:  758:	    ed = DAY_LAST + is_leap_year + 1;
+        -:  759:	}
+        3:  760:      else if (rc_period_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  761:	{
+    #####:  762:	  if (rc_week_year_flag)
+branch  0 never executed
+branch  1 never executed
+        -:  763:	    {
+        -:  764:	      /*
+        -:  765:	         `-cNw' option found
+        -:  766:	       */
+    #####:  767:	      if (iso_week_number)
+branch  0 never executed
+branch  1 never executed
+        -:  768:		/*
+        -:  769:		   Those ISO-8601:1988 weeks starts on Monday.
+        -:  770:		 */
+    #####:  771:		wd = start_day = DAY_MIN;
+        -:  772:	      /*
+        -:  773:	         Compute the day number of year the week starts at.
+        -:  774:	       */
+    #####:  775:	      j = day =
+    #####:  776:		weekno2doy (rc_period, act_year, iso_week_number, start_day);
+call    0 never executed
+    #####:  777:	      if (day != -WEEK_MAX)
+branch  0 never executed
+branch  1 never executed
+        -:  778:		{
+    #####:  779:		  if (rc_period_list)
+branch  0 never executed
+branch  1 never executed
+        -:  780:		    {
+        -:  781:		      /*
+        -:  782:		         `-cNw' option found.
+        -:  783:		       */
+    #####:  784:		      if (day > ed)
+branch  0 never executed
+branch  1 never executed
+        -:  785:			{
+    #####:  786:			  if (day <= DAY_LAST + is_leap_year)
+branch  0 never executed
+branch  1 never executed
+        -:  787:			    {
+    #####:  788:			      rc_forwards_flag = TRUE;
+    #####:  789:			      day = ed + 1 - rc_have_today_in_list;
+    #####:  790:			      ed = j + DAY_MAX;
+        -:  791:			      /*
+        -:  792:			         Correction in case week occurs during Gregorian Reformation period.
+        -:  793:			       */
+    #####:  794:			      if (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+        -:  795:				{
+    #####:  796:				  (void) doy2date (j, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####:  797:				  for (i = j; i < ed; i++)
+branch  0 never executed
+branch  1 never executed
+    #####:  798:				    if (!next_date (&dd, &mm, &yy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  799:				      {
+    #####:  800:					ed += greg_missing_days;
+    #####:  801:					break;
+        -:  802:				      }
+        -:  803:				}
+    #####:  804:			      if (ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####:  805:				ed = DAY_LAST + is_leap_year + 1;
+        -:  806:			    }
+        -:  807:			  else
+        -:  808:			    /*
+        -:  809:			       No fixed date messages to display.
+        -:  810:			     */
+    #####:  811:			    day = ed;
+        -:  812:			}
+        -:  813:		      else
+        -:  814:			{
+    #####:  815:			  if (ed > DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -:  816:			    {
+    #####:  817:			      rc_backwards_flag = TRUE;
+    #####:  818:			      day = ed + rc_have_today_in_list;
+    #####:  819:			      ed = j;
+    #####:  820:			      if (ed < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####:  821:				ed = DAY_MIN;
+        -:  822:			    }
+        -:  823:			  else
+        -:  824:			    /*
+        -:  825:			       No fixed date messages to display.
+        -:  826:			     */
+    #####:  827:			    day = ed;
+        -:  828:			}
+        -:  829:		    }
+        -:  830:		  else
+        -:  831:		    {
+        -:  832:		      /*
+        -:  833:		         `-cNw' option found:
+        -:  834:		         Set actual date to Mondays date of week
+        -:  835:		         and omit highlighting that date; boolean
+        -:  836:		         `adate_set' is set to distinct this
+        -:  837:		         SPECIAL mode from other modes...
+        -:  838:		       */
+    #####:  839:		      rc_week_flag = TRUE;
+    #####:  840:		      ed = day + DAY_MAX;
+        -:  841:		      /*
+        -:  842:		         Correction in case week occurs during Gregorian Reformation period.
+        -:  843:		       */
+    #####:  844:		      if (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+        -:  845:			{
+    #####:  846:			  (void) doy2date (day, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####:  847:			  for (i = day; i < ed; i++)
+branch  0 never executed
+branch  1 never executed
+    #####:  848:			    if (!next_date (&dd, &mm, &yy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  849:			      {
+    #####:  850:				ed += greg_missing_days;
+    #####:  851:				break;
+        -:  852:			      }
+        -:  853:			}
+    #####:  854:		      if (day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -:  855:			{
+    #####:  856:			  act_year--;
+    #####:  857:			  j +=
+    #####:  858:			    (DAY_LAST + (days_of_february (act_year) == 29));
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  859:			}
+        -:  860:		      else
+    #####:  861:			j = day;
+    #####:  862:		      (void) doy2date (j, is_leap_year, &act_day, &act_month);
+call    0 never executed
+    #####:  863:		      month = act_month;
+    #####:  864:		      fiscal_month = MONTH_MIN;
+    #####:  865:		      adate_set = TRUE;
+        -:  866:		    }
+        -:  867:		}
+        -:  868:	      else
+        -:  869:		/*
+        -:  870:		   Wanted week doesn't exist:
+        -:  871:		   Don't display any fixed date messages.
+        -:  872:		 */
+    #####:  873:		day = ed;
+        -:  874:	    }
+        -:  875:	  else
+        -:  876:	    /*
+        -:  877:	       `-cNd', `-cMMDD', `-cMMWW[W]N', `-c*d|wN[WW[W]' and
+        -:  878:	       `-c@e|t|DVAR[[-]N] options are implicitly managed in
+        -:  879:	       this subsection, too.
+        -:  880:	     */
+    #####:  881:	  if (rc_forwards_flag && (day < DAY_LAST + is_leap_year))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  882:	    {
+    #####:  883:	      if (rc_period_list)
+branch  0 never executed
+branch  1 never executed
+        -:  884:		{
+        -:  885:		  /*
+        -:  886:		     `-clN+' option found (list of dates).
+        -:  887:		   */
+    #####:  888:		  day += !rc_have_today_in_list;
+        -:  889:		  /*
+        -:  890:		     Correction in case date occurs during Gregorian Reformation period.
+        -:  891:		   */
+    #####:  892:		  if (rc_fwdf_buffer
+branch  0 never executed
+branch  1 never executed
+    #####:  893:		      && (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  894:		      && (ed <
+branch  0 never executed
+branch  1 never executed
+    #####:  895:			  day_of_year (greg->first_day, greg->month,
+call    0 never executed
+    #####:  896:				       greg->year))
+    #####:  897:		      && (ed + rc_period >=
+branch  0 never executed
+branch  1 never executed
+    #####:  898:			  day_of_year (greg->first_day, greg->month,
+call    0 never executed
+    #####:  899:				       greg->year)))
+    #####:  900:		    ed += greg_missing_days;
+    #####:  901:		  ed += (rc_period + 1);
+    #####:  902:		  if (ed > DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+    #####:  903:		    ed = DAY_LAST + is_leap_year + 1;
+        -:  904:		}
+        -:  905:	      else
+        -:  906:		{
+        -:  907:		  /*
+        -:  908:		     `-cN+ option found (single date).
+        -:  909:		   */
+    #####:  910:		  rc_forwards_flag = FALSE;
+        -:  911:		  /*
+        -:  912:		     Correction in case date occurs during Gregorian Reformation period.
+        -:  913:		   */
+    #####:  914:		  if (rc_fwdf_buffer
+branch  0 never executed
+branch  1 never executed
+    #####:  915:		      && (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  916:		      && (day <
+branch  0 never executed
+branch  1 never executed
+    #####:  917:			  day_of_year (greg->first_day, greg->month,
+call    0 never executed
+    #####:  918:				       greg->year))
+    #####:  919:		      && (day + rc_period >=
+branch  0 never executed
+branch  1 never executed
+    #####:  920:			  day_of_year (greg->first_day, greg->month,
+call    0 never executed
+    #####:  921:				       greg->year)))
+    #####:  922:		    day += greg_missing_days;
+    #####:  923:		  day += rc_period;
+    #####:  924:		  ed = day;
+    #####:  925:		  if (day < DAY_LAST + is_leap_year + 1)
+branch  0 never executed
+branch  1 never executed
+        -:  926:		    {
+    #####:  927:		      rc_period_flag = FALSE;
+    #####:  928:		      (void) doy2date (day, is_leap_year, &act_day,
+call    0 never executed
+        -:  929:				       &act_month);
+    #####:  930:		      month = act_month;
+    #####:  931:		      ed++;
+        -:  932:		    }
+        -:  933:		}
+        -:  934:	    }
+    #####:  935:	  else if (rc_backwards_flag && (day > DAY_MIN))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  936:	    {
+    #####:  937:	      if (rc_period_list)
+branch  0 never executed
+branch  1 never executed
+        -:  938:		{
+        -:  939:		  /*
+        -:  940:		     `-clN-' option found (list of dates).
+        -:  941:		   */
+    #####:  942:		  day += rc_have_today_in_list;
+        -:  943:		  /*
+        -:  944:		     Correction in case date occurs during Gregorian Reformation period.
+        -:  945:		   */
+    #####:  946:		  if (rc_bwdf_buffer
+branch  0 never executed
+branch  1 never executed
+    #####:  947:		      && (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  948:		      && (ed >
+branch  0 never executed
+branch  1 never executed
+    #####:  949:			  day_of_year (greg->last_day, greg->month,
+call    0 never executed
+    #####:  950:				       greg->year))
+    #####:  951:		      && (ed - rc_period <=
+branch  0 never executed
+branch  1 never executed
+    #####:  952:			  day_of_year (greg->last_day, greg->month,
+call    0 never executed
+    #####:  953:				       greg->year)))
+    #####:  954:		    ed -= greg_missing_days;
+    #####:  955:		  ed -= rc_period;
+    #####:  956:		  if (ed < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####:  957:		    ed = DAY_MIN;
+        -:  958:		}
+        -:  959:	      else
+        -:  960:		{
+        -:  961:		  /*
+        -:  962:		     `-cN-' option found (single date).
+        -:  963:		   */
+    #####:  964:		  rc_backwards_flag = FALSE;
+        -:  965:		  /*
+        -:  966:		     Correction in case date occurs during Gregorian Reformation period.
+        -:  967:		   */
+    #####:  968:		  if (rc_bwdf_buffer
+branch  0 never executed
+branch  1 never executed
+    #####:  969:		      && (act_year == greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  970:		      && (day >
+branch  0 never executed
+branch  1 never executed
+    #####:  971:			  day_of_year (greg->last_day, greg->month,
+call    0 never executed
+    #####:  972:				       greg->year))
+    #####:  973:		      && (day - rc_period <=
+branch  0 never executed
+branch  1 never executed
+    #####:  974:			  day_of_year (greg->last_day, greg->month,
+call    0 never executed
+    #####:  975:				       greg->year)))
+    #####:  976:		    day -= greg_missing_days;
+    #####:  977:		  day -= rc_period;
+    #####:  978:		  ed = day;
+    #####:  979:		  if (day > 0)
+branch  0 never executed
+branch  1 never executed
+        -:  980:		    {
+    #####:  981:		      rc_period_flag = FALSE;
+    #####:  982:		      (void) doy2date (day, is_leap_year, &act_day,
+call    0 never executed
+        -:  983:				       &act_month);
+    #####:  984:		      month = act_month;
+    #####:  985:		      ed++;
+        -:  986:		    }
+        -:  987:		}
+        -:  988:	    }
+        -:  989:	}
+        -:  990:      else
+        -:  991:	{
+        -:  992:	  /*
+        -:  993:	     Only a simple option `-c' (without any modifiers) found.
+        -:  994:	   */
+        3:  995:	  rc_period_list = FALSE;
+        3:  996:	  ed++;
+        -:  997:	}
+        -:  998:      /*
+        -:  999:         Swap the starting date `day' and final date `ed' of the period.
+        -: 1000:       */
+        3: 1001:      if (swap_flag || rc_backwards_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -: 1002:	{
+    #####: 1003:	  int tmp = ed;
+    #####: 1004:	  ed = day;
+    #####: 1005:	  day = tmp;
+        -: 1006:	}
+        -: 1007:      /*
+        -: 1008:         Correction in case date occurs during Gregorian Reformation period.
+        -: 1009:       */
+        3: 1010:      if (greg_correction)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1011:	{
+    #####: 1012:	  (void) doy2date (day, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####: 1013:	  if (!prev_date (&dd, &mm, &yy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1014:	    day -= greg_missing_days;
+        -: 1015:	  else
+        -: 1016:	    {
+    #####: 1017:	      if (!rc_forwards_flag && !rc_backwards_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1018:		{
+    #####: 1019:		  (void) doy2date (day, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####: 1020:		  if (weekday_of_date (dd, mm, yy) != start_day)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1021:		    day -= greg_missing_days;
+        -: 1022:		  else
+    #####: 1023:		    for (i = day; i < ed; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1024:		      if (!next_date (&dd, &mm, &yy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1025:			{
+    #####: 1026:			  ed += greg_missing_days;
+    #####: 1027:			  break;
+        -: 1028:			}
+        -: 1029:		}
+        -: 1030:	      else
+        -: 1031:		{
+    #####: 1032:		  auto Bool ed_set = FALSE;
+        -: 1033:
+        -: 1034:
+    #####: 1035:		  for (i = day; i < ed; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1036:		    if (!next_date (&dd, &mm, &yy))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1037:		      {
+    #####: 1038:			ed += greg_missing_days;
+    #####: 1039:			ed_set = TRUE;
+    #####: 1040:			break;
+        -: 1041:		      }
+    #####: 1042:		  if (rc_backwards_flag && ed_set)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1043:		    {
+    #####: 1044:		      (void) doy2date (day, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####: 1045:		      if (weekday_of_date (dd, mm, yy) != start_day)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1046:			{
+    #####: 1047:			  day -= greg_missing_days;
+    #####: 1048:			  ed -= greg_missing_days;
+        -: 1049:			}
+        -: 1050:		    }
+        -: 1051:		}
+        -: 1052:	    }
+        -: 1053:	}
+        -: 1054:    }
+        3: 1055:  if (day != ed)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1056:    {
+        3: 1057:      auto double save_time_offset = time_offset;
+        3: 1058:      register int save_hour_offset = time_hour_offset;
+        3: 1059:      register int save_min_offset = time_min_offset;
+        3: 1060:      register int save_loop_end = loop_end;
+        -: 1061:      auto char *tmp_rc_here_fn;
+        3: 1062:      auto Bool cycle_increment = TRUE;
+        -: 1063:      auto Bool is_here_file;
+        -: 1064:      auto Bool ok;
+        -: 1065:
+        -: 1066:
+        -: 1067:      /*
+        -: 1068:         Now include the eternal holidays, which are valid fixed dates,
+        -: 1069:         into `rc_elems_table[]'.
+        -: 1070:       */
+        3: 1071:      if (rc_enable_hda_flag || rc_enable_hdl_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -: 1072:	{
+    #####: 1073:	  while ((hd_table[tindex] != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1074:		 && (tindex < HD_ELEMS_MAX))
+branch  0 never executed
+branch  1 never executed
+        -: 1075:	    {
+    #####: 1076:	      strcpy (line_buffer, hd_table[tindex]);
+    #####: 1077:	      i = LEN_HD_NAME + len_year_max + 4 + 2;
+    #####: 1078:	      if (rc_enable_hda_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1079:		  || (rc_enable_hdl_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1080:		      && (line_buffer[i] != *DIS_HLS_PREF)
+branch  0 never executed
+branch  1 never executed
+    #####: 1081:		      && (line_buffer[i] != *DIS_HLS_PREF2)))
+branch  0 never executed
+branch  1 never executed
+        -: 1082:		{
+    #####: 1083:		  i -= 2;
+    #####: 1084:		  while (i && isspace (line_buffer[i]))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1085:		    line_buffer[i--] = '\0';
+    #####: 1086:		  if (i > len_year_max + 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1087:		    rc_check (line_buffer, _("`Eternal holiday list'"),
+call    0 never executed
+        -: 1088:			      (long) tindex, i, &rc_elems, day, ed, wd);
+        -: 1089:		}
+    #####: 1090:	      if (!holiday_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 1091:		{
+    #####: 1092:		  free (hd_table[tindex]);
+    #####: 1093:		  hd_table[tindex] = (char *) NULL;
+        -: 1094:		}
+    #####: 1095:	      tindex++;
+        -: 1096:	    }
+        -: 1097:	  /*
+        -: 1098:	     If the fixed date mode is related to a week or to tomorrow
+        -: 1099:	     and the period has left the current year, include those
+        -: 1100:	     eternal holidays in year +/- 1 into `rc_elems_table',
+        -: 1101:	     which are valid fixed dates.
+        -: 1102:	   */
+    #####: 1103:	  if ((rc_tomorrow_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1104:	       || rc_week_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1105:	      && !is_date_given
+branch  0 never executed
+branch  1 never executed
+    #####: 1106:	      && !is_1month_mode
+branch  0 never executed
+branch  1 never executed
+    #####: 1107:	      && !is_2month_mode
+branch  0 never executed
+branch  1 never executed
+    #####: 1108:	      && ((!rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1109:		   && !rc_backwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1110:		   && (((year + 1 <= YEAR_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1111:			&& (ed > DAY_LAST + is_leap_year + 1))
+branch  0 never executed
+branch  1 never executed
+    #####: 1112:		       || ((year - 1 >= YEAR_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1113:			   && (day < DAY_MIN))))
+branch  0 never executed
+branch  1 never executed
+    #####: 1114:		  || (rc_forwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1115:		      && ((year + 1 <= YEAR_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1116:			  && (ed > DAY_LAST + is_leap_year + 1)))
+branch  0 never executed
+branch  1 never executed
+    #####: 1117:		  || (rc_backwards_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1118:		      && ((year - 1 >= YEAR_MIN) && (day < DAY_MIN)))))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1119:	    {
+    #####: 1120:	      register int jtmp_ad = act_day;
+    #####: 1121:	      register int tay = act_year;
+    #####: 1122:	      register int tam = act_month;
+    #####: 1123:	      register int tad = act_day;
+        -: 1124:
+        -: 1125:
+    #####: 1126:	      if (holiday_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1127:		for (i = 0; i < tindex; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 1128:		  {
+    #####: 1129:		    free (hd_table[i]);
+    #####: 1130:		    hd_table[i] = (char *) NULL;
+        -: 1131:		  }
+    #####: 1132:	      tindex = 0;
+    #####: 1133:	      if (day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1134:		{
+    #####: 1135:		  year--;
+    #####: 1136:		  month = MONTH_MAX;
+        -: 1137:		}
+        -: 1138:	      else
+        -: 1139:		{
+    #####: 1140:		  year++;
+    #####: 1141:		  month = MONTH_MIN;
+        -: 1142:		}
+    #####: 1143:	      is_leap_year = (days_of_february (year) == 29);
+call    0 never executed
+    #####: 1144:	      if (cal_special_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1145:		act_day = day_of_year (jtmp_ad, act_month, act_year);
+call    0 never executed
+    #####: 1146:	      if (adate_set)
+branch  0 never executed
+branch  1 never executed
+    #####: 1147:		fiscal_month = tmp_fiscal_month;
+    #####: 1148:	      if (((year == EASTER_MIN - 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1149:		   && (fiscal_month > MONTH_MIN))
+branch  0 never executed
+branch  1 never executed
+    #####: 1150:		  || ((year >= EASTER_MIN) && (year <= EASTER_MAX)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1151:		print_all_holidays (TRUE, TRUE);
+call    0 never executed
+    #####: 1152:	      if (adate_set)
+branch  0 never executed
+branch  1 never executed
+    #####: 1153:		fiscal_month = MONTH_MIN;
+    #####: 1154:	      if (day < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1155:		{
+    #####: 1156:		  year++;
+    #####: 1157:		  month = MONTH_MIN;
+        -: 1158:		}
+        -: 1159:	      else
+        -: 1160:		{
+    #####: 1161:		  year--;
+    #####: 1162:		  month = MONTH_MAX;
+        -: 1163:		}
+    #####: 1164:	      while ((hd_table[tindex] != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1165:		     && (tindex < HD_ELEMS_MAX))
+branch  0 never executed
+branch  1 never executed
+        -: 1166:		{
+    #####: 1167:		  strcpy (line_buffer, hd_table[tindex]);
+    #####: 1168:		  i = LEN_HD_NAME + len_year_max + 4 + 2;
+    #####: 1169:		  if (rc_enable_hda_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1170:		      || (rc_enable_hdl_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1171:			  && (line_buffer[i] == *DIS_HLS_PREF)
+branch  0 never executed
+branch  1 never executed
+    #####: 1172:			  && (line_buffer[i] == *DIS_HLS_PREF2)))
+branch  0 never executed
+branch  1 never executed
+        -: 1173:		    {
+    #####: 1174:		      i -= 2;
+    #####: 1175:		      while (i && isspace (line_buffer[i]))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1176:			line_buffer[i--] = '\0';
+    #####: 1177:		      if (i > len_year_max + 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1178:			rc_check (line_buffer, _("`Eternal holiday list'"),
+call    0 never executed
+        -: 1179:				  (long) tindex, i, &rc_elems, day, ed, wd);
+        -: 1180:		    }
+    #####: 1181:		  free (hd_table[tindex]);
+    #####: 1182:		  hd_table[tindex] = (char *) NULL;
+    #####: 1183:		  tindex++;
+        -: 1184:		}
+    #####: 1185:	      is_leap_year = (days_of_february (year) == 29);
+call    0 never executed
+    #####: 1186:	      if (adate_set)
+branch  0 never executed
+branch  1 never executed
+        -: 1187:		{
+    #####: 1188:		  fiscal_month = tmp_fiscal_month;
+    #####: 1189:		  act_year = tmp_ay;
+    #####: 1190:		  act_month = tmp_am;
+    #####: 1191:		  jtmp_ad = act_day = tmp_ad;
+        -: 1192:		}
+    #####: 1193:	      if (cal_special_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1194:		act_day = day_of_year (jtmp_ad, act_month, act_year);
+call    0 never executed
+    #####: 1195:	      if (holiday_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 1196:		  && (((year == EASTER_MIN - 1)
+branch  0 never executed
+branch  1 never executed
+    #####: 1197:		       && (fiscal_month > MONTH_MIN))
+branch  0 never executed
+branch  1 never executed
+    #####: 1198:		      || ((year >= EASTER_MIN) && (year <= EASTER_MAX))))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1199:		print_all_holidays (TRUE, TRUE);
+call    0 never executed
+    #####: 1200:	      if (cal_special_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1201:		act_day = jtmp_ad;
+    #####: 1202:	      if (adate_set)
+branch  0 never executed
+branch  1 never executed
+        -: 1203:		{
+    #####: 1204:		  fiscal_month = MONTH_MIN;
+    #####: 1205:		  act_year = tay;
+    #####: 1206:		  month = act_month = tam;
+    #####: 1207:		  act_day = tad;
+        -: 1208:		}
+        -: 1209:	      else
+    #####: 1210:		month = tmp_month;
+        -: 1211:	    }
+        -: 1212:	}
+        -: 1213:      /*
+        -: 1214:         Try to open the resource file(s).
+        -: 1215:       */
+        3: 1216:      if (rc_filename == (char *) NULL)
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -: 1217:	{
+        -: 1218:	  /*
+        -: 1219:	     Use the standard resource file.
+        -: 1220:	   */
+        2: 1221:	  i = (int) strlen (PACKAGE_NAME) + strlen (RC_SUFFIX);
+        -: 1222:# ifdef GCAL_SHELL
+        2: 1223:	  i++;
+        -: 1224:# endif
+        2: 1225:	  if ((Uint) i >= maxlen_max)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1226:	    resize_all_strings (i + 1, FALSE, __FILE__, (long) __LINE__);
+call    0 never executed
+        -: 1227:# ifdef GCAL_SHELL
+        2: 1228:	  strcpy (s3, ".");
+        -: 1229:# else /* !GCAL_SHELL */
+        -: 1230:	  *s3 = '\0';
+        -: 1231:# endif	/* !GCAL_SHELL */
+        2: 1232:	  strcat (s3, PACKAGE_NAME);
+        2: 1233:	  strcat (s3, RC_SUFFIX);
+        -: 1234:	}
+        -: 1235:      else
+        -: 1236:	{
+        -: 1237:	  /*
+        -: 1238:	     Use the list of resource file names.
+        -: 1239:	   */
+        1: 1240:	  i = (int) strlen (rc_filename);
+        1: 1241:	  if ((Uint) i >= maxlen_max)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1242:	    resize_all_strings (i + 1, FALSE, __FILE__, (long) __LINE__);
+call    0 never executed
+        1: 1243:	  strcpy (s3, rc_filename);
+        -: 1244:	}
+        -: 1245:      /*
+        -: 1246:         Allocate the file buffers for the main resource file itself
+        -: 1247:         (the main resource file is always buffered at position 0 in `rc_files_table[]').
+        -: 1248:       */
+        6: 1249:      rc_files_table[rc_files] =
+        6: 1250:	(File_struct *) my_malloc (sizeof (File_struct),
+call    0 returned 100%
+        -: 1251:				   ERR_NO_MEMORY_AVAILABLE, __FILE__,
+        -: 1252:				   ((long) __LINE__) - 2L,
+        -: 1253:				   "rc_files_table[rc_files]", rc_files);
+        3: 1254:      rc_files_table[rc_files]->fp = (FILE *) NULL;
+        3: 1255:      rc_files_table[rc_files]->pool = (char *) my_malloc (BUF_LEN + 1,
+call    0 returned 100%
+        -: 1256:							   ERR_NO_MEMORY_AVAILABLE,
+        -: 1257:							   __FILE__,
+        -: 1258:							   ((long) __LINE__) -
+        -: 1259:							   2L,
+        -: 1260:							   "rc_files_table[rc_files]->pool",
+        -: 1261:							   rc_files);
+        3: 1262:      if (loop_end != SPECIAL_VALUE)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1263:	{
+        -: 1264:	  /*
+        -: 1265:	     Set the cycle-starting time value for %sun* and %moon*.
+        -: 1266:	   */
+    #####: 1267:	  tindex = HHMM2MM (time_hour_offset, time_min_offset);
+        -: 1268:	  /*
+        -: 1269:	     Reduce the given cycle-starting time value in minutes to a single day.
+        -: 1270:	   */
+    #####: 1271:	  if (tindex < 0)
+branch  0 never executed
+branch  1 never executed
+    #####: 1272:	    tindex = 0;
+    #####: 1273:	  else if (tindex >= MINS_PER_DAY)
+branch  0 never executed
+branch  1 never executed
+    #####: 1274:	    tindex = MINS_PER_DAY - 1;
+    #####: 1275:	  if (tindex > loop_end)
+branch  0 never executed
+branch  1 never executed
+    #####: 1276:	    cycle_increment = FALSE;
+    #####: 1277:	  time_hour_offset = MM2HH (tindex);
+    #####: 1278:	  time_min_offset = tindex % MINS_PER_HOUR;
+    #####: 1279:	  time_offset = MM2DAY (tindex);
+        -: 1280:	}
+        -: 1281:      else
+        3: 1282:	tindex = 0;
+        -: 1283:      do
+        -: 1284:	{
+        3: 1285:	  tmp_rc_here_fn = rc_here_fn;
+        3: 1286:	  ok = is_here_file = FALSE;
+       11: 1287:	  while (!ok)
+branch  0 taken 63%
+branch  1 taken 38% (fallthrough)
+        -: 1288:	    {
+        -: 1289:	      /*
+        -: 1290:	         Single file or list of resource file names given in the command line.
+        -: 1291:	       */
+       10: 1292:	      while (rc_files_table[rc_files]->fp == (FILE *) NULL)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -: 1293:		{
+        5: 1294:		  i = 0;
+        5: 1295:		  ptr_char = s3;
+        -: 1296:		  LOOP
+        -: 1297:		  {
+       85: 1298:		    if (*ptr_char == QUOTE_CHAR)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1299:		      {
+    #####: 1300:			if (*(ptr_char + 1) == *CONNECT_SEP
+branch  0 never executed
+branch  1 never executed
+    #####: 1301:			    || *(ptr_char + 1) == QUOTE_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 1302:			  ptr_char++;
+    #####: 1303:			s7[i++] = *ptr_char++;
+        -: 1304:		      }
+       45: 1305:		    else if (*ptr_char != *CONNECT_SEP)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       45: 1306:		      s7[i++] = *ptr_char++;
+       45: 1307:		    if (!*ptr_char || *ptr_char == *CONNECT_SEP)
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -: 1308:		      break;
+        -: 1309:		  }
+        5: 1310:		  s7[i] = '\0';
+        -: 1311:		  /*
+        -: 1312:		     Now check if the file exists.
+        -: 1313:		   */
+        5: 1314:		  rc_files_table[rc_files]->filename
+       10: 1315:		    = (char *) my_malloc (i + 1, ERR_NO_MEMORY_AVAILABLE,
+call    0 returned 100%
+        -: 1316:					  __FILE__, ((long) __LINE__) - 1L,
+        -: 1317:					  "rc_files_table[rc_files]->filename",
+        -: 1318:					  rc_files);
+        5: 1319:		  strcpy (rc_files_table[rc_files]->filename, s7);
+       10: 1320:		  rc_files_table[rc_files]->fp =
+       10: 1321:		    file_open (&rc_files_table[rc_files]->filename, rc_files,
+branch  0 taken 40% (fallthrough)
+branch  1 taken 60%
+call    2 returned 100%
+        -: 1322:			       (is_here_file) ? HEre : REsource,
+        -: 1323:			       &bad_sys_include);
+        5: 1324:		  if (!*ptr_char)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 1325:		    {
+        -: 1326:		      /*
+        -: 1327:		         Finished, THE file respectively ALL files are managed
+        -: 1328:		         so check whether any `--here=ARG' options must be processed
+        -: 1329:		         at last coming from the temporary file already created.
+        -: 1330:		       */
+        5: 1331:		      if (tmp_rc_here_fn != (char *) NULL)
+branch  0 taken 40% (fallthrough)
+branch  1 taken 60%
+        -: 1332:			{
+        -: 1333:			  /*
+        -: 1334:			     Use the temporary "here" filename for processing next.
+        -: 1335:			   */
+        2: 1336:			  i = (int) strlen (tmp_rc_here_fn);
+        2: 1337:			  if ((Uint) i >= maxlen_max)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1338:			    resize_all_strings (i + 1, FALSE, __FILE__,
+call    0 never executed
+        -: 1339:						(long) __LINE__);
+        2: 1340:			  strcpy (s3, tmp_rc_here_fn);
+        2: 1341:			  tmp_rc_here_fn = (char *) NULL;
+        2: 1342:			  is_here_file = !ok;	/* Nomen est Omen??? :-) */
+        -: 1343:			}
+        -: 1344:		      else
+        3: 1345:			ok = TRUE;
+        5: 1346:		      break;
+        -: 1347:		    }
+        -: 1348:		  else
+        -: 1349:		    {
+        -: 1350:		      /*
+        -: 1351:		         Now skip a trailing '+' character of a file name list.
+        -: 1352:		       */
+    #####: 1353:		      ptr_char++;
+        -: 1354:		      /*
+        -: 1355:		         Copy the rest of the file name list and start
+        -: 1356:		         the file search again if the file was not found.
+        -: 1357:		       */
+    #####: 1358:		      strcpy (s7, ptr_char);
+    #####: 1359:		      strcpy (s3, s7);
+    #####: 1360:		      if (rc_files_table[rc_files]->fp == (FILE *) NULL)
+branch  0 never executed
+branch  1 never executed
+    #####: 1361:			free (rc_files_table[rc_files]->filename);
+        -: 1362:		    }
+        -: 1363:		}
+        -: 1364:	      /*
+        -: 1365:	         Now read and check contents of a resource file `filename'
+        -: 1366:	         and include valid fixed dates into `rc_elems_table[]'.
+        -: 1367:	       */
+        5: 1368:	      if (rc_files_table[rc_files]->fp != (FILE *) NULL)
+branch  0 taken 40% (fallthrough)
+branch  1 taken 60%
+        -: 1369:		{
+        2: 1370:		  rc_files_table[rc_files]->in_pool = 0;
+        2: 1371:		  rc_files_table[rc_files]->line_number = 0L;
+        -: 1372:		  /*
+        -: 1373:		     First of all, copy the contents of the global date variables to the
+        -: 1374:		     local variables (if one of these isn't defined) so we can perform
+        -: 1375:		     local operations (++, --, +=, -=) on global variables.
+        -: 1376:		   */
+       54: 1377:		  for (i = 0; i < RC_DVAR_MAX; i++)
+branch  0 taken 96%
+branch  1 taken 4% (fallthrough)
+       52: 1378:		    if (rc_dvar[i].dvar_global.dvar_month
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1379:			&& !rc_dvar[i].dvar_local.dvar_month)
+branch  0 never executed
+branch  1 never executed
+        -: 1380:		      {
+    #####: 1381:			rc_dvar[i].dvar_local.dvar_month =
+    #####: 1382:			  rc_dvar[i].dvar_global.dvar_month;
+    #####: 1383:			rc_dvar[i].dvar_local.dvar_day =
+    #####: 1384:			  rc_dvar[i].dvar_global.dvar_day;
+        -: 1385:		      }
+        -: 1386:		  /*
+        -: 1387:		     Then copy the contents of the global text variables to the
+        -: 1388:		     local variables (if one of these isn't defined) so we can
+        -: 1389:		     perform local operations (++, --, +=, -=) on global variables.
+        -: 1390:		   */
+       54: 1391:		  for (i = 0; i < RC_TVAR_MAX; i++)
+branch  0 taken 96%
+branch  1 taken 4% (fallthrough)
+       52: 1392:		    if ((rc_tvar[i].tvar_global.tvar_text != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1393:			&& (rc_tvar[i].tvar_local.tvar_text == (char *) NULL))
+branch  0 never executed
+branch  1 never executed
+        -: 1394:		      {
+        -: 1395:			rc_tvar[i].tvar_local.tvar_text
+    #####: 1396:			  =
+        -: 1397:			  (char *)
+    #####: 1398:			  my_malloc (strlen (rc_tvar[i].tvar_global.tvar_text)
+call    0 never executed
+    #####: 1399:				     + 1, ERR_NO_MEMORY_AVAILABLE, __FILE__,
+        -: 1400:				     ((long) __LINE__) - 2L,
+        -: 1401:				     "rc_tvar[i].tvar_local.tvar_text", i);
+    #####: 1402:			strcpy (rc_tvar[i].tvar_local.tvar_text,
+    #####: 1403:				rc_tvar[i].tvar_global.tvar_text);
+        -: 1404:		      }
+        6: 1405:		  while ((rc_files_table[rc_files]->ptr_pool =
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+       10: 1406:			  file_read_line (rc_files_table[rc_files]->fp,
+call    0 returned 100%
+        -: 1407:					  &line_buffer,
+        2: 1408:					  &rc_files_table[rc_files]->in_pool,
+        2: 1409:					  rc_files_table[rc_files]->pool,
+        2: 1410:					  rc_files_table[rc_files]->ptr_pool,
+        2: 1411:					  rc_files_table[rc_files]->filename,
+        2: 1412:					  &rc_files_table[rc_files]->
+        -: 1413:					  line_number, &line_length, REsource,
+        -: 1414:					  &is_include, &is_dvar,
+        -: 1415:					  &is_tvar)) != (char *) NULL)
+        -: 1416:		    {
+        -: 1417:		      /*
+        -: 1418:		         Check whether an "#include" statement is found.
+        -: 1419:		       */
+    #####: 1420:		      if (is_include)
+branch  0 never executed
+branch  1 never executed
+        -: 1421:			/*
+        -: 1422:			   We have to manage an include file.
+        -: 1423:			 */
+    #####: 1424:			try_to_include_file (ed, wd);
+call    0 never executed
+        -: 1425:		      else
+        -: 1426:			/*
+        -: 1427:			   We are still in the main resource file.
+        -: 1428:			 */
+    #####: 1429:		      if (*line_buffer && !is_dvar && !is_tvar)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1430:			rc_check (line_buffer,
+call    0 never executed
+    #####: 1431:				  rc_files_table[rc_files]->filename,
+    #####: 1432:				  rc_files_table[rc_files]->line_number,
+        -: 1433:				  line_length, &rc_elems, day, ed, wd);
+        -: 1434:		    }
+        2: 1435:		  if (rc_files_table[rc_files]->fp != stdin)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2: 1436:		    (void) fclose (rc_files_table[rc_files]->fp);
+call    0 returned 100%
+        2: 1437:		  rc_files_table[rc_files]->fp = (FILE *) NULL;
+        2: 1438:		  free (rc_files_table[rc_files]->filename);
+        -: 1439:		  /*
+        -: 1440:		     Next file -> reset all local date variables to zero,
+        -: 1441:		     if `--export-date-variables' flag set, don't reset them!
+        -: 1442:		   */
+        2: 1443:		  if (!rc_export_ldvar_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       54: 1444:		    for (i = 0; i < RC_DVAR_MAX; i++)
+branch  0 taken 96%
+branch  1 taken 4% (fallthrough)
+       52: 1445:		      rc_dvar[i].dvar_local.dvar_month = (char) 0;
+        -: 1446:		  /*
+        -: 1447:		     Next file -> reset all local text variables to NULL,
+        -: 1448:		     if `--export-text-variables' flag set, don't reset them!
+        -: 1449:		   */
+        2: 1450:		  if (!rc_export_ltvar_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       54: 1451:		    for (i = 0; i < RC_TVAR_MAX; i++)
+branch  0 taken 96%
+branch  1 taken 4%
+       52: 1452:		      if (rc_tvar[i].tvar_local.tvar_text != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1453:			{
+    #####: 1454:			  free (rc_tvar[i].tvar_local.tvar_text);
+    #####: 1455:			  rc_tvar[i].tvar_local.tvar_text = (char *) NULL;
+        -: 1456:			}
+        -: 1457:		}
+        -: 1458:	      else
+        -: 1459:		/*
+        -: 1460:		   Yeah, we have not found any main resource file so it's absolutely
+        -: 1461:		   necessary to free the allocated memory area of the "file name",
+        -: 1462:		   because it's possible that we enter this function again,
+        -: 1463:		   e.g. if we produce month/year lists or ranges.
+        -: 1464:		 */
+        3: 1465:		free (rc_files_table[rc_files]->filename);
+        -: 1466:	    }
+        3: 1467:	  if (loop_end != SPECIAL_VALUE)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1468:	    {
+        -: 1469:	      /*
+        -: 1470:	         Increase/decrease the cycle-time counter properly and set
+        -: 1471:	         a ``new'' time value for the %sun* and %moon* special texts.
+        -: 1472:	       */
+    #####: 1473:	      if (cycle_increment)
+branch  0 never executed
+branch  1 never executed
+    #####: 1474:		tindex += loop_step;
+        -: 1475:	      else
+    #####: 1476:		tindex -= loop_step;
+    #####: 1477:	      time_hour_offset = MM2HH (tindex);
+    #####: 1478:	      time_min_offset = tindex % MINS_PER_HOUR;
+    #####: 1479:	      time_offset = MM2DAY (tindex);
+        -: 1480:	    }
+        -: 1481:	}
+        -: 1482:      while ((cycle_increment
+        3: 1483:	      && (tindex <= loop_end))
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        6: 1484:	     || (!cycle_increment && (tindex >= loop_end)));
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 never executed
+branch  5 never executed
+        3: 1485:      time_hour_offset = save_hour_offset;
+        3: 1486:      time_min_offset = save_min_offset;
+        3: 1487:      time_offset = save_time_offset;
+        3: 1488:      loop_end = save_loop_end;
+        3: 1489:      free (rc_files_table[rc_files]->pool);
+       81: 1490:      for (i = 0; i < RC_TVAR_MAX; i++)
+branch  0 taken 96%
+branch  1 taken 4% (fallthrough)
+       78: 1491:	if (rc_tvar[i].tvar_local.tvar_text != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1492:	  {
+    #####: 1493:	    free (rc_tvar[i].tvar_local.tvar_text);
+    #####: 1494:	    rc_tvar[i].tvar_local.tvar_text = (char *) NULL;
+        -: 1495:	  }
+        3: 1496:      free (rc_files_table[rc_files]);
+        3: 1497:      fiscal_month = tmp_fiscal_month;
+        -: 1498:      /*
+        -: 1499:         Now display the constructed contents of `rc_elems_table[]'.
+        -: 1500:       */
+        3: 1501:      if (rc_elems || rc_all_dates_flag || rc_zero_dates_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 67% (fallthrough)
+branch  3 taken 33%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+        1: 1502:	display_table (tmp_ad, tmp_am, tmp_ay, day, ed, wd);
+call    0 returned 100%
+        -: 1503:    }
+        3: 1504:  start_day = tmp_start_day;
+        3: 1505:  month = tmp_month;
+        3: 1506:  act_day = tmp_ad;
+        3: 1507:  act_month = tmp_am;
+        3: 1508:  act_year = tmp_ay;
+        3: 1509:}
+        -: 1510:
+        -: 1511:
+        -: 1512:
+        -: 1513:static void
+function try_to_include_file called 0 returned 0% blocks executed 0%
+    #####: 1514:try_to_include_file (ed, wd)
+        -: 1515:     int ed;
+        -: 1516:     int wd;
+        -: 1517:/*!
+        -: 1518:   Manages an include file.
+        -: 1519:*/
+        -: 1520:{
+        -: 1521:  register int i;
+        -: 1522:  register int j;
+    #####: 1523:  auto Bool is_usr_file = FALSE;
+    #####: 1524:  auto Bool is_sys_file = FALSE;
+        -: 1525:
+        -: 1526:
+    #####: 1527:  i = (int) strlen (line_buffer);
+    #####: 1528:  if ((Uint) i >= maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 1529:    resize_all_strings (i + 1, FALSE, __FILE__, (long) __LINE__);
+call    0 never executed
+    #####: 1530:  strcpy (s7, line_buffer);
+    #####: 1531:  i = (int) strlen (RC_INCL_STMENT);
+    #####: 1532:  if (strncasecmp (s7, RC_INCL_STMENT, i))
+branch  0 never executed
+branch  1 never executed
+        -: 1533:    /*
+        -: 1534:       Error, misspelled "#include" directive found.
+        -: 1535:     */
+    #####: 1536:    my_error (ERR_MALFORMED_INCLUDE, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1537:	      rc_files_table[rc_files]->line_number, line_buffer, 0);
+        -: 1538:  /*
+        -: 1539:     Skip any leading whitespace characters of the line.
+        -: 1540:   */
+    #####: 1541:  while (isspace (s7[i]))
+branch  0 never executed
+branch  1 never executed
+    #####: 1542:    i++;
+    #####: 1543:  if (!s7[i] || s7[i] == '\n')
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1544:    /*
+        -: 1545:       Error, no include file "argument" encoded.
+        -: 1546:     */
+    #####: 1547:    my_error (ERR_MALFORMED_INCLUDE, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1548:	      rc_files_table[rc_files]->line_number, line_buffer, 0);
+    #####: 1549:  if (s7[i] == *RC_INCL_USR_ID)
+branch  0 never executed
+branch  1 never executed
+    #####: 1550:    is_usr_file = TRUE;
+    #####: 1551:  else if (s7[i] == *RC_INCL_SYS_ID)
+branch  0 never executed
+branch  1 never executed
+    #####: 1552:    is_sys_file = TRUE;
+        -: 1553:  else
+        -: 1554:    /*
+        -: 1555:       Error, illegal leading include file name delimiter found.
+        -: 1556:     */
+    #####: 1557:    my_error (ERR_MALFORMED_INCLUDE, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1558:	      rc_files_table[rc_files]->line_number, line_buffer, 0);
+    #####: 1559:  i++;
+    #####: 1560:  j = 0;
+        -: 1561:  /*
+        -: 1562:     Get the include file name.
+        -: 1563:   */
+    #####: 1564:  while (s7[i] && (s7[i] != *RC_INCL_USR_OD) && (s7[i] != *RC_INCL_SYS_OD))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1565:    s7[j++] = s7[i++];
+    #####: 1566:  if ((is_usr_file
+branch  0 never executed
+branch  1 never executed
+    #####: 1567:       && (s7[i] != *RC_INCL_USR_OD))
+branch  0 never executed
+branch  1 never executed
+    #####: 1568:      || (is_sys_file && (s7[i] != *RC_INCL_SYS_OD)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1569:    /*
+        -: 1570:       Error, illegal trailing include file name delimiter found.
+        -: 1571:     */
+    #####: 1572:    my_error (ERR_MALFORMED_INCLUDE, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1573:	      rc_files_table[rc_files]->line_number, line_buffer, 0);
+    #####: 1574:  if (!j)
+branch  0 never executed
+branch  1 never executed
+        -: 1575:    /*
+        -: 1576:       Error, no include file "name" encoded.
+        -: 1577:     */
+    #####: 1578:    my_error (ERR_MALFORMED_INCLUDE, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1579:	      rc_files_table[rc_files]->line_number, line_buffer, 0);
+        -: 1580:  /*
+        -: 1581:     Now we have the name of include file and the mode of operation.
+        -: 1582:   */
+    #####: 1583:  s7[j] = '\0';
+        -: 1584:  /*
+        -: 1585:     Before we have to manage this next include file,
+        -: 1586:     let's check for recursive/cyclic includes, which we MUST avoid!
+        -: 1587:   */
+    #####: 1588:  for (i = 0; i <= rc_files; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 1589:    {
+        -: 1590:      /*
+        -: 1591:         Check if any file buffered in `rc_files_table[]' is just included by this file.
+        -: 1592:       */
+    #####: 1593:      if (*s7 == *rc_files_table[i]->filename)
+branch  0 never executed
+branch  1 never executed
+    #####: 1594:	if (!strcmp (s7 + 1, rc_files_table[i]->filename + 1))
+branch  0 never executed
+branch  1 never executed
+        -: 1595:	  /*
+        -: 1596:	     Error, invalid recursive/cyclic include statement found.
+        -: 1597:	   */
+    #####: 1598:	  my_error (ERR_CYCLIC_INCLUDE, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1599:		    rc_files_table[rc_files]->line_number, line_buffer, 0);
+        -: 1600:    }
+        -: 1601:  /*
+        -: 1602:     First or next include file, so we increment the counter
+        -: 1603:     of buffered files in `rc_files_table[]' by one first before we check
+        -: 1604:     the table size, because `rc_files' wasn't just postincremented
+        -: 1605:   */
+    #####: 1606:  rc_files++;
+        -: 1607:  /*
+        -: 1608:     Now check if it's necessary to resize the `rc_files_table[]'.
+        -: 1609:   */
+    #####: 1610:  if ((Uint) rc_files >= rc_files_max)
+branch  0 never executed
+branch  1 never executed
+        -: 1611:    {
+        -: 1612:      /*
+        -: 1613:         Resize the `rc_files_table[]' table.
+        -: 1614:       */
+    #####: 1615:      rc_files_max <<= 1;
+    #####: 1616:      if (rc_elems_max * sizeof (File_struct *) > testval)
+branch  0 never executed
+branch  1 never executed
+    #####: 1617:	rc_files_max--;
+    #####: 1618:      rc_files_table = (File_struct **) my_realloc ((VOID_PTR) rc_files_table,
+call    0 never executed
+    #####: 1619:						    rc_files_max *
+        -: 1620:						    sizeof (File_struct *),
+        -: 1621:						    ERR_NO_MEMORY_AVAILABLE,
+        -: 1622:						    __FILE__,
+        -: 1623:						    ((long) __LINE__) - 3L,
+        -: 1624:						    "rc_files_table[rc_files_max]",
+        -: 1625:						    rc_files_max);
+        -: 1626:    }
+        -: 1627:  /*
+        -: 1628:     Allocate the file buffers for an include file.
+        -: 1629:   */
+    #####: 1630:  rc_files_table[rc_files] = (File_struct *) my_malloc (sizeof (File_struct),
+call    0 never executed
+        -: 1631:							ERR_NO_MEMORY_AVAILABLE,
+        -: 1632:							__FILE__,
+        -: 1633:							((long) __LINE__) -
+        -: 1634:							2L,
+        -: 1635:							"rc_files_table[rc_files]",
+        -: 1636:							rc_files);
+    #####: 1637:  rc_files_table[rc_files]->filename =
+    #####: 1638:    (char *) my_malloc (j + 1, ERR_NO_MEMORY_AVAILABLE, __FILE__,
+call    0 never executed
+        -: 1639:			((long) __LINE__) - 2L,
+        -: 1640:			"rc_files_table[rc_files]->filename", rc_files);
+    #####: 1641:  strcpy (rc_files_table[rc_files]->filename, s7);
+        -: 1642:  /*
+        -: 1643:     Try to open it.
+        -: 1644:   */
+    #####: 1645:  rc_files_table[rc_files]->fp =
+    #####: 1646:    file_open (&rc_files_table[rc_files]->filename, rc_files,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1647:	       (is_usr_file) ? USr_include : SYs_include, &bad_sys_include);
+    #####: 1648:  if (bad_sys_include)
+branch  0 never executed
+branch  1 never executed
+        -: 1649:    /*
+        -: 1650:       Error, invalid root directory based system include file name found
+        -: 1651:       in the include statement, e.g.:  #include </foo>   or   #include </foo/bar>.
+        -: 1652:     */
+    #####: 1653:    my_error (ERR_MALFORMED_INCLUDE, rc_files_table[rc_files - 1]->filename,
+call    0 never executed
+    #####: 1654:	      rc_files_table[rc_files - 1]->line_number, line_buffer, 0);
+        -: 1655:  /*
+        -: 1656:     If include file exists, read it.
+        -: 1657:   */
+    #####: 1658:  if (rc_files_table[rc_files]->fp != (FILE *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1659:    {
+    #####: 1660:      rc_files_table[rc_files]->in_pool = 0;
+    #####: 1661:      rc_files_table[rc_files]->line_number = 0L;
+    #####: 1662:      rc_files_table[rc_files]->pool = (char *) my_malloc (BUF_LEN + 1,
+call    0 never executed
+        -: 1663:							   ERR_NO_MEMORY_AVAILABLE,
+        -: 1664:							   __FILE__,
+        -: 1665:							   ((long) __LINE__) -
+        -: 1666:							   2L,
+        -: 1667:							   "rc_files_table[rc_files]->pool",
+        -: 1668:							   rc_files);
+        -: 1669:      /*
+        -: 1670:         Buffer all local date variables of the include file.
+        -: 1671:       */
+    #####: 1672:      for (i = 0; i < RC_DVAR_MAX; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 1673:	{
+    #####: 1674:	  rc_files_table[rc_files]->local_dvars[i].dvar_month =
+    #####: 1675:	    rc_dvar[i].dvar_local.dvar_month;
+    #####: 1676:	  rc_files_table[rc_files]->local_dvars[i].dvar_day =
+    #####: 1677:	    rc_dvar[i].dvar_local.dvar_day;
+        -: 1678:	}
+        -: 1679:      /*
+        -: 1680:         Buffer all local text variables of the include file.
+        -: 1681:       */
+    #####: 1682:      for (i = 0; i < RC_TVAR_MAX; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 1683:	{
+    #####: 1684:	  if (rc_tvar[i].tvar_local.tvar_text != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1685:	    {
+    #####: 1686:	      rc_files_table[rc_files]->local_tvars[i].tvar_text
+    #####: 1687:		=
+    #####: 1688:		(char *) my_malloc (strlen (rc_tvar[i].tvar_local.tvar_text) +
+call    0 never executed
+        -: 1689:				    1, ERR_NO_MEMORY_AVAILABLE, __FILE__,
+        -: 1690:				    ((long) __LINE__) - 2L,
+        -: 1691:				    "rc_tvar[i].tvar_local.tvar_text", i);
+    #####: 1692:	      strcpy (rc_files_table[rc_files]->local_tvars[i].tvar_text,
+    #####: 1693:		      rc_tvar[i].tvar_local.tvar_text);
+        -: 1694:	    }
+        -: 1695:	  else
+    #####: 1696:	    rc_files_table[rc_files]->local_tvars[i].tvar_text =
+        -: 1697:	      (char *) NULL;
+        -: 1698:	}
+    #####: 1699:      while ((rc_files_table[rc_files]->ptr_pool =
+branch  0 never executed
+branch  1 never executed
+    #####: 1700:	      file_read_line (rc_files_table[rc_files]->fp, &line_buffer,
+call    0 never executed
+    #####: 1701:			      &rc_files_table[rc_files]->in_pool,
+    #####: 1702:			      rc_files_table[rc_files]->pool,
+    #####: 1703:			      rc_files_table[rc_files]->ptr_pool,
+    #####: 1704:			      rc_files_table[rc_files]->filename,
+    #####: 1705:			      &rc_files_table[rc_files]->line_number,
+        -: 1706:			      &line_length, REsource, &is_include, &is_dvar,
+        -: 1707:			      &is_tvar)) != (char *) NULL)
+        -: 1708:	/*
+        -: 1709:	   Check whether an "#include" statement is found.
+        -: 1710:	 */
+    #####: 1711:	if (is_include)
+branch  0 never executed
+branch  1 never executed
+        -: 1712:	  /*
+        -: 1713:	     Ok, let's manage a next include file by calling this function recursively.
+        -: 1714:	   */
+    #####: 1715:	  try_to_include_file (ed, wd);
+call    0 never executed
+        -: 1716:	else
+        -: 1717:	  /*
+        -: 1718:	     We are still in the actual include file.
+        -: 1719:	   */
+    #####: 1720:	if (*line_buffer && !is_dvar && !is_tvar)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1721:	  rc_check (line_buffer, rc_files_table[rc_files]->filename,
+call    0 never executed
+    #####: 1722:		    rc_files_table[rc_files]->line_number, line_length,
+        -: 1723:		    &rc_elems, day, ed, wd);
+    #####: 1724:      (void) fclose (rc_files_table[rc_files]->fp);
+call    0 never executed
+    #####: 1725:      free (rc_files_table[rc_files]->pool);
+        -: 1726:      /*
+        -: 1727:         Restore all local date variables of the include file.
+        -: 1728:       */
+    #####: 1729:      for (i = 0; i < RC_DVAR_MAX; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 1730:	{
+    #####: 1731:	  rc_dvar[i].dvar_local.dvar_month =
+    #####: 1732:	    rc_files_table[rc_files]->local_dvars[i].dvar_month;
+    #####: 1733:	  rc_dvar[i].dvar_local.dvar_day =
+    #####: 1734:	    rc_files_table[rc_files]->local_dvars[i].dvar_day;
+        -: 1735:	}
+        -: 1736:      /*
+        -: 1737:         Restore all local text variables of the include file.
+        -: 1738:       */
+    #####: 1739:      for (i = 0; i < RC_TVAR_MAX; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1740:	if (rc_files_table[rc_files]->local_tvars[i].tvar_text !=
+branch  0 never executed
+branch  1 never executed
+        -: 1741:	    (char *) NULL)
+        -: 1742:	  {
+    #####: 1743:	    if (rc_tvar[i].tvar_local.tvar_text == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 1744:	      rc_tvar[i].tvar_local.tvar_text
+    #####: 1745:		=
+        -: 1746:		(char *)
+    #####: 1747:		my_malloc (strlen
+call    0 never executed
+    #####: 1748:			   (rc_files_table[rc_files]->local_tvars[i].
+    #####: 1749:			    tvar_text) + 1, ERR_NO_MEMORY_AVAILABLE, __FILE__,
+        -: 1750:			   ((long) __LINE__) - 2L,
+        -: 1751:			   "rc_tvar[i].tvar_local.tvar_text", i);
+        -: 1752:	    else
+        -: 1753:	      rc_tvar[i].tvar_local.tvar_text
+    #####: 1754:		=
+        -: 1755:		(char *)
+    #####: 1756:		my_realloc ((VOID_PTR) (rc_tvar[i].tvar_local.tvar_text),
+call    0 never executed
+    #####: 1757:			    strlen (rc_files_table[rc_files]->local_tvars[i].
+    #####: 1758:				    tvar_text) + 1, ERR_NO_MEMORY_AVAILABLE,
+        -: 1759:			    __FILE__, ((long) __LINE__) - 3L,
+        -: 1760:			    "rc_tvar[i].tvar_local.tvar_text", i);
+    #####: 1761:	    strcpy (rc_tvar[i].tvar_local.tvar_text,
+    #####: 1762:		    rc_files_table[rc_files]->local_tvars[i].tvar_text);
+    #####: 1763:	    free (rc_files_table[rc_files]->local_tvars[i].tvar_text);
+    #####: 1764:	    rc_files_table[rc_files]->local_tvars[i].tvar_text =
+        -: 1765:	      (char *) NULL;
+        -: 1766:	  }
+        -: 1767:    }
+        -: 1768:  /*
+        -: 1769:     Now deallocate the include file buffers.
+        -: 1770:   */
+    #####: 1771:  free (rc_files_table[rc_files]->filename);
+    #####: 1772:  free (rc_files_table[rc_files]);
+        -: 1773:  /*
+        -: 1774:     And back to the previous include file resp., main resource file.
+        -: 1775:   */
+    #####: 1776:  rc_files--;
+    #####: 1777:}
+        -: 1778:
+        -: 1779:
+        -: 1780:
+        -: 1781:static void
+function display_table called 1 returned 100% blocks executed 22%
+        1: 1782:display_table (tmp_ad, tmp_am, tmp_ay, day, ed, wd)
+        -: 1783:     const int tmp_ad;
+        -: 1784:     const int tmp_am;
+        -: 1785:     const int tmp_ay;
+        -: 1786:     int day;
+        -: 1787:     int ed;
+        -: 1788:     int wd;
+        -: 1789:/*!
+        -: 1790:   Displays all entries in `rc_elems_table[]' in sorted order.
+        -: 1791:*/
+        -: 1792:{
+        -: 1793:  register int n;
+        -: 1794:  register int i;
+        1: 1795:  register int j = 0;
+        1: 1796:  register int tindex = 0;
+        1: 1797:  auto int ld = 0;
+        1: 1798:  auto int lm = 0;
+        1: 1799:  auto int ly = 0;
+        1: 1800:  auto int dd = 0;
+        1: 1801:  auto int mm = 0;
+        1: 1802:  auto int yy = 0;
+        -: 1803:  auto int i_dummy;
+        -: 1804:  auto char c_dummy;
+        -: 1805:  auto Bool b_dummy;
+        -: 1806:  auto Bool ok;
+        -: 1807:
+        -: 1808:
+        1: 1809:  rc_zero_pos = rc_elems;
+        -: 1810:  /*
+        -: 1811:     If `rc_all_dates_flag' or `rc_zero_dates_flag' is set, complete the
+        -: 1812:     contents of `rc_elems_table[]', i.e., generate "empty" texts for
+        -: 1813:     each day in the requested period.
+        -: 1814:   */
+        1: 1815:  if (rc_all_dates_flag || rc_zero_dates_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+        -: 1816:    {
+        1: 1817:      register int rc_e = rc_zero_pos;
+        -: 1818:
+        -: 1819:
+        -: 1820:      /*
+        -: 1821:         Lets sort ascending first only in case `rc_elems_table[]' isn't presorted!
+        -: 1822:       */
+        1: 1823:      if ((rc_elems > 1) && !is_presorted (rc_elems_table, rc_elems))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 never executed
+branch  4 never executed
+    #####: 1824:	qsort ((VOID_PTR) rc_elems_table, rc_elems, sizeof *rc_elems_table,
+call    0 never executed
+        -: 1825:	       (Cmp_func) asc_sort);
+        1: 1826:      if (rc_elems)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1827:	(void) rc_get_date (rc_elems_table[j], lineptrs, FALSE, &b_dummy, &ld,
+call    0 never executed
+        -: 1828:			    &lm, &ly, &i_dummy, &i_dummy, &c_dummy, &i_dummy,
+        -: 1829:			    &i_dummy, _("Internal"), (long) j,
+    #####: 1830:			    rc_elems_table[j], TRUE);
+        -: 1831:      /*
+        -: 1832:         Correction for the respected period if we are in fiscal year mode.
+        -: 1833:       */
+        1: 1834:      if ((fiscal_month > MONTH_MIN) && !adate_set)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+        -: 1835:	{
+    #####: 1836:	  day = mvec[fiscal_month - 1] + 1;
+    #####: 1837:	  if (fiscal_month > 2)
+branch  0 never executed
+branch  1 never executed
+    #####: 1838:	    day += is_leap_year;
+        -: 1839:	}
+        -: 1840:      /*
+        -: 1841:         Let's produce the dummy entries ("empty" fixed dates)...
+        -: 1842:       */
+        2: 1843:      for (i = day; i < ed; i++)
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        -: 1844:	{
+        1: 1845:	  yy = year;
+        1: 1846:	  ok = doy2date (i, is_leap_year, &dd, &mm);
+call    0 returned 100%
+        1: 1847:	  if (!ok)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 1848:	    {
+    #####: 1849:	      if (rc_tomorrow_flag || rc_week_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 1850:		{
+    #####: 1851:		  if (i < DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+        -: 1852:		    {
+    #####: 1853:		      yy = year - 1;
+    #####: 1854:		      if (yy < YEAR_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1855:			break;
+    #####: 1856:		      n = (days_of_february (yy) == 29);
+call    0 never executed
+    #####: 1857:		      (void) doy2date (DAY_LAST + n + i, n, &dd, &mm);
+call    0 never executed
+        -: 1858:		    }
+    #####: 1859:		  else if (i > DAY_LAST + is_leap_year)
+branch  0 never executed
+branch  1 never executed
+        -: 1860:		    {
+    #####: 1861:		      yy = year + 1;
+    #####: 1862:		      if (yy > YEAR_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1863:			break;
+    #####: 1864:		      n = (days_of_february (yy) == 29);
+call    0 never executed
+    #####: 1865:		      (void) doy2date (i - (DAY_LAST + is_leap_year), n, &dd,
+call    0 never executed
+        -: 1866:				       &mm);
+        -: 1867:		    }
+        -: 1868:		}
+        -: 1869:	      else
+        -: 1870:		break;
+        -: 1871:	    }
+        1: 1872:	  if (j == rc_e
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1873:	      || mm < lm
+branch  0 never executed
+branch  1 never executed
+    #####: 1874:	      || yy < ly || ((dd < ld) && (mm <= lm) && (yy <= ly)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 1875:	    {
+        1: 1876:	      sprintf (line_buffer, "%0*d%02d%02d ", len_year_max, yy, mm,
+        -: 1877:		       dd);
+        2: 1878:	      rc_check (line_buffer, _("`Internal'"), (long) tindex,
+call    0 returned 100%
+        1: 1879:			strlen (line_buffer), &rc_elems, day, ed, wd);
+        -: 1880:	    }
+        -: 1881:	  else
+    #####: 1882:	    while ((dd == ld) && (mm == lm) && (yy == ly))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1883:	      if (j + 1 < rc_e)
+branch  0 never executed
+branch  1 never executed
+        -: 1884:		{
+    #####: 1885:		  j++;
+    #####: 1886:		  (void) rc_get_date (rc_elems_table[j], lineptrs, FALSE,
+call    0 never executed
+        -: 1887:				      &b_dummy, &ld, &lm, &ly, &i_dummy,
+        -: 1888:				      &i_dummy, &c_dummy, &i_dummy, &i_dummy,
+        -: 1889:				      _("Internal"), (long) j,
+    #####: 1890:				      rc_elems_table[j], TRUE);
+        -: 1891:		}
+        -: 1892:	      else
+        -: 1893:		{
+    #####: 1894:		  j++;
+    #####: 1895:		  break;
+        -: 1896:		}
+        -: 1897:	}
+        -: 1898:      /*
+        -: 1899:         Respect fiscal year mode.
+        -: 1900:       */
+        1: 1901:      if ((fiscal_month > MONTH_MIN) && (year < YEAR_MAX) && !adate_set)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 1902:	{
+        -: 1903:	  /*
+        -: 1904:	     Correction for the respected period.
+        -: 1905:	   */
+    #####: 1906:	  day = DAY_MIN;
+    #####: 1907:	  yy = year + 1;
+    #####: 1908:	  is_leap_year = (days_of_february (yy) == 29);
+call    0 never executed
+    #####: 1909:	  if (fiscal_month < MONTH_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 1910:	    ed = day_of_year (DAY_MIN, fiscal_month + 1, yy) + 1;
+call    0 never executed
+        -: 1911:	  else
+    #####: 1912:	    ed = DAY_LAST + is_leap_year + 1;
+        -: 1913:	  /*
+        -: 1914:	     Let's produce the dummy entries ("empty" fixed dates)...
+        -: 1915:	   */
+    #####: 1916:	  for (i = day; i < ed; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 1917:	    {
+    #####: 1918:	      ok = doy2date (i, is_leap_year, &dd, &mm);
+call    0 never executed
+    #####: 1919:	      if (!ok)
+branch  0 never executed
+branch  1 never executed
+    #####: 1920:		break;
+    #####: 1921:	      if (j == rc_e
+branch  0 never executed
+branch  1 never executed
+    #####: 1922:		  || mm < lm
+branch  0 never executed
+branch  1 never executed
+    #####: 1923:		  || yy < ly || ((dd < ld) && (mm <= lm) && (yy <= ly)))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+        -: 1924:		{
+    #####: 1925:		  sprintf (line_buffer, "%0*d%02d%02d ", len_year_max, yy, mm,
+        -: 1926:			   dd);
+    #####: 1927:		  rc_check (line_buffer, _("`Internal'"), (long) tindex,
+call    0 never executed
+    #####: 1928:			    strlen (line_buffer), &rc_elems, day, ed, wd);
+        -: 1929:		}
+        -: 1930:	      else
+    #####: 1931:		while ((dd == ld) && (mm == lm) && (yy == ly))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####: 1932:		  if (j + 1 < rc_e)
+branch  0 never executed
+branch  1 never executed
+        -: 1933:		    {
+    #####: 1934:		      j++;
+    #####: 1935:		      (void) rc_get_date (rc_elems_table[j], lineptrs, FALSE,
+call    0 never executed
+        -: 1936:					  &b_dummy, &ld, &lm, &ly, &i_dummy,
+        -: 1937:					  &i_dummy, &c_dummy, &i_dummy,
+        -: 1938:					  &i_dummy, _("Internal"), (long) j,
+    #####: 1939:					  rc_elems_table[j], TRUE);
+        -: 1940:		    }
+        -: 1941:		  else
+        -: 1942:		    {
+    #####: 1943:		      j++;
+    #####: 1944:		      break;
+        -: 1945:		    }
+        -: 1946:	    }
+        -: 1947:	}
+        1: 1948:      is_leap_year = (days_of_february (year) == 29);
+call    0 returned 100%
+        -: 1949:    }
+        1: 1950:  if ((rc_zero_dates_flag
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 1951:       && (rc_elems - rc_zero_pos)) || (!rc_zero_dates_flag && rc_elems))
+branch  0 never executed
+branch  1 never executed
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        -: 1952:    {
+        -: 1953:      register int tstart;
+        -: 1954:      register int tend;
+        -: 1955:      register int skipped;
+        1: 1956:      register int len_rce = 0;
+        -: 1957:      register int len_line;
+        -: 1958:      register int len_fn_part;
+        -: 1959:      register int len_text_part;
+        1: 1960:      register int hls_len = 0;
+        -: 1961:      auto char *ptr_char;
+        1: 1962:      auto Bool same_date = FALSE;
+        -: 1963:      auto Bool ok2;
+        -: 1964:
+        -: 1965:
+        -: 1966:      /*
+        -: 1967:         At last, sort the fixed dates only if they are either not presorted
+        -: 1968:         or contain no resource file name reference, and not ONLY "empty"
+        -: 1969:         fixed dates shall be displayed.
+        -: 1970:       */
+        1: 1971:      if (!rc_zero_dates_flag && (rc_elems > 1))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -: 1972:	{
+    #####: 1973:	  if (rc_enable_fn_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 1974:	    {
+    #####: 1975:	      if (rc_sort_des_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1976:		qsort ((VOID_PTR) rc_elems_table, rc_elems,
+call    0 never executed
+        -: 1977:		       sizeof *rc_elems_table, (Cmp_func) fn_des_sort);
+        -: 1978:	      else
+    #####: 1979:		qsort ((VOID_PTR) rc_elems_table, rc_elems,
+call    0 never executed
+        -: 1980:		       sizeof *rc_elems_table, (Cmp_func) fn_asc_sort);
+        -: 1981:	    }
+    #####: 1982:	  else if (!is_presorted (rc_elems_table, rc_elems))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1983:	    {
+    #####: 1984:	      if (rc_sort_des_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 1985:		qsort ((VOID_PTR) rc_elems_table, rc_elems,
+call    0 never executed
+        -: 1986:		       sizeof *rc_elems_table, (Cmp_func) des_sort);
+        -: 1987:	      else
+    #####: 1988:		qsort ((VOID_PTR) rc_elems_table, rc_elems,
+call    0 never executed
+        -: 1989:		       sizeof *rc_elems_table, (Cmp_func) asc_sort);
+        -: 1990:	    }
+    #####: 1991:	  else if (rc_sort_des_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 1992:	    /*
+        -: 1993:	       `rc_elems_table[]' is presorted and must be shown in
+        -: 1994:	       descending sort order, rearrange its internal sort
+        -: 1995:	       order from ascending to descending sort order.
+        -: 1996:	     */
+    #####: 1997:	    reverse_order (rc_elems_table, rc_elems);
+call    0 never executed
+        -: 1998:	}
+        1: 1999:      d = tmp_ad;
+        1: 2000:      m = tmp_am;
+        -: 2001:      /*
+        -: 2002:         Copy `rc_grp_sep' [-c]g[] to text buffer variable `s3' for further use,
+        -: 2003:         which will be first evaluated for text variable references and
+        -: 2004:         some special texts.  Thereafter, perform the '~'-TILDE or '^'-CARET
+        -: 2005:         expansion on the one hand.
+        -: 2006:       */
+        1: 2007:      if (rc_grp_sep != (char *) NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2008:	{
+    #####: 2009:	  register int x1 = year;
+    #####: 2010:	  register int x2 = incr_year;
+    #####: 2011:	  register int x3 = decr_year;
+        -: 2012:
+        -: 2013:
+    #####: 2014:	  year = act_year;
+    #####: 2015:	  incr_year = decr_year = 0;
+    #####: 2016:	  insert_line_into_table (rc_grp_sep, _("`Internal'"),
+call    0 never executed
+        -: 2017:				  (long) SPECIAL_VALUE, &rc_elems, 1, 1);
+    #####: 2018:	  decr_year = x3;
+    #####: 2019:	  incr_year = x2;
+    #####: 2020:	  year = x1;
+    #####: 2021:	  i = (int) strlen (rc_elems_table[--rc_elems]);
+    #####: 2022:	  if ((Uint) i >= maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 2023:	    resize_all_strings (i + 1, FALSE, __FILE__, (long) __LINE__);
+call    0 never executed
+    #####: 2024:	  strcpy (s3, rc_elems_table[rc_elems] + len_year_max + 5);
+    #####: 2025:	  free (rc_elems_table[rc_elems]);
+    #####: 2026:	  ptr_char = s3;
+    #####: 2027:	  if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2028:	    {
+        -: 2029:	      /*
+        -: 2030:	         A text for grouping is defined.
+        -: 2031:	       */
+    #####: 2032:	      i = 0;
+    #####: 2033:	      while (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2034:		{
+    #####: 2035:		  switch (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 2036:		    {
+    #####: 2037:		    case RC_NL_CHAR:
+        -: 2038:		    case RC_NL2_CHAR:
+    #####: 2039:		      if (i)
+branch  0 never executed
+branch  1 never executed
+        -: 2040:			{
+        -: 2041:			  /*
+        -: 2042:			     RC_NL[2]_CHAR is single `\~' or `\^' quoted
+        -: 2043:			     or double `\\~' or `\\^' quoted:
+        -: 2044:			     Replace QUOTE_CHAR by RC_NL[2]_CHAR resp.,
+        -: 2045:			     replace last QUOTE_CHAR by RC_NL_CHAR.
+        -: 2046:			   */
+    #####: 2047:			  if (s3[i - 1] == QUOTE_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 2048:			    s3[i - 1] = *ptr_char;
+        -: 2049:			  else
+        -: 2050:			    /*
+        -: 2051:			       RC_NL[2]_CHAR is not quoted '~' or '^':
+        -: 2052:			       Insert a real `\n'-NEWLINE character.
+        -: 2053:			     */
+    #####: 2054:			    s3[i++] = '\n';
+        -: 2055:			}
+        -: 2056:		      else
+        -: 2057:			/*
+        -: 2058:			   RC_NL[2]_CHAR is not quoted '~' or '^':
+        -: 2059:			   Insert a real `\n'-NEWLINE character.
+        -: 2060:			 */
+    #####: 2061:			s3[i++] = '\n';
+    #####: 2062:		      break;
+    #####: 2063:		    case QUOTE_CHAR:
+    #####: 2064:		      ptr_char++;
+    #####: 2065:		      if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2066:			{
+    #####: 2067:			  if (*ptr_char == RC_NL_CHAR
+branch  0 never executed
+branch  1 never executed
+    #####: 2068:			      || *ptr_char == RC_NL2_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 2069:			    s3[i++] = *ptr_char;
+        -: 2070:			  else
+        -: 2071:			    {
+    #####: 2072:			      s3[i++] = QUOTE_CHAR;
+    #####: 2073:			      s3[i++] = *ptr_char;
+        -: 2074:			    }
+        -: 2075:			}
+        -: 2076:		      else
+    #####: 2077:			s3[i++] = QUOTE_CHAR;
+    #####: 2078:		      break;
+    #####: 2079:		    default:
+    #####: 2080:		      s3[i++] = *ptr_char;
+        -: 2081:		    }
+    #####: 2082:		  ptr_char++;
+        -: 2083:		}
+    #####: 2084:	      s3[i] = '\0';
+        -: 2085:	    }
+        -: 2086:	}
+        1: 2087:      (*s1) = (*s6) = '\0';
+        -: 2088:      /*
+        -: 2089:         Now display a leading NEWLINE character before the text/title.
+        -: 2090:       */
+        1: 2091:      if (!rc_suppr_list_sep_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2092:	print_text (stdout, s1);
+call    0 returned 100%
+        -: 2093:      /*
+        -: 2094:         Now display the leading title/heading text of the fixed date list,
+        -: 2095:         which will be first evaluated for text variable references and
+        -: 2096:         some special texts.  Thereafter, perform the '~'-TILDE or '^'-CARET
+        -: 2097:         expansion on the one hand.
+        -: 2098:       */
+        1: 2099:      if (rc_title_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 2100:	{
+        1: 2101:	  register int x1 = year;
+        1: 2102:	  register int x2 = incr_year;
+        1: 2103:	  register int x3 = decr_year;
+        -: 2104:
+        -: 2105:
+        1: 2106:	  year = act_year;
+        1: 2107:	  incr_year = decr_year = 0;
+        1: 2108:	  insert_line_into_table (rc_heading_text, _("`Internal'"),
+call    0 returned 100%
+        -: 2109:				  (long) SPECIAL_VALUE, &rc_elems, 1, 1);
+        1: 2110:	  decr_year = x3;
+        1: 2111:	  incr_year = x2;
+        1: 2112:	  year = x1;
+        1: 2113:	  i = (int) strlen (rc_elems_table[--rc_elems]);
+        1: 2114:	  if ((Uint) i >= maxlen_max)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2115:	    resize_all_strings (i + 1, FALSE, __FILE__, (long) __LINE__);
+call    0 never executed
+        1: 2116:	  strcpy (s1, rc_elems_table[rc_elems] + len_year_max + 5);
+        1: 2117:	  free (rc_elems_table[rc_elems]);
+        1: 2118:	  ptr_char = s1;
+        1: 2119:	  i = 0;
+       18: 2120:	  while (*ptr_char)
+branch  0 taken 94%
+branch  1 taken 6% (fallthrough)
+        -: 2121:	    {
+       16: 2122:	      switch (*ptr_char)
+branch  0 taken 0%
+branch  1 taken 0%
+branch  2 taken 100%
+        -: 2123:		{
+    #####: 2124:		case RC_NL_CHAR:
+        -: 2125:		case RC_NL2_CHAR:
+    #####: 2126:		  if (i)
+branch  0 never executed
+branch  1 never executed
+        -: 2127:		    {
+        -: 2128:		      /*
+        -: 2129:		         RC_NL[2]_CHAR is single `\~' or `\^' quoted
+        -: 2130:		         or double `\\~' `\\^' quoted:
+        -: 2131:		         Replace QUOTE_CHAR by RC_NL[2]_CHAR resp.,
+        -: 2132:		         replace last QUOTE_CHAR by RC_NL[2]_CHAR.
+        -: 2133:		       */
+    #####: 2134:		      if (s1[i - 1] == QUOTE_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 2135:			s1[i - 1] = *ptr_char;
+        -: 2136:		      else
+        -: 2137:			/*
+        -: 2138:			   RC_NL[2]_CHAR is not quoted '~' or '^':
+        -: 2139:			   Insert a real `\n'-NEWLINE character.
+        -: 2140:			 */
+    #####: 2141:			s1[i++] = '\n';
+        -: 2142:		    }
+        -: 2143:		  else
+        -: 2144:		    /*
+        -: 2145:		       RC_NL[2]_CHAR is not quoted '~' or '^':
+        -: 2146:		       Insert a real `\n'-NEWLINE character.
+        -: 2147:		     */
+    #####: 2148:		    s1[i++] = '\n';
+    #####: 2149:		  break;
+    #####: 2150:		case QUOTE_CHAR:
+    #####: 2151:		  ptr_char++;
+    #####: 2152:		  if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2153:		    {
+    #####: 2154:		      if (*ptr_char == RC_NL_CHAR || *ptr_char == RC_NL2_CHAR)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2155:			s1[i++] = *ptr_char;
+        -: 2156:		      else
+        -: 2157:			{
+    #####: 2158:			  s1[i++] = QUOTE_CHAR;
+    #####: 2159:			  s1[i++] = *ptr_char;
+        -: 2160:			}
+        -: 2161:		    }
+        -: 2162:		  else
+    #####: 2163:		    s1[i++] = QUOTE_CHAR;
+    #####: 2164:		  break;
+       16: 2165:		default:
+       16: 2166:		  s1[i++] = *ptr_char;
+        -: 2167:		}
+       16: 2168:	      ptr_char++;
+        -: 2169:	    }
+        1: 2170:	  s1[i] = '\0';
+        1: 2171:	  print_text (stdout, s1);
+call    0 returned 100%
+        1: 2172:	  print_text (stdout, s1);
+call    0 returned 100%
+        -: 2173:	}
+        -: 2174:      /*
+        -: 2175:         Detect the number of digits of `rc_elems'.
+        -: 2176:       */
+        1: 2177:      sprintf (s2, "%d",
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        1: 2178:	       (rc_zero_dates_flag) ? rc_elems - rc_zero_pos : rc_elems);
+        1: 2179:      len_rce = (int) strlen (s2);
+        -: 2180:      /*
+        -: 2181:         Initialize the variables which control the loop.
+        -: 2182:       */
+        1: 2183:      skipped = tstart = 0;
+        1: 2184:      tend = rc_elems - 1;
+        1: 2185:      if (rc_zero_dates_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2186:	{
+    #####: 2187:	  if (rc_sort_des_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 2188:	    {
+    #####: 2189:	      tstart = rc_elems - 1;
+    #####: 2190:	      tend = rc_zero_pos;
+    #####: 2191:	      skipped = rc_elems + 1;
+        -: 2192:	    }
+        -: 2193:	  else
+    #####: 2194:	    skipped = tstart = rc_zero_pos;
+        -: 2195:	}
+        -: 2196:      /*
+        -: 2197:         Now initialize the loop counter.
+        -: 2198:       */
+        1: 2199:      tindex = tstart;
+        -: 2200:      /*
+        -: 2201:         And display all fixed dates of `rc_elems_table[]'.
+        -: 2202:       */
+        -: 2203:      LOOP
+        -: 2204:      {
+        1: 2205:	lineptrs =
+        1: 2206:	  rc_get_date (rc_elems_table[tindex], lineptrs, FALSE, &b_dummy,
+call    0 returned 100%
+        -: 2207:		       &day, &lm, &ly, &i_dummy, &i_dummy, &c_dummy, &i_dummy,
+        -: 2208:		       &i_dummy, _("Internal"), (long) tindex,
+        1: 2209:		       rc_elems_table[tindex], TRUE);
+        1: 2210:	if ((tindex == tstart)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2211:	    && (rc_omit_date_flag
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2212:		|| rc_alternative_format_flag || rc_grp_sep != (char *) NULL))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -: 2213:	  {
+    #####: 2214:	    dd = day;
+    #####: 2215:	    mm = lm;
+    #####: 2216:	    yy = ly;
+        -: 2217:	  }
+        -: 2218:	/*
+        -: 2219:	   Avoid displaying duplicate resource file entries by storing
+        -: 2220:	   the actual entry into `s6' and comparing it with the previous
+        -: 2221:	   entry in line.
+        -: 2222:	 */
+        1: 2223:	if (tindex == tstart
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####: 2224:	    || ((tindex != tstart) && strcmp (s6, rc_elems_table[tindex])))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2225:	  {
+        1: 2226:	    strcpy (s6, rc_elems_table[tindex]);
+        -: 2227:	    /*
+        -: 2228:	       Now display fixed date list group separator resp.,
+        -: 2229:	       detect if date of text differs from previous text.
+        -: 2230:	     */
+        1: 2231:	    if (rc_omit_date_flag
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2232:		|| rc_alternative_format_flag || rc_grp_sep != (char *) NULL)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -: 2233:	      {
+    #####: 2234:		if ((day == dd) && (lm == mm) && (ly == yy))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2235:		  {
+        -: 2236:		    /*
+        -: 2237:		       Same date:
+        -: 2238:		       Avoid displaying of group separator.
+        -: 2239:		     */
+    #####: 2240:		    if (tindex != tstart)
+branch  0 never executed
+branch  1 never executed
+    #####: 2241:		      same_date = TRUE;
+        -: 2242:		  }
+        -: 2243:		else
+        -: 2244:		  {
+        -: 2245:		    /*
+        -: 2246:		       Date differs.
+        -: 2247:		     */
+    #####: 2248:		    same_date = FALSE;
+    #####: 2249:		    dd = day;
+    #####: 2250:		    mm = lm;
+    #####: 2251:		    yy = ly;
+    #####: 2252:		    if (rc_grp_sep != (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2253:		      {
+        -: 2254:			/*
+        -: 2255:			   Display constructed group separator text `-cg[TEXT]'.
+        -: 2256:			 */
+    #####: 2257:			strcpy (s2, s3);
+    #####: 2258:			print_text (stdout, s2);
+call    0 never executed
+        -: 2259:		      }
+        -: 2260:		  }
+        -: 2261:	      }
+        -: 2262:	    /*
+        -: 2263:	       Construct the leading (partitially highlighted) "date"-part of the fixed date.
+        -: 2264:	     */
+        1: 2265:	    if (rc_week_number_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2266:	      {
+    #####: 2267:		j = week_number (day, lm, ly, iso_week_number, start_day);
+call    0 never executed
+        -: 2268:		/*
+        -: 2269:		   We convert the computed week number to a week number text
+        -: 2270:		   (this looks nicer in output).
+        -: 2271:		 */
+    #####: 2272:		if (j < 0)
+branch  0 never executed
+branch  1 never executed
+        -: 2273:		  /*
+        -: 2274:		     Week starts in previous year and the first days
+        -: 2275:		     of the actual year are not in its first week.
+        -: 2276:		   */
+    #####: 2277:		  sprintf (s7, "|%02d/0|", -j);
+    #####: 2278:		else if (!j)
+branch  0 never executed
+branch  1 never executed
+        -: 2279:		  /*
+        -: 2280:		     Week starts in previous year and the first days
+        -: 2281:		     of the actual year are in its first week.
+        -: 2282:		   */
+    #####: 2283:		  sprintf (s7, "|%s|", "53/1");
+        -: 2284:		else
+        -: 2285:		  /*
+        -: 2286:		     Week starts in actual year.
+        -: 2287:		   */
+    #####: 2288:		  sprintf (s7, "|%02d|", j);
+    #####: 2289:		if (!rc_alternative_format_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 2290:		  {
+    #####: 2291:		    if (strlen (s7) > 4)
+branch  0 never executed
+branch  1 never executed
+        -: 2292:		      {
+    #####: 2293:			if (rc_count_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2294:			  sprintf (s1, "%0*d)  %s ", len_rce,
+branch  0 never executed
+branch  1 never executed
+    #####: 2295:				   abs ((tindex - skipped) + 1), s7);
+        -: 2296:			else
+    #####: 2297:			  sprintf (s1, "%s ", s7);
+        -: 2298:		      }
+    #####: 2299:		    else if (rc_count_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2300:		      sprintf (s1, "%0*d)  %s%*s ", len_rce,
+branch  0 never executed
+branch  1 never executed
+    #####: 2301:			       abs ((tindex - skipped) + 1), s7, len_fil_wt,
+        -: 2302:			       "");
+        -: 2303:		    else
+    #####: 2304:		      sprintf (s1, "%s%*s ", s7, len_fil_wt, "");
+        -: 2305:		  }
+        -: 2306:	      }
+        1: 2307:	    else if (!rc_alternative_format_flag && rc_count_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####: 2308:	      sprintf (s1, "%0*d)  ", len_rce, abs ((tindex - skipped) + 1));
+branch  0 never executed
+branch  1 never executed
+        1: 2309:	    wd = day;
+        1: 2310:	    ld = day_of_year (day, lm, ly);
+call    0 returned 100%
+        1: 2311:	    if (!rc_both_dates_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 2312:	      {
+        1: 2313:		if (!rc_special_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2314:		  ld = 0;
+        -: 2315:		else
+    #####: 2316:		  day = 0;
+        -: 2317:	      }
+        1: 2318:	    if (!rc_suppr_date_part_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -: 2319:	      {
+        1: 2320:		if ((ly == tmp_ay) && (lm == tmp_am) && (wd == tmp_ad))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        1: 2321:		  hls_len =
+call    0 returned 100%
+        1: 2322:		    decode_date_format (date_format->df_format, &s1, day, lm,
+        -: 2323:					ly, ld, TRUE, FALSE,
+        -: 2324:					!rc_alternative_format_flag);
+        -: 2325:		else
+        -: 2326:		  {
+    #####: 2327:		    if (hd_ldays[((lm - 1) * MONTH_LAST) + (wd - 1)])
+branch  0 never executed
+branch  1 never executed
+    #####: 2328:		      hls_len =
+call    0 never executed
+    #####: 2329:			decode_date_format (date_format->df_format, &s1, day,
+        -: 2330:					    lm, ly, ld, FALSE, TRUE,
+        -: 2331:					    !rc_alternative_format_flag);
+        -: 2332:		    else
+    #####: 2333:		      hls_len =
+call    0 never executed
+    #####: 2334:			decode_date_format (date_format->df_format, &s1, day,
+        -: 2335:					    lm, ly, ld, FALSE, FALSE,
+        -: 2336:					    !rc_alternative_format_flag);
+        -: 2337:		  }
+        1: 2338:		if (rc_alternative_format_flag && rc_week_number_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+        -: 2339:		  {
+    #####: 2340:		    sprintf (s2, _(" ; Week %s"), s7);
+        -: 2341:		  }
+        -: 2342:		else
+        1: 2343:		  *s2 = '\0';
+        -: 2344:	      }
+        -: 2345:	    else
+        -: 2346:	      {
+    #####: 2347:		if (rc_alternative_format_flag && rc_week_number_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2348:		  {
+    #####: 2349:		    sprintf (s2, _("Week %s"), s7);
+        -: 2350:		  }
+        -: 2351:		else
+    #####: 2352:		  *s2 = '\0';
+        -: 2353:	      }
+        1: 2354:	    if (*s2 || !rc_suppr_date_part_flag)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -: 2355:	      {
+        1: 2356:		strcat (s2, ":");
+        1: 2357:		strcat (s1, s2);
+        -: 2358:	      }
+        1: 2359:	    j = (int) strlen (s1) - hls_len;
+        -: 2360:	    /*
+        -: 2361:	       Skip the separating whitespace character between
+        -: 2362:	       the "date"-part and the "text"-part.
+        -: 2363:	     */
+        1: 2364:	    if (*lineptrs->text_part == ' ')
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2365:	      lineptrs->text_part++;
+        -: 2366:	    /*
+        -: 2367:	       Construct the "text"-part of the fixed date.
+        -: 2368:	     */
+        1: 2369:	    len_text_part = (int) strlen (lineptrs->text_part);
+        1: 2370:	    if (rc_alternative_format_flag)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2371:	      {
+    #####: 2372:		if (!same_date && *s1)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2373:		  /*
+        -: 2374:		     Print the constructed date on a separate line
+        -: 2375:		     only if it appears the first time!
+        -: 2376:		   */
+    #####: 2377:		  print_text (stdout, s1);
+call    0 never executed
+    #####: 2378:		if (rc_count_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 2379:		  {
+    #####: 2380:		    sprintf (s1, "%0*d)", len_rce,
+branch  0 never executed
+branch  1 never executed
+    #####: 2381:			     abs ((tindex - skipped) + 1));
+    #####: 2382:		    if (len_text_part)
+branch  0 never executed
+branch  1 never executed
+    #####: 2383:		      strcat (s1, "  ");
+        -: 2384:		  }
+        -: 2385:		else
+    #####: 2386:		  *s1 = '\0';
+    #####: 2387:		j = len_line = (int) strlen (s1);
+        -: 2388:	      }
+        -: 2389:	    else
+        1: 2390:	      len_line = j + hls_len + (int) !rc_suppr_date_part_flag;
+        -: 2391:	    /*
+        -: 2392:	       Now check if it's necessary to modify the "text"-part of the fixed date.
+        -: 2393:	     */
+        1: 2394:	    ok = FALSE;
+        1: 2395:	    len_fn_part = 0;
+        -: 2396:	    /*
+        -: 2397:	       "Empty" texts have no trailing blank character!
+        -: 2398:	     */
+        1: 2399:	    if (len_text_part)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -: 2400:	      {
+    #####: 2401:		if (!rc_alternative_format_flag && !rc_suppr_date_part_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2402:		  strcat (s1, " ");
+        -: 2403:		/*
+        -: 2404:		   Get the textual length of the file name,
+        -: 2405:		   which has been inserted into the line.
+        -: 2406:		 */
+    #####: 2407:		if (rc_enable_fn_flag)
+branch  0 never executed
+branch  1 never executed
+        -: 2408:		  {
+    #####: 2409:		    auto Bool pseudo_quote_found = FALSE;
+        -: 2410:
+        -: 2411:
+        -: 2412:		    /*
+        -: 2413:		       Add the length of the "file name"+3 (+3 because the file
+        -: 2414:		       name itself is leaded by a blank character and is
+        -: 2415:		       enclosed in PSEUDO_QUOTE characters to the number of
+        -: 2416:		       leading blanks, which must be displayed if the line
+        -: 2417:		       wrapped by a given `~'-TILDE.
+        -: 2418:		     */
+    #####: 2419:		    ptr_char = lineptrs->text_part;
+    #####: 2420:		    while (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2421:		      {
+    #####: 2422:			len_fn_part++;
+    #####: 2423:			if (*ptr_char == PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+        -: 2424:			  {
+    #####: 2425:			    if (!pseudo_quote_found)
+branch  0 never executed
+branch  1 never executed
+    #####: 2426:			      pseudo_quote_found = TRUE;
+        -: 2427:			    else
+    #####: 2428:			      break;
+        -: 2429:			  }
+    #####: 2430:			ptr_char++;
+        -: 2431:		      }
+    #####: 2432:		    if (!*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2433:		      /*
+        -: 2434:		         Internal error, a maintainer has modified the internal
+        -: 2435:		         format of a line and forgots to respect this
+        -: 2436:		         modification here!
+        -: 2437:		       */
+    #####: 2438:		      my_error (ERR_MAINTAINER_FAILURE, __FILE__,
+call    0 never executed
+        -: 2439:				(long) __LINE__, "", 0);
+    #####: 2440:		    c_dummy = *++ptr_char;
+    #####: 2441:		    if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+        -: 2442:		      {
+    #####: 2443:			len_line++;
+    #####: 2444:			ptr_char++;
+    #####: 2445:			c_dummy = *ptr_char;
+    #####: 2446:			*ptr_char = '\0';
+        -: 2447:		      }
+    #####: 2448:		    strcat (s1, lineptrs->text_part);
+    #####: 2449:		    i = len_fn_part;
+    #####: 2450:		    len_line += i;
+    #####: 2451:		    if (c_dummy)
+branch  0 never executed
+branch  1 never executed
+        -: 2452:		      {
+    #####: 2453:			*ptr_char = c_dummy;
+    #####: 2454:			i++;
+    #####: 2455:			j += (int) !rc_alternative_format_flag;
+        -: 2456:		      }
+    #####: 2457:		    len_text_part -= i;
+    #####: 2458:		    lineptrs->text_part += i;
+        -: 2459:		    /*
+        -: 2460:		       Now exchange the first two PSEUDO_QUOTE characters
+        -: 2461:		       -- which embrace the "file name" -- by parentheses.
+        -: 2462:		     */
+    #####: 2463:		    ptr_char = strchr (s1, PSEUDO_QUOTE);
+    #####: 2464:		    if (ptr_char == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2465:		      /*
+        -: 2466:		         Internal error, a maintainer has modified the internal
+        -: 2467:		         format of a line and forgots to respect this
+        -: 2468:		         modification here!
+        -: 2469:		       */
+    #####: 2470:		      my_error (ERR_MAINTAINER_FAILURE, __FILE__,
+call    0 never executed
+        -: 2471:				(long) __LINE__, "", 0);
+    #####: 2472:		    *ptr_char = '(';
+    #####: 2473:		    ptr_char = strchr (s1, PSEUDO_QUOTE);
+    #####: 2474:		    if (ptr_char == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2475:		      /*
+        -: 2476:		         Internal error, a maintainer has modified the internal
+        -: 2477:		         format of a line and forgots to respect this
+        -: 2478:		         modification here!
+        -: 2479:		       */
+    #####: 2480:		      my_error (ERR_MAINTAINER_FAILURE, __FILE__,
+call    0 never executed
+        -: 2481:				(long) __LINE__, "", 0);
+    #####: 2482:		    *ptr_char = ')';
+        -: 2483:		    /*
+        -: 2484:		       Check if the FIRST character of the REAL "text"-part was a quoted
+        -: 2485:		       whitespace character (this is indicated by a PSEUDO_QUOTE
+        -: 2486:		       character ('\001') followed by a "whitespace" character,
+        -: 2487:		       see `rc-check.c').  If this case is TRUE, skip the PSEUDO_QUOTE.
+        -: 2488:		     */
+    #####: 2489:		    if (*lineptrs->text_part)
+branch  0 never executed
+branch  1 never executed
+    #####: 2490:		      if ((*lineptrs->text_part == PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+    #####: 2491:			  && isspace (lineptrs->text_part[1]))
+branch  0 never executed
+branch  1 never executed
+        -: 2492:			{
+    #####: 2493:			  lineptrs->text_part++;
+    #####: 2494:			  len_text_part--;
+        -: 2495:			}
+        -: 2496:		  }
+        -: 2497:		else
+        -: 2498:		  {
+        -: 2499:		    /*
+        -: 2500:		       Check if the FIRST character of the "text"-part was a quoted
+        -: 2501:		       whitespace character (this is indicated by a PSEUDO_QUOTE
+        -: 2502:		       character ('\001') followed by a "whitespace" character,
+        -: 2503:		       see `rc-check.c').  If this case is TRUE, skip the PSEUDO_QUOTE.
+        -: 2504:		     */
+    #####: 2505:		    if ((*lineptrs->text_part == PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+    #####: 2506:			&& isspace (lineptrs->text_part[1]))
+branch  0 never executed
+branch  1 never executed
+        -: 2507:		      {
+    #####: 2508:			lineptrs->text_part++;
+    #####: 2509:			len_text_part--;
+        -: 2510:		      }
+        -: 2511:		  }
+    #####: 2512:		ok =
+    #####: 2513:		  (Bool) (strchr (lineptrs->text_part, RC_NL_CHAR) ==
+        -: 2514:			  (char *) NULL);
+    #####: 2515:		ok2 =
+    #####: 2516:		  (Bool) (strchr (lineptrs->text_part, RC_NL2_CHAR) ==
+        -: 2517:			  (char *) NULL);
+    #####: 2518:		if (ok && ok2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -: 2519:		  {
+    #####: 2520:		    if (*lineptrs->text_part)
+branch  0 never executed
+branch  1 never executed
+        -: 2521:		      {
+    #####: 2522:			if ((Uint) len_line + len_text_part >= maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 2523:			  resize_all_strings (len_line + len_text_part + 1,
+call    0 never executed
+        -: 2524:					      FALSE, __FILE__,
+        -: 2525:					      (long) __LINE__);
+    #####: 2526:			strcat (s1, lineptrs->text_part);
+        -: 2527:		      }
+        -: 2528:		  }
+        -: 2529:		else
+        -: 2530:		  {
+        -: 2531:		    /*
+        -: 2532:		       `~'-TILDE, `^'-CARET or quoted `\~'-TILDE resp., CARET found
+        -: 2533:		       in "text"-part of fixed date:
+        -: 2534:		       Quote TILDE/CARET resp., insert a real `\n'-NEWLINE character
+        -: 2535:		     */
+    #####: 2536:		    while (*lineptrs->text_part)
+branch  0 never executed
+branch  1 never executed
+        -: 2537:		      {
+    #####: 2538:			if ((Uint) len_line >= maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 2539:			  resize_all_strings (maxlen_max << 1, FALSE,
+call    0 never executed
+        -: 2540:					      __FILE__, (long) __LINE__);
+    #####: 2541:			if (*lineptrs->text_part == RC_NL_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -: 2542:			  {
+        -: 2543:			    /*
+        -: 2544:			       RC_NL_CHAR is single `\~' quoted
+        -: 2545:			       or double `\\~' quoted:
+        -: 2546:			       Replace QUOTE_CHAR by RC_NL_CHAR resp.,
+        -: 2547:			       replace last QUOTE_CHAR by RC_NL_CHAR.
+        -: 2548:			     */
+    #####: 2549:			    if (s1[len_line - 1] == QUOTE_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 2550:			      s1[len_line - 1] = *lineptrs->text_part;
+        -: 2551:			    else
+        -: 2552:			      {
+        -: 2553:				/*
+        -: 2554:				   RC_NL_CHAR is not quoted '~':
+        -: 2555:				   Insert a real `\n'_NEWLINE character.
+        -: 2556:				 */
+    #####: 2557:				s1[len_line++] = '\n';
+        -: 2558:				/*
+        -: 2559:				   Insert some leading blanks.
+        -: 2560:				 */
+    #####: 2561:				if (rc_alternative_format_flag
+branch  0 never executed
+branch  1 never executed
+    #####: 2562:				    && !rc_enable_fn_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2563:				  n = j;
+        -: 2564:				else
+        -: 2565:				  {
+    #####: 2566:				    n = j + len_fn_part + 1;
+    #####: 2567:				    if (!rc_alternative_format_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2568:				      n -= (int) rc_suppr_date_part_flag;
+        -: 2569:				  }
+    #####: 2570:				for (i = 0; i < n; i++)
+branch  0 never executed
+branch  1 never executed
+        -: 2571:				  {
+    #####: 2572:				    if ((Uint) len_line >= maxlen_max)
+branch  0 never executed
+branch  1 never executed
+    #####: 2573:				      resize_all_strings (maxlen_max << 1,
+call    0 never executed
+        -: 2574:							  FALSE, __FILE__,
+        -: 2575:							  (long) __LINE__);
+    #####: 2576:				    s1[len_line++] = ' ';
+        -: 2577:				  }
+        -: 2578:			      }
+        -: 2579:			  }
+    #####: 2580:			else if (*lineptrs->text_part == RC_NL2_CHAR)
+branch  0 never executed
+branch  1 never executed
+        -: 2581:			  {
+        -: 2582:			    /*
+        -: 2583:			       RC_NL2_CHAR is single `\^' quoted
+        -: 2584:			       or double `\\^' quoted:
+        -: 2585:			       Replace QUOTE_CHAR by RC_NL2_CHAR resp.,
+        -: 2586:			       replace last QUOTE_CHAR by RC_NL2_CHAR.
+        -: 2587:			     */
+    #####: 2588:			    if (s1[len_line - 1] == QUOTE_CHAR)
+branch  0 never executed
+branch  1 never executed
+    #####: 2589:			      s1[len_line - 1] = *lineptrs->text_part;
+        -: 2590:			    else
+        -: 2591:			      /*
+        -: 2592:			         RC_NL2_CHAR is not quoted '^':
+        -: 2593:			         Insert a real `\n'_NEWLINE character only!
+        -: 2594:			       */
+    #####: 2595:			      s1[len_line++] = '\n';
+        -: 2596:			  }
+        -: 2597:			else
+    #####: 2598:			  s1[len_line++] = *lineptrs->text_part;
+    #####: 2599:			lineptrs->text_part++;
+        -: 2600:		      }
+    #####: 2601:		    s1[len_line] = '\0';
+        -: 2602:		  }
+        -: 2603:	      }
+        1: 2604:	    if (rc_omit_date_flag && !rc_alternative_format_flag && same_date)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -: 2605:	      {
+        -: 2606:		/*
+        -: 2607:		   Overwrite leading "date"-part of output with blanks.
+        -: 2608:		 */
+    #####: 2609:		if (rc_count_flag)
+branch  0 never executed
+branch  1 never executed
+    #####: 2610:		  i = len_rce + 3;	/* +3 because of the ")  " text */
+        -: 2611:		else
+    #####: 2612:		  i = 0;
+    #####: 2613:		n = j - (int) rc_suppr_date_part_flag;
+    #####: 2614:		for (; i < n; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 2615:		  s1[i] = ' ';
+    #####: 2616:		ptr_char = s1 + j + hls_len;
+    #####: 2617:		for (i = j; *ptr_char; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 2618:		  s1[i] = *ptr_char++;
+    #####: 2619:		s1[i] = '\0';
+        -: 2620:	      }
+        -: 2621:	    /*
+        -: 2622:	       Now we display the constructed fixed date text.
+        -: 2623:	     */
+        2: 2624:	    if (!rc_alternative_format_flag || len_text_part || len_line)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        1: 2625:	      print_text (stdout, s1);
+call    0 returned 100%
+        -: 2626:	  }
+        -: 2627:	else
+    #####: 2628:	  skipped++;
+        -: 2629:	/*
+        -: 2630:	   Now deallocate the just displayed/skipped fixed date in the table.
+        -: 2631:	 */
+        1: 2632:	free (rc_elems_table[tindex]);
+        -: 2633:	/*
+        -: 2634:	   Check if all fixed date entries are displayed.
+        -: 2635:	 */
+        1: 2636:	if (tindex == tend)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        1: 2637:	  break;
+        -: 2638:	/*
+        -: 2639:	   If not, increase/decrease the loop counter.
+        -: 2640:	 */
+    #####: 2641:	if (rc_zero_dates_flag && rc_sort_des_flag)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 2642:	  tindex--;
+        -: 2643:	else
+    #####: 2644:	  tindex++;
+        -: 2645:      }
+        -: 2646:    }
+        -: 2647:  /*
+        -: 2648:     Now deallocate all NON-"empty" fixed dates in the table
+        -: 2649:     in case only "empty" fixed dates were displayed.
+        -: 2650:   */
+        1: 2651:  if (rc_zero_dates_flag && (rc_elems - rc_zero_pos))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed
+branch  3 never executed
+    #####: 2652:    for (tindex = 0; tindex < rc_zero_pos; tindex++)
+branch  0 never executed
+branch  1 never executed
+    #####: 2653:      free (rc_elems_table[tindex]);
+        1: 2654:}
+        -: 2655:
+        -: 2656:
+        -: 2657:
+        -: 2658:static int
+function fn_asc_sort called 0 returned 0% blocks executed 0%
+    #####: 2659:fn_asc_sort (a, b)
+        -: 2660:     const char **a;
+        -: 2661:     const char **b;
+        -: 2662:/*!
+        -: 2663:   The (q)sort compare function for fixed dates which texts
+        -: 2664:     have an included resource "file name"; ascending order.
+        -: 2665:*/
+        -: 2666:{
+        -: 2667:  static Uint previous_len;
+        -: 2668:  static int i;
+        -: 2669:  static char *a_text;
+        -: 2670:  static char *b_text;
+        -: 2671:  static char *ptr_char;
+        -: 2672:  static Bool is_initialized = FALSE;
+        -: 2673:
+        -: 2674:
+        -: 2675:  /*
+        -: 2676:     Don't sort on the included resource "file name",
+        -: 2677:     sort on the REAL text of the fixed date  O N L Y  !!!
+        -: 2678:   */
+    #####: 2679:  if (!is_initialized)
+branch  0 never executed
+branch  1 never executed
+        -: 2680:    {
+    #####: 2681:      a_text = (char *) my_malloc (maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+call    0 never executed
+        -: 2682:				   __FILE__, ((long) __LINE__) - 1L,
+        -: 2683:				   "a_text", 0);
+    #####: 2684:      b_text = (char *) my_malloc (maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+call    0 never executed
+        -: 2685:				   __FILE__, ((long) __LINE__) - 1L,
+        -: 2686:				   "b_text", 0);
+    #####: 2687:      previous_len = maxlen_max;
+    #####: 2688:      is_initialized = TRUE;
+        -: 2689:    }
+    #####: 2690:  else if (previous_len < maxlen_max)
+branch  0 never executed
+branch  1 never executed
+        -: 2691:    {
+    #####: 2692:      a_text = (char *) my_realloc ((VOID_PTR) a_text,
+call    0 never executed
+        -: 2693:				    maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+        -: 2694:				    __FILE__, ((long) __LINE__) - 2L,
+        -: 2695:				    "a_text", maxlen_max);
+    #####: 2696:      b_text = (char *) my_realloc ((VOID_PTR) b_text,
+call    0 never executed
+        -: 2697:				    maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+        -: 2698:				    __FILE__, ((long) __LINE__) - 2L,
+        -: 2699:				    "b_text", maxlen_max);
+    #####: 2700:      previous_len = maxlen_max;
+        -: 2701:    }
+    #####: 2702:  i = len_year_max + 4;
+        -: 2703:  /*
+        -: 2704:     Copy the "date"-part AS IS.
+        -: 2705:   */
+    #####: 2706:  strncpy (a_text, *a, i);
+    #####: 2707:  a_text[i] = '\0';
+        -: 2708:  /*
+        -: 2709:     Skip the filename part.
+        -: 2710:   */
+    #####: 2711:  if (*(*a + i + 1) != PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+        -: 2712:    /*
+        -: 2713:       Internal error, a maintainer has modified the internal format
+        -: 2714:       of a line and forgots to respect this modification here!
+        -: 2715:     */
+    #####: 2716:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2717:  ptr_char = strchr (*a + i + 2, PSEUDO_QUOTE);
+    #####: 2718:  if (ptr_char == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2719:    /*
+        -: 2720:       Internal error, a maintainer has modified the internal format
+        -: 2721:       of a line and forgots to respect this modification here!
+        -: 2722:     */
+    #####: 2723:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2724:  ptr_char++;
+        -: 2725:  /*
+        -: 2726:     And concatenate the "text"-part.
+        -: 2727:   */
+    #####: 2728:  if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+    #####: 2729:    strcat (a_text, ptr_char);
+        -: 2730:  /*
+        -: 2731:     Copy the "date"-part AS IS.
+        -: 2732:   */
+    #####: 2733:  strncpy (b_text, *b, i);
+    #####: 2734:  b_text[i] = '\0';
+        -: 2735:  /*
+        -: 2736:     Skip the filename part.
+        -: 2737:   */
+    #####: 2738:  if (*(*b + i + 1) != PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+        -: 2739:    /*
+        -: 2740:       Internal error, a maintainer has modified the internal format
+        -: 2741:       of a line and forgots to respect this modification here!
+        -: 2742:     */
+    #####: 2743:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2744:  ptr_char = strchr (*b + i + 2, PSEUDO_QUOTE);
+    #####: 2745:  if (ptr_char == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2746:    /*
+        -: 2747:       Internal error, a maintainer has modified the internal format
+        -: 2748:       of a line and forgots to respect this modification here!
+        -: 2749:     */
+    #####: 2750:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2751:  ptr_char++;
+        -: 2752:  /*
+        -: 2753:     And concatenate the "text"-part.
+        -: 2754:   */
+    #####: 2755:  if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+    #####: 2756:    strcat (b_text, ptr_char);
+        -: 2757:
+    #####: 2758:  return (strcmp (a_text, b_text));
+        -: 2759:}
+        -: 2760:
+        -: 2761:
+        -: 2762:
+        -: 2763:static int
+function fn_des_sort called 0 returned 0% blocks executed 0%
+    #####: 2764:fn_des_sort (a, b)
+        -: 2765:     const char **a;
+        -: 2766:     const char **b;
+        -: 2767:/*!
+        -: 2768:   The (q)sort compare function for fixed dates which texts
+        -: 2769:     have an included resource "file name"; descending order.
+        -: 2770:*/
+        -: 2771:{
+        -: 2772:  static Uint previous_len;
+        -: 2773:  static int i;
+        -: 2774:  static char *a_text;
+        -: 2775:  static char *b_text;
+        -: 2776:  static char *ptr_char;
+        -: 2777:  static Bool is_initialized = FALSE;
+        -: 2778:
+        -: 2779:
+        -: 2780:  /*
+        -: 2781:     Don't sort on the included resource "file name",
+        -: 2782:     sort on the REAL text of the fixed date  O N L Y  !!!
+        -: 2783:   */
+    #####: 2784:  if (!is_initialized)
+branch  0 never executed
+branch  1 never executed
+        -: 2785:    {
+    #####: 2786:      a_text = (char *) my_malloc (maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+call    0 never executed
+        -: 2787:				   __FILE__, ((long) __LINE__) - 1L,
+        -: 2788:				   "a_text", 0);
+    #####: 2789:      b_text = (char *) my_malloc (maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+call    0 never executed
+        -: 2790:				   __FILE__, ((long) __LINE__) - 1L,
+        -: 2791:				   "b_text", 0);
+    #####: 2792:      previous_len = maxlen_max;
+    #####: 2793:      is_initialized = TRUE;
+        -: 2794:    }
+    #####: 2795:  else if (previous_len < maxlen_max)
+branch  0 never executed
+branch  1 never executed
+        -: 2796:    {
+    #####: 2797:      a_text = (char *) my_realloc ((VOID_PTR) a_text,
+call    0 never executed
+        -: 2798:				    maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+        -: 2799:				    __FILE__, ((long) __LINE__) - 2L,
+        -: 2800:				    "a_text", maxlen_max);
+    #####: 2801:      b_text = (char *) my_realloc ((VOID_PTR) b_text,
+call    0 never executed
+        -: 2802:				    maxlen_max, ERR_NO_MEMORY_AVAILABLE,
+        -: 2803:				    __FILE__, ((long) __LINE__) - 2L,
+        -: 2804:				    "b_text", maxlen_max);
+    #####: 2805:      previous_len = maxlen_max;
+        -: 2806:    }
+    #####: 2807:  i = len_year_max + 4;
+        -: 2808:  /*
+        -: 2809:     Copy the "date"-part AS IS.
+        -: 2810:   */
+    #####: 2811:  strncpy (a_text, *a, i);
+    #####: 2812:  a_text[i] = '\0';
+        -: 2813:  /*
+        -: 2814:     Skip the filename part.
+        -: 2815:   */
+    #####: 2816:  if (*(*a + i + 1) != PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+        -: 2817:    /*
+        -: 2818:       Internal error, a maintainer has modified the internal format
+        -: 2819:       of a line and forgots to respect this modification here!
+        -: 2820:     */
+    #####: 2821:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2822:  ptr_char = strchr (*a + i + 2, PSEUDO_QUOTE);
+    #####: 2823:  if (ptr_char == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2824:    /*
+        -: 2825:       Internal error, a maintainer has modified the internal format
+        -: 2826:       of a line and forgots to respect this modification here!
+        -: 2827:     */
+    #####: 2828:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2829:  ptr_char++;
+        -: 2830:  /*
+        -: 2831:     And concatenate the "text"-part.
+        -: 2832:   */
+    #####: 2833:  if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+    #####: 2834:    strcat (a_text, ptr_char);
+        -: 2835:  /*
+        -: 2836:     Copy the "date"-part AS IS.
+        -: 2837:   */
+    #####: 2838:  strncpy (b_text, *b, i);
+    #####: 2839:  b_text[i] = '\0';
+        -: 2840:  /*
+        -: 2841:     Skip the filename part.
+        -: 2842:   */
+    #####: 2843:  if (*(*b + i + 1) != PSEUDO_QUOTE)
+branch  0 never executed
+branch  1 never executed
+        -: 2844:    /*
+        -: 2845:       Internal error, a maintainer has modified the internal format
+        -: 2846:       of a line and forgots to respect this modification here!
+        -: 2847:     */
+    #####: 2848:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2849:  ptr_char = strchr (*b + i + 2, PSEUDO_QUOTE);
+    #####: 2850:  if (ptr_char == (char *) NULL)
+branch  0 never executed
+branch  1 never executed
+        -: 2851:    /*
+        -: 2852:       Internal error, a maintainer has modified the internal format
+        -: 2853:       of a line and forgots to respect this modification here!
+        -: 2854:     */
+    #####: 2855:    my_error (ERR_MAINTAINER_FAILURE, __FILE__, (long) __LINE__, "", 0);
+call    0 never executed
+    #####: 2856:  ptr_char++;
+        -: 2857:  /*
+        -: 2858:     And concatenate the "text"-part.
+        -: 2859:   */
+    #####: 2860:  if (*ptr_char)
+branch  0 never executed
+branch  1 never executed
+    #####: 2861:    strcat (b_text, ptr_char);
+        -: 2862:
+    #####: 2863:  return (strcmp (b_text, a_text));
+        -: 2864:}
+        -: 2865:#endif /* USE_RC */

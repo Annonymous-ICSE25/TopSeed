@@ -1,0 +1,7 @@
+     ../../src/df_options.c \
+     ../../src/field.c \
+     ../../src/main.c \
+     ../../src/makeindex.c \
+     ../../src/process_files.c \
+     ../../src/read_files.c \
+     ../../src/write_files.c

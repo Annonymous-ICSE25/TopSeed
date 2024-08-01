@@ -1,0 +1,429 @@
+        -:    0:Source:../../lib/setlocale_null.c
+        -:    0:Programs:50
+        -:    1:/* Query the name of the current global locale.
+        -:    2:   Copyright (C) 2019-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:/* Written by Bruno Haible <bruno@clisp.org>, 2019.  */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:
+        -:   21:/* Specification.  */
+        -:   22:#include "setlocale_null.h"
+        -:   23:
+        -:   24:#include <errno.h>
+        -:   25:#include <locale.h>
+        -:   26:#include <stdlib.h>
+        -:   27:#include <string.h>
+        -:   28:#if defined _WIN32 && !defined __CYGWIN__
+        -:   29:# include <wchar.h>
+        -:   30:#endif
+        -:   31:
+        -:   32:#if !(SETLOCALE_NULL_ALL_MTSAFE && SETLOCALE_NULL_ONE_MTSAFE)
+        -:   33:# if defined _WIN32 && !defined __CYGWIN__
+        -:   34:
+        -:   35:#  define WIN32_LEAN_AND_MEAN  /* avoid including junk */
+        -:   36:#  include <windows.h>
+        -:   37:
+        -:   38:# elif HAVE_PTHREAD_API
+        -:   39:
+        -:   40:#  include <pthread.h>
+        -:   41:#  if HAVE_THREADS_H && HAVE_WEAK_SYMBOLS
+        -:   42:#   include <threads.h>
+        -:   43:#   pragma weak thrd_exit
+        -:   44:#   define c11_threads_in_use() (thrd_exit != NULL)
+        -:   45:#  else
+        -:   46:#   define c11_threads_in_use() 0
+        -:   47:#  endif
+        -:   48:
+        -:   49:# elif HAVE_THREADS_H
+        -:   50:
+        -:   51:#  include <threads.h>
+        -:   52:
+        -:   53:# endif
+        -:   54:#endif
+        -:   55:
+        -:   56:/* Use the system's setlocale() function, not the gnulib override, here.  */
+        -:   57:#undef setlocale
+        -:   58:
+        -:   59:static const char *
+function setlocale_null_androidfix called 4200 returned 100% blocks executed 100%
+     4200:   60:setlocale_null_androidfix (int category)
+        -:   61:{
+     4200:   62:  const char *result = setlocale (category, NULL);
+call    0 returned 100%
+        -:   63:
+        -:   64:#ifdef __ANDROID__
+        -:   65:  if (result == NULL)
+        -:   66:    switch (category)
+        -:   67:      {
+        -:   68:      case LC_CTYPE:
+        -:   69:      case LC_NUMERIC:
+        -:   70:      case LC_TIME:
+        -:   71:      case LC_COLLATE:
+        -:   72:      case LC_MONETARY:
+        -:   73:      case LC_MESSAGES:
+        -:   74:      case LC_ALL:
+        -:   75:      case LC_PAPER:
+        -:   76:      case LC_NAME:
+        -:   77:      case LC_ADDRESS:
+        -:   78:      case LC_TELEPHONE:
+        -:   79:      case LC_MEASUREMENT:
+        -:   80:        result = "C";
+        -:   81:        break;
+        -:   82:      default:
+        -:   83:        break;
+        -:   84:      }
+        -:   85:#endif
+        -:   86:
+     4200:   87:  return result;
+        -:   88:}
+        -:   89:
+        -:   90:static int
+function setlocale_null_unlocked called 4200 returned 100% blocks executed 45%
+     4200:   91:setlocale_null_unlocked (int category, char *buf, size_t bufsize)
+        -:   92:{
+        -:   93:#if defined _WIN32 && !defined __CYGWIN__ && defined _MSC_VER
+        -:   94:  /* On native Windows, nowadays, the setlocale() implementation is based
+        -:   95:     on _wsetlocale() and uses malloc() for the result.  We are better off
+        -:   96:     using _wsetlocale() directly.  */
+        -:   97:  const wchar_t *result = _wsetlocale (category, NULL);
+        -:   98:
+        -:   99:  if (result == NULL)
+        -:  100:    {
+        -:  101:      /* CATEGORY is invalid.  */
+        -:  102:      if (bufsize > 0)
+        -:  103:        /* Return an empty string in BUF.
+        -:  104:           This is a convenience for callers that don't want to write explicit
+        -:  105:           code for handling EINVAL.  */
+        -:  106:        buf[0] = '\0';
+        -:  107:      return EINVAL;
+        -:  108:    }
+        -:  109:  else
+        -:  110:    {
+        -:  111:      size_t length = wcslen (result);
+        -:  112:      if (length < bufsize)
+        -:  113:        {
+        -:  114:          size_t i;
+        -:  115:
+        -:  116:          /* Convert wchar_t[] -> char[], assuming plain ASCII.  */
+        -:  117:          for (i = 0; i <= length; i++)
+        -:  118:            buf[i] = result[i];
+        -:  119:
+        -:  120:          return 0;
+        -:  121:        }
+        -:  122:      else
+        -:  123:        {
+        -:  124:          if (bufsize > 0)
+        -:  125:            {
+        -:  126:              /* Return a truncated result in BUF.
+        -:  127:                 This is a convenience for callers that don't want to write
+        -:  128:                 explicit code for handling ERANGE.  */
+        -:  129:              size_t i;
+        -:  130:
+        -:  131:              /* Convert wchar_t[] -> char[], assuming plain ASCII.  */
+        -:  132:              for (i = 0; i < bufsize; i++)
+        -:  133:                buf[i] = result[i];
+        -:  134:              buf[bufsize - 1] = '\0';
+        -:  135:            }
+        -:  136:          return ERANGE;
+        -:  137:        }
+        -:  138:    }
+        -:  139:#else
+     4200:  140:  const char *result = setlocale_null_androidfix (category);
+call    0 returned 100%
+        -:  141:
+     4200:  142:  if (result == NULL)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  143:    {
+        -:  144:      /* CATEGORY is invalid.  */
+    #####:  145:      if (bufsize > 0)
+branch  0 never executed
+branch  1 never executed
+        -:  146:        /* Return an empty string in BUF.
+        -:  147:           This is a convenience for callers that don't want to write explicit
+        -:  148:           code for handling EINVAL.  */
+    #####:  149:        buf[0] = '\0';
+    #####:  150:      return EINVAL;
+        -:  151:    }
+        -:  152:  else
+        -:  153:    {
+     4200:  154:      size_t length = strlen (result);
+     4200:  155:      if (length < bufsize)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  156:        {
+     4200:  157:          memcpy (buf, result, length + 1);
+     4200:  158:          return 0;
+        -:  159:        }
+        -:  160:      else
+        -:  161:        {
+    #####:  162:          if (bufsize > 0)
+branch  0 never executed
+branch  1 never executed
+        -:  163:            {
+        -:  164:              /* Return a truncated result in BUF.
+        -:  165:                 This is a convenience for callers that don't want to write
+        -:  166:                 explicit code for handling ERANGE.  */
+    #####:  167:              memcpy (buf, result, bufsize - 1);
+    #####:  168:              buf[bufsize - 1] = '\0';
+        -:  169:            }
+    #####:  170:          return ERANGE;
+        -:  171:        }
+        -:  172:    }
+        -:  173:#endif
+        -:  174:}
+        -:  175:
+        -:  176:#if !(SETLOCALE_NULL_ALL_MTSAFE && SETLOCALE_NULL_ONE_MTSAFE) /* musl libc, macOS, FreeBSD, NetBSD, OpenBSD, AIX, Haiku, Cygwin */
+        -:  177:
+        -:  178:/* Use a lock, so that no two threads can invoke setlocale_null_unlocked
+        -:  179:   at the same time.  */
+        -:  180:
+        -:  181:/* Prohibit renaming this symbol.  */
+        -:  182:# undef gl_get_setlocale_null_lock
+        -:  183:
+        -:  184:# if defined _WIN32 && !defined __CYGWIN__
+        -:  185:
+        -:  186:extern __declspec(dllimport) CRITICAL_SECTION *gl_get_setlocale_null_lock (void);
+        -:  187:
+        -:  188:static int
+        -:  189:setlocale_null_with_lock (int category, char *buf, size_t bufsize)
+        -:  190:{
+        -:  191:  CRITICAL_SECTION *lock = gl_get_setlocale_null_lock ();
+        -:  192:  int ret;
+        -:  193:
+        -:  194:  EnterCriticalSection (lock);
+        -:  195:  ret = setlocale_null_unlocked (category, buf, bufsize);
+        -:  196:  LeaveCriticalSection (lock);
+        -:  197:
+        -:  198:  return ret;
+        -:  199:}
+        -:  200:
+        -:  201:# elif HAVE_PTHREAD_API /* musl libc, macOS, FreeBSD, NetBSD, OpenBSD, AIX, Haiku, Cygwin */
+        -:  202:
+        -:  203:extern
+        -:  204:#  if defined _WIN32 || defined __CYGWIN__
+        -:  205:  __declspec(dllimport)
+        -:  206:#  endif
+        -:  207:  pthread_mutex_t *gl_get_setlocale_null_lock (void);
+        -:  208:
+        -:  209:#  if HAVE_WEAK_SYMBOLS /* musl libc, FreeBSD, NetBSD, OpenBSD, Haiku */
+        -:  210:
+        -:  211:    /* Avoid the need to link with '-lpthread'.  */
+        -:  212:#   pragma weak pthread_mutex_lock
+        -:  213:#   pragma weak pthread_mutex_unlock
+        -:  214:
+        -:  215:    /* Determine whether libpthread is in use.  */
+        -:  216:#   pragma weak pthread_mutexattr_gettype
+        -:  217:    /* See the comments in lock.h.  */
+        -:  218:#   define pthread_in_use() \
+        -:  219:      (pthread_mutexattr_gettype != NULL || c11_threads_in_use ())
+        -:  220:
+        -:  221:#  else
+        -:  222:#   define pthread_in_use() 1
+        -:  223:#  endif
+        -:  224:
+        -:  225:static int
+        -:  226:setlocale_null_with_lock (int category, char *buf, size_t bufsize)
+        -:  227:{
+        -:  228:  if (pthread_in_use())
+        -:  229:    {
+        -:  230:      pthread_mutex_t *lock = gl_get_setlocale_null_lock ();
+        -:  231:      int ret;
+        -:  232:
+        -:  233:      if (pthread_mutex_lock (lock))
+        -:  234:        abort ();
+        -:  235:      ret = setlocale_null_unlocked (category, buf, bufsize);
+        -:  236:      if (pthread_mutex_unlock (lock))
+        -:  237:        abort ();
+        -:  238:
+        -:  239:      return ret;
+        -:  240:    }
+        -:  241:  else
+        -:  242:    return setlocale_null_unlocked (category, buf, bufsize);
+        -:  243:}
+        -:  244:
+        -:  245:# elif HAVE_THREADS_H
+        -:  246:
+        -:  247:extern mtx_t *gl_get_setlocale_null_lock (void);
+        -:  248:
+        -:  249:static int
+        -:  250:setlocale_null_with_lock (int category, char *buf, size_t bufsize)
+        -:  251:{
+        -:  252:  mtx_t *lock = gl_get_setlocale_null_lock ();
+        -:  253:  int ret;
+        -:  254:
+        -:  255:  if (mtx_lock (lock) != thrd_success)
+        -:  256:    abort ();
+        -:  257:  ret = setlocale_null_unlocked (category, buf, bufsize);
+        -:  258:  if (mtx_unlock (lock) != thrd_success)
+        -:  259:    abort ();
+        -:  260:
+        -:  261:  return ret;
+        -:  262:}
+        -:  263:
+        -:  264:# endif
+        -:  265:
+        -:  266:#endif
+        -:  267:
+        -:  268:int
+function setlocale_null_r called 4200 returned 100% blocks executed 100%
+     4200:  269:setlocale_null_r (int category, char *buf, size_t bufsize)
+        -:  270:{
+        -:  271:#if SETLOCALE_NULL_ALL_MTSAFE
+        -:  272:# if SETLOCALE_NULL_ONE_MTSAFE
+        -:  273:
+     4200:  274:  return setlocale_null_unlocked (category, buf, bufsize);
+call    0 returned 100%
+        -:  275:
+        -:  276:# else
+        -:  277:
+        -:  278:  if (category == LC_ALL)
+        -:  279:    return setlocale_null_unlocked (category, buf, bufsize);
+        -:  280:  else
+        -:  281:    return setlocale_null_with_lock (category, buf, bufsize);
+        -:  282:
+        -:  283:# endif
+        -:  284:#else
+        -:  285:# if SETLOCALE_NULL_ONE_MTSAFE
+        -:  286:
+        -:  287:  if (category == LC_ALL)
+        -:  288:    return setlocale_null_with_lock (category, buf, bufsize);
+        -:  289:  else
+        -:  290:    return setlocale_null_unlocked (category, buf, bufsize);
+        -:  291:
+        -:  292:# else
+        -:  293:
+        -:  294:  return setlocale_null_with_lock (category, buf, bufsize);
+        -:  295:
+        -:  296:# endif
+        -:  297:#endif
+        -:  298:}
+        -:  299:
+        -:  300:const char *
+function setlocale_null called 0 returned 0% blocks executed 0%
+    #####:  301:setlocale_null (int category)
+        -:  302:{
+        -:  303:#if SETLOCALE_NULL_ALL_MTSAFE && SETLOCALE_NULL_ONE_MTSAFE
+    #####:  304:  return setlocale_null_androidfix (category);
+call    0 never executed
+        -:  305:#else
+        -:  306:
+        -:  307:  /* This call must be multithread-safe.  To achieve this without using
+        -:  308:     thread-local storage:
+        -:  309:       1. We use a specific static buffer for each possible CATEGORY
+        -:  310:          argument.  So that different threads can call setlocale_mtsafe
+        -:  311:          with different CATEGORY arguments, without interfering.
+        -:  312:       2. We use a simple strcpy or memcpy to fill this static buffer.
+        -:  313:          Filling it through, for example, strcpy + strcat would not be
+        -:  314:          guaranteed to leave the buffer's contents intact if another thread
+        -:  315:          is currently accessing it.  If necessary, the contents is first
+        -:  316:          assembled in a stack-allocated buffer.  */
+        -:  317:  if (category == LC_ALL)
+        -:  318:    {
+        -:  319:# if SETLOCALE_NULL_ALL_MTSAFE
+        -:  320:      return setlocale_null_androidfix (LC_ALL);
+        -:  321:# else
+        -:  322:      char buf[SETLOCALE_NULL_ALL_MAX];
+        -:  323:      static char resultbuf[SETLOCALE_NULL_ALL_MAX];
+        -:  324:
+        -:  325:      if (setlocale_null_r (LC_ALL, buf, sizeof (buf)))
+        -:  326:        return "C";
+        -:  327:      strcpy (resultbuf, buf);
+        -:  328:      return resultbuf;
+        -:  329:# endif
+        -:  330:    }
+        -:  331:  else
+        -:  332:    {
+        -:  333:# if SETLOCALE_NULL_ONE_MTSAFE
+        -:  334:      return setlocale_null_androidfix (category);
+        -:  335:# else
+        -:  336:      enum
+        -:  337:        {
+        -:  338:          LC_CTYPE_INDEX,
+        -:  339:          LC_NUMERIC_INDEX,
+        -:  340:          LC_TIME_INDEX,
+        -:  341:          LC_COLLATE_INDEX,
+        -:  342:          LC_MONETARY_INDEX,
+        -:  343:          LC_MESSAGES_INDEX,
+        -:  344:#  ifdef LC_PAPER
+        -:  345:          LC_PAPER_INDEX,
+        -:  346:#  endif
+        -:  347:#  ifdef LC_NAME
+        -:  348:          LC_NAME_INDEX,
+        -:  349:#  endif
+        -:  350:#  ifdef LC_ADDRESS
+        -:  351:          LC_ADDRESS_INDEX,
+        -:  352:#  endif
+        -:  353:#  ifdef LC_TELEPHONE
+        -:  354:          LC_TELEPHONE_INDEX,
+        -:  355:#  endif
+        -:  356:#  ifdef LC_MEASUREMENT
+        -:  357:          LC_MEASUREMENT_INDEX,
+        -:  358:#  endif
+        -:  359:#  ifdef LC_IDENTIFICATION
+        -:  360:          LC_IDENTIFICATION_INDEX,
+        -:  361:#  endif
+        -:  362:          LC_INDICES_COUNT
+        -:  363:        }
+        -:  364:        i;
+        -:  365:      char buf[SETLOCALE_NULL_MAX];
+        -:  366:      static char resultbuf[LC_INDICES_COUNT][SETLOCALE_NULL_MAX];
+        -:  367:      int err;
+        -:  368:
+        -:  369:      err = setlocale_null_r (category, buf, sizeof (buf));
+        -:  370:      if (err == EINVAL)
+        -:  371:        return NULL;
+        -:  372:      if (err)
+        -:  373:        return "C";
+        -:  374:
+        -:  375:      switch (category)
+        -:  376:        {
+        -:  377:        case LC_CTYPE:          i = LC_CTYPE_INDEX;          break;
+        -:  378:        case LC_NUMERIC:        i = LC_NUMERIC_INDEX;        break;
+        -:  379:        case LC_TIME:           i = LC_TIME_INDEX;           break;
+        -:  380:        case LC_COLLATE:        i = LC_COLLATE_INDEX;        break;
+        -:  381:        case LC_MONETARY:       i = LC_MONETARY_INDEX;       break;
+        -:  382:        case LC_MESSAGES:       i = LC_MESSAGES_INDEX;       break;
+        -:  383:#  ifdef LC_PAPER
+        -:  384:        case LC_PAPER:          i = LC_PAPER_INDEX;          break;
+        -:  385:#  endif
+        -:  386:#  ifdef LC_NAME
+        -:  387:        case LC_NAME:           i = LC_NAME_INDEX;           break;
+        -:  388:#  endif
+        -:  389:#  ifdef LC_ADDRESS
+        -:  390:        case LC_ADDRESS:        i = LC_ADDRESS_INDEX;        break;
+        -:  391:#  endif
+        -:  392:#  ifdef LC_TELEPHONE
+        -:  393:        case LC_TELEPHONE:      i = LC_TELEPHONE_INDEX;      break;
+        -:  394:#  endif
+        -:  395:#  ifdef LC_MEASUREMENT
+        -:  396:        case LC_MEASUREMENT:    i = LC_MEASUREMENT_INDEX;    break;
+        -:  397:#  endif
+        -:  398:#  ifdef LC_IDENTIFICATION
+        -:  399:        case LC_IDENTIFICATION: i = LC_IDENTIFICATION_INDEX; break;
+        -:  400:#  endif
+        -:  401:        default:
+        -:  402:          /* If you get here, a #ifdef LC_xxx is missing.  */
+        -:  403:          abort ();
+        -:  404:        }
+        -:  405:
+        -:  406:      strcpy (resultbuf[i], buf);
+        -:  407:      return resultbuf[i];
+        -:  408:# endif
+        -:  409:    }
+        -:  410:#endif
+        -:  411:}

@@ -1,0 +1,296 @@
+        -:    0:Source:../../lib/xalloc.h
+        -:    0:Programs:50
+        -:    1:/* xalloc.h -- malloc with out-of-memory checking
+        -:    2:
+        -:    3:   Copyright (C) 1990-2000, 2003-2004, 2006-2020 Free Software Foundation, Inc.
+        -:    4:
+        -:    5:   This program is free software: you can redistribute it and/or modify
+        -:    6:   it under the terms of the GNU General Public License as published by
+        -:    7:   the Free Software Foundation; either version 3 of the License, or
+        -:    8:   (at your option) any later version.
+        -:    9:
+        -:   10:   This program is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   13:   GNU General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU General Public License
+        -:   16:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   17:
+        -:   18:#ifndef XALLOC_H_
+        -:   19:#define XALLOC_H_
+        -:   20:
+        -:   21:#include <stddef.h>
+        -:   22:#include <stdint.h>
+        -:   23:
+        -:   24:#include "xalloc-oversized.h"
+        -:   25:
+        -:   26:#ifndef _GL_INLINE_HEADER_BEGIN
+        -:   27: #error "Please include config.h first."
+        -:   28:#endif
+        -:   29:_GL_INLINE_HEADER_BEGIN
+        -:   30:#ifndef XALLOC_INLINE
+        -:   31:# define XALLOC_INLINE _GL_INLINE
+        -:   32:#endif
+        -:   33:
+        -:   34:
+        -:   35:#ifdef __cplusplus
+        -:   36:extern "C" {
+        -:   37:#endif
+        -:   38:
+        -:   39:
+        -:   40:#if GNULIB_XALLOC_DIE
+        -:   41:
+        -:   42:/* This function is always triggered when memory is exhausted.
+        -:   43:   It must be defined by the application, either explicitly
+        -:   44:   or by using gnulib's xalloc-die module.  This is the
+        -:   45:   function to call when one wants the program to die because of a
+        -:   46:   memory allocation failure.  */
+        -:   47:/*extern*/ _Noreturn void xalloc_die (void);
+        -:   48:
+        -:   49:#endif /* GNULIB_XALLOC_DIE */
+        -:   50:
+        -:   51:#if GNULIB_XALLOC
+        -:   52:
+        -:   53:void *xmalloc (size_t s)
+        -:   54:      _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_ALLOC_SIZE ((1));
+        -:   55:void *xzalloc (size_t s)
+        -:   56:      _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_ALLOC_SIZE ((1));
+        -:   57:void *xcalloc (size_t n, size_t s)
+        -:   58:      _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_ALLOC_SIZE ((1, 2));
+        -:   59:void *xrealloc (void *p, size_t s)
+        -:   60:      _GL_ATTRIBUTE_ALLOC_SIZE ((2));
+        -:   61:void *x2realloc (void *p, size_t *pn);
+        -:   62:void *xmemdup (void const *p, size_t s)
+        -:   63:      _GL_ATTRIBUTE_ALLOC_SIZE ((2));
+        -:   64:char *xstrdup (char const *str)
+        -:   65:      _GL_ATTRIBUTE_MALLOC;
+        -:   66:
+        -:   67:/* In the following macros, T must be an elementary or structure/union or
+        -:   68:   typedef'ed type, or a pointer to such a type.  To apply one of the
+        -:   69:   following macros to a function pointer or array type, you need to typedef
+        -:   70:   it first and use the typedef name.  */
+        -:   71:
+        -:   72:/* Allocate an object of type T dynamically, with error checking.  */
+        -:   73:/* extern t *XMALLOC (typename t); */
+        -:   74:# define XMALLOC(t) ((t *) xmalloc (sizeof (t)))
+        -:   75:
+        -:   76:/* Allocate memory for N elements of type T, with error checking.  */
+        -:   77:/* extern t *XNMALLOC (size_t n, typename t); */
+        -:   78:# define XNMALLOC(n, t) \
+        -:   79:    ((t *) (sizeof (t) == 1 ? xmalloc (n) : xnmalloc (n, sizeof (t))))
+        -:   80:
+        -:   81:/* Allocate an object of type T dynamically, with error checking,
+        -:   82:   and zero it.  */
+        -:   83:/* extern t *XZALLOC (typename t); */
+        -:   84:# define XZALLOC(t) ((t *) xzalloc (sizeof (t)))
+        -:   85:
+        -:   86:/* Allocate memory for N elements of type T, with error checking,
+        -:   87:   and zero it.  */
+        -:   88:/* extern t *XCALLOC (size_t n, typename t); */
+        -:   89:# define XCALLOC(n, t) \
+        -:   90:    ((t *) (sizeof (t) == 1 ? xzalloc (n) : xcalloc (n, sizeof (t))))
+        -:   91:
+        -:   92:
+        -:   93:/* Allocate an array of N objects, each with S bytes of memory,
+        -:   94:   dynamically, with error checking.  S must be nonzero.  */
+        -:   95:
+        -:   96:XALLOC_INLINE void *xnmalloc (size_t n, size_t s)
+        -:   97:                    _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_ALLOC_SIZE ((1, 2));
+        -:   98:XALLOC_INLINE void *
+function xnmalloc called 369 returned 100% blocks executed 75%
+      369:   99:xnmalloc (size_t n, size_t s)
+        -:  100:{
+      369:  101:  if (xalloc_oversized (n, s))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  102:    xalloc_die ();
+call    0 never executed
+      369:  103:  return xmalloc (n * s);
+call    0 returned 100%
+        -:  104:}
+        -:  105:
+        -:  106:/* Change the size of an allocated block of memory P to an array of N
+        -:  107:   objects each of S bytes, with error checking.  S must be nonzero.  */
+        -:  108:
+        -:  109:XALLOC_INLINE void *xnrealloc (void *p, size_t n, size_t s)
+        -:  110:                    _GL_ATTRIBUTE_ALLOC_SIZE ((2, 3));
+        -:  111:XALLOC_INLINE void *
+function xnrealloc called 134 returned 100% blocks executed 75%
+      134:  112:xnrealloc (void *p, size_t n, size_t s)
+        -:  113:{
+      134:  114:  if (xalloc_oversized (n, s))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  115:    xalloc_die ();
+call    0 never executed
+      134:  116:  return xrealloc (p, n * s);
+call    0 returned 100%
+        -:  117:}
+        -:  118:
+        -:  119:/* If P is null, allocate a block of at least *PN such objects;
+        -:  120:   otherwise, reallocate P so that it contains more than *PN objects
+        -:  121:   each of S bytes.  S must be nonzero.  Set *PN to the new number of
+        -:  122:   objects, and return the pointer to the new block.  *PN is never set
+        -:  123:   to zero, and the returned pointer is never null.
+        -:  124:
+        -:  125:   Repeated reallocations are guaranteed to make progress, either by
+        -:  126:   allocating an initial block with a nonzero size, or by allocating a
+        -:  127:   larger block.
+        -:  128:
+        -:  129:   In the following implementation, nonzero sizes are increased by a
+        -:  130:   factor of approximately 1.5 so that repeated reallocations have
+        -:  131:   O(N) overall cost rather than O(N**2) cost, but the
+        -:  132:   specification for this function does not guarantee that rate.
+        -:  133:
+        -:  134:   Here is an example of use:
+        -:  135:
+        -:  136:     int *p = NULL;
+        -:  137:     size_t used = 0;
+        -:  138:     size_t allocated = 0;
+        -:  139:
+        -:  140:     void
+        -:  141:     append_int (int value)
+        -:  142:       {
+        -:  143:         if (used == allocated)
+        -:  144:           p = x2nrealloc (p, &allocated, sizeof *p);
+        -:  145:         p[used++] = value;
+        -:  146:       }
+        -:  147:
+        -:  148:   This causes x2nrealloc to allocate a block of some nonzero size the
+        -:  149:   first time it is called.
+        -:  150:
+        -:  151:   To have finer-grained control over the initial size, set *PN to a
+        -:  152:   nonzero value before calling this function with P == NULL.  For
+        -:  153:   example:
+        -:  154:
+        -:  155:     int *p = NULL;
+        -:  156:     size_t used = 0;
+        -:  157:     size_t allocated = 0;
+        -:  158:     size_t allocated1 = 1000;
+        -:  159:
+        -:  160:     void
+        -:  161:     append_int (int value)
+        -:  162:       {
+        -:  163:         if (used == allocated)
+        -:  164:           {
+        -:  165:             p = x2nrealloc (p, &allocated1, sizeof *p);
+        -:  166:             allocated = allocated1;
+        -:  167:           }
+        -:  168:         p[used++] = value;
+        -:  169:       }
+        -:  170:
+        -:  171:   */
+        -:  172:
+        -:  173:XALLOC_INLINE void *
+function x2nrealloc called 57 returned 100% blocks executed 80%
+       57:  174:x2nrealloc (void *p, size_t *pn, size_t s)
+        -:  175:{
+       57:  176:  size_t n = *pn;
+        -:  177:
+       57:  178:  if (! p)
+branch  0 taken 53% (fallthrough)
+branch  1 taken 47%
+        -:  179:    {
+       30:  180:      if (! n)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  181:        {
+        -:  182:          /* The approximate size to use for initial small allocation
+        -:  183:             requests, when the invoking code specifies an old size of
+        -:  184:             zero.  This is the largest "small" request for the GNU C
+        -:  185:             library malloc.  */
+        -:  186:          enum { DEFAULT_MXFAST = 64 * sizeof (size_t) / 4 };
+        -:  187:
+       30:  188:          n = DEFAULT_MXFAST / s;
+       30:  189:          n += !n;
+        -:  190:        }
+       30:  191:      if (xalloc_oversized (n, s))
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  192:        xalloc_die ();
+call    0 never executed
+        -:  193:    }
+        -:  194:  else
+        -:  195:    {
+        -:  196:      /* Set N = floor (1.5 * N) + 1 so that progress is made even if N == 0.
+        -:  197:         Check for overflow, so that N * S stays in both ptrdiff_t and
+        -:  198:         size_t range.  The check may be slightly conservative, but an
+        -:  199:         exact check isn't worth the trouble.  */
+       27:  200:      if ((PTRDIFF_MAX < SIZE_MAX ? PTRDIFF_MAX : SIZE_MAX) / 3 * 2 / s
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  201:          <= n)
+    #####:  202:        xalloc_die ();
+call    0 never executed
+       27:  203:      n += n / 2 + 1;
+        -:  204:    }
+        -:  205:
+       57:  206:  *pn = n;
+       57:  207:  return xrealloc (p, n * s);
+call    0 returned 100%
+        -:  208:}
+        -:  209:
+        -:  210:/* Return a pointer to a new buffer of N bytes.  This is like xmalloc,
+        -:  211:   except it returns char *.  */
+        -:  212:
+        -:  213:XALLOC_INLINE char *xcharalloc (size_t n)
+        -:  214:                    _GL_ATTRIBUTE_MALLOC _GL_ATTRIBUTE_ALLOC_SIZE ((1));
+        -:  215:XALLOC_INLINE char *
+function xcharalloc called 0 returned 0% blocks executed 0%
+    #####:  216:xcharalloc (size_t n)
+        -:  217:{
+    #####:  218:  return XNMALLOC (n, char);
+call    0 never executed
+        -:  219:}
+        -:  220:
+        -:  221:#endif /* GNULIB_XALLOC */
+        -:  222:
+        -:  223:
+        -:  224:#ifdef __cplusplus
+        -:  225:}
+        -:  226:#endif
+        -:  227:
+        -:  228:
+        -:  229:#if GNULIB_XALLOC && defined __cplusplus
+        -:  230:
+        -:  231:/* C++ does not allow conversions from void * to other pointer types
+        -:  232:   without a cast.  Use templates to work around the problem when
+        -:  233:   possible.  */
+        -:  234:
+        -:  235:template <typename T> inline T *
+        -:  236:xrealloc (T *p, size_t s)
+        -:  237:{
+        -:  238:  return (T *) xrealloc ((void *) p, s);
+        -:  239:}
+        -:  240:
+        -:  241:template <typename T> inline T *
+        -:  242:xnrealloc (T *p, size_t n, size_t s)
+        -:  243:{
+        -:  244:  return (T *) xnrealloc ((void *) p, n, s);
+        -:  245:}
+        -:  246:
+        -:  247:template <typename T> inline T *
+        -:  248:x2realloc (T *p, size_t *pn)
+        -:  249:{
+        -:  250:  return (T *) x2realloc ((void *) p, pn);
+        -:  251:}
+        -:  252:
+        -:  253:template <typename T> inline T *
+        -:  254:x2nrealloc (T *p, size_t *pn, size_t s)
+        -:  255:{
+        -:  256:  return (T *) x2nrealloc ((void *) p, pn, s);
+        -:  257:}
+        -:  258:
+        -:  259:template <typename T> inline T *
+        -:  260:xmemdup (T const *p, size_t s)
+        -:  261:{
+        -:  262:  return (T *) xmemdup ((void const *) p, s);
+        -:  263:}
+        -:  264:
+        -:  265:#endif /* GNULIB_XALLOC && C++ */
+        -:  266:
+        -:  267:
+        -:  268:_GL_INLINE_HEADER_END
+        -:  269:
+        -:  270:#endif /* !XALLOC_H_ */

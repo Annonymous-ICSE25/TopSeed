@@ -1,0 +1,312 @@
+        -:    0:Source:../../lib/version-etc.c
+        -:    0:Programs:50
+        -:    1:/* Print --version and bug-reporting information in a consistent format.
+        -:    2:   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:/* Written by Jim Meyering. */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:
+        -:   21:/* Specification.  */
+        -:   22:#include "version-etc.h"
+        -:   23:
+        -:   24:#include <stdarg.h>
+        -:   25:#include <stdio.h>
+        -:   26:
+        -:   27:#if USE_UNLOCKED_IO
+        -:   28:# include "unlocked-io.h"
+        -:   29:#endif
+        -:   30:
+        -:   31:#include "gettext.h"
+        -:   32:#define _(msgid) gettext (msgid)
+        -:   33:
+        -:   34:/* If you use AM_INIT_AUTOMAKE's no-define option,
+        -:   35:   PACKAGE is not defined.  Use PACKAGE_TARNAME instead.  */
+        -:   36:#if ! defined PACKAGE && defined PACKAGE_TARNAME
+        -:   37:# define PACKAGE PACKAGE_TARNAME
+        -:   38:#endif
+        -:   39:
+        -:   40:enum { COPYRIGHT_YEAR = 2020 };
+        -:   41:
+        -:   42:/* The three functions below display the --version information the
+        -:   43:   standard way.
+        -:   44:
+        -:   45:   If COMMAND_NAME is NULL, the PACKAGE is assumed to be the name of
+        -:   46:   the program.  The formats are therefore:
+        -:   47:
+        -:   48:   PACKAGE VERSION
+        -:   49:
+        -:   50:   or
+        -:   51:
+        -:   52:   COMMAND_NAME (PACKAGE) VERSION.
+        -:   53:
+        -:   54:   The functions differ in the way they are passed author names. */
+        -:   55:
+        -:   56:/* Display the --version information the standard way.
+        -:   57:
+        -:   58:   Author names are given in the array AUTHORS. N_AUTHORS is the
+        -:   59:   number of elements in the array. */
+        -:   60:void
+function version_etc_arn called 0 returned 0% blocks executed 0%
+    #####:   61:version_etc_arn (FILE *stream,
+        -:   62:                 const char *command_name, const char *package,
+        -:   63:                 const char *version,
+        -:   64:                 const char * const * authors, size_t n_authors)
+        -:   65:{
+    #####:   66:  if (command_name)
+branch  0 never executed
+branch  1 never executed
+    #####:   67:    fprintf (stream, "%s (%s) %s\n", command_name, package, version);
+call    0 never executed
+        -:   68:  else
+    #####:   69:    fprintf (stream, "%s %s\n", package, version);
+call    0 never executed
+        -:   70:
+        -:   71:#ifdef PACKAGE_PACKAGER
+        -:   72:# ifdef PACKAGE_PACKAGER_VERSION
+        -:   73:  fprintf (stream, _("Packaged by %s (%s)\n"), PACKAGE_PACKAGER,
+        -:   74:           PACKAGE_PACKAGER_VERSION);
+        -:   75:# else
+        -:   76:  fprintf (stream, _("Packaged by %s\n"), PACKAGE_PACKAGER);
+        -:   77:# endif
+        -:   78:#endif
+        -:   79:
+        -:   80:  /* TRANSLATORS: Translate "(C)" to the copyright symbol
+        -:   81:     (C-in-a-circle), if this symbol is available in the user's
+        -:   82:     locale.  Otherwise, do not translate "(C)"; leave it as-is.  */
+    #####:   83:  fprintf (stream, version_etc_copyright, _("(C)"), COPYRIGHT_YEAR);
+call    0 never executed
+        -:   84:
+    #####:   85:  fputs ("\n", stream);
+call    0 never executed
+        -:   86:
+        -:   87:  /* TRANSLATORS: The %s placeholder is the web address of the GPL license.  */
+    #####:   88:  fprintf (stream, _("\
+call    0 never executed
+        -:   89:License GPLv3+: GNU GPL version 3 or later <%s>.\n\
+        -:   90:This is free software: you are free to change and redistribute it.\n\
+        -:   91:There is NO WARRANTY, to the extent permitted by law.\n\
+        -:   92:"),
+        -:   93:           "https://gnu.org/licenses/gpl.html");
+        -:   94:
+    #####:   95:  fputs ("\n", stream);
+call    0 never executed
+        -:   96:
+    #####:   97:  switch (n_authors)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+branch 10 never executed
+        -:   98:    {
+    #####:   99:    case 0:
+        -:  100:      /* No authors are given.  The caller should output authorship
+        -:  101:         info after calling this function.  */
+    #####:  102:      break;
+    #####:  103:    case 1:
+        -:  104:      /* TRANSLATORS: %s denotes an author name.  */
+    #####:  105:      fprintf (stream, _("Written by %s.\n"), authors[0]);
+call    0 never executed
+    #####:  106:      break;
+    #####:  107:    case 2:
+        -:  108:      /* TRANSLATORS: Each %s denotes an author name.  */
+    #####:  109:      fprintf (stream, _("Written by %s and %s.\n"), authors[0], authors[1]);
+call    0 never executed
+    #####:  110:      break;
+    #####:  111:    case 3:
+        -:  112:      /* TRANSLATORS: Each %s denotes an author name.  */
+    #####:  113:      fprintf (stream, _("Written by %s, %s, and %s.\n"),
+call    0 never executed
+    #####:  114:               authors[0], authors[1], authors[2]);
+    #####:  115:      break;
+    #####:  116:    case 4:
+        -:  117:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  118:         You can use line breaks, estimating that each author name occupies
+        -:  119:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  120:      fprintf (stream, _("Written by %s, %s, %s,\nand %s.\n"),
+call    0 never executed
+    #####:  121:               authors[0], authors[1], authors[2], authors[3]);
+    #####:  122:      break;
+    #####:  123:    case 5:
+        -:  124:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  125:         You can use line breaks, estimating that each author name occupies
+        -:  126:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  127:      fprintf (stream, _("Written by %s, %s, %s,\n%s, and %s.\n"),
+call    0 never executed
+    #####:  128:               authors[0], authors[1], authors[2], authors[3], authors[4]);
+    #####:  129:      break;
+    #####:  130:    case 6:
+        -:  131:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  132:         You can use line breaks, estimating that each author name occupies
+        -:  133:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  134:      fprintf (stream, _("Written by %s, %s, %s,\n%s, %s, and %s.\n"),
+call    0 never executed
+    #####:  135:               authors[0], authors[1], authors[2], authors[3], authors[4],
+    #####:  136:               authors[5]);
+    #####:  137:      break;
+    #####:  138:    case 7:
+        -:  139:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  140:         You can use line breaks, estimating that each author name occupies
+        -:  141:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  142:      fprintf (stream, _("Written by %s, %s, %s,\n%s, %s, %s, and %s.\n"),
+call    0 never executed
+    #####:  143:               authors[0], authors[1], authors[2], authors[3], authors[4],
+    #####:  144:               authors[5], authors[6]);
+    #####:  145:      break;
+    #####:  146:    case 8:
+        -:  147:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  148:         You can use line breaks, estimating that each author name occupies
+        -:  149:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  150:      fprintf (stream, _("\
+call    0 never executed
+        -:  151:Written by %s, %s, %s,\n%s, %s, %s, %s,\nand %s.\n"),
+    #####:  152:                authors[0], authors[1], authors[2], authors[3], authors[4],
+    #####:  153:                authors[5], authors[6], authors[7]);
+    #####:  154:      break;
+    #####:  155:    case 9:
+        -:  156:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  157:         You can use line breaks, estimating that each author name occupies
+        -:  158:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  159:      fprintf (stream, _("\
+call    0 never executed
+        -:  160:Written by %s, %s, %s,\n%s, %s, %s, %s,\n%s, and %s.\n"),
+    #####:  161:               authors[0], authors[1], authors[2], authors[3], authors[4],
+    #####:  162:               authors[5], authors[6], authors[7], authors[8]);
+    #####:  163:      break;
+    #####:  164:    default:
+        -:  165:      /* 10 or more authors.  Use an abbreviation, since the human reader
+        -:  166:         will probably not want to read the entire list anyway.  */
+        -:  167:      /* TRANSLATORS: Each %s denotes an author name.
+        -:  168:         You can use line breaks, estimating that each author name occupies
+        -:  169:         ca. 16 screen columns and that a screen line has ca. 80 columns.  */
+    #####:  170:      fprintf (stream, _("\
+call    0 never executed
+        -:  171:Written by %s, %s, %s,\n%s, %s, %s, %s,\n%s, %s, and others.\n"),
+    #####:  172:                authors[0], authors[1], authors[2], authors[3], authors[4],
+    #####:  173:                authors[5], authors[6], authors[7], authors[8]);
+    #####:  174:      break;
+        -:  175:    }
+    #####:  176:}
+        -:  177:
+        -:  178:/* Display the --version information the standard way.  See the initial
+        -:  179:   comment to this module, for more information.
+        -:  180:
+        -:  181:   Author names are given in the NULL-terminated array AUTHORS. */
+        -:  182:void
+function version_etc_ar called 0 returned 0% blocks executed 0%
+    #####:  183:version_etc_ar (FILE *stream,
+        -:  184:                const char *command_name, const char *package,
+        -:  185:                const char *version, const char * const * authors)
+        -:  186:{
+        -:  187:  size_t n_authors;
+        -:  188:
+    #####:  189:  for (n_authors = 0; authors[n_authors]; n_authors++)
+branch  0 never executed
+branch  1 never executed
+        -:  190:    ;
+    #####:  191:  version_etc_arn (stream, command_name, package, version, authors, n_authors);
+call    0 never executed
+    #####:  192:}
+        -:  193:
+        -:  194:/* Display the --version information the standard way.  See the initial
+        -:  195:   comment to this module, for more information.
+        -:  196:
+        -:  197:   Author names are given in the NULL-terminated va_list AUTHORS. */
+        -:  198:void
+function version_etc_va called 0 returned 0% blocks executed 0%
+    #####:  199:version_etc_va (FILE *stream,
+        -:  200:                const char *command_name, const char *package,
+        -:  201:                const char *version, va_list authors)
+        -:  202:{
+        -:  203:  size_t n_authors;
+        -:  204:  const char *authtab[10];
+        -:  205:
+    #####:  206:  for (n_authors = 0;
+branch  0 never executed
+branch  1 never executed
+        -:  207:       n_authors < 10
+    #####:  208:         && (authtab[n_authors] = va_arg (authors, const char *)) != NULL;
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  209:       n_authors++)
+        -:  210:    ;
+    #####:  211:  version_etc_arn (stream, command_name, package, version,
+call    0 never executed
+        -:  212:                   authtab, n_authors);
+    #####:  213:}
+        -:  214:
+        -:  215:
+        -:  216:/* Display the --version information the standard way.
+        -:  217:
+        -:  218:   If COMMAND_NAME is NULL, the PACKAGE is assumed to be the name of
+        -:  219:   the program.  The formats are therefore:
+        -:  220:
+        -:  221:   PACKAGE VERSION
+        -:  222:
+        -:  223:   or
+        -:  224:
+        -:  225:   COMMAND_NAME (PACKAGE) VERSION.
+        -:  226:
+        -:  227:   The authors names are passed as separate arguments, with an additional
+        -:  228:   NULL argument at the end.  */
+        -:  229:void
+function version_etc called 0 returned 0% blocks executed 0%
+    #####:  230:version_etc (FILE *stream,
+        -:  231:             const char *command_name, const char *package,
+        -:  232:             const char *version, /* const char *author1, ...*/ ...)
+        -:  233:{
+        -:  234:  va_list authors;
+        -:  235:
+    #####:  236:  va_start (authors, version);
+    #####:  237:  version_etc_va (stream, command_name, package, version, authors);
+call    0 never executed
+    #####:  238:  va_end (authors);
+    #####:  239:}
+        -:  240:
+        -:  241:void
+function emit_bug_reporting_address called 0 returned 0% blocks executed 0%
+    #####:  242:emit_bug_reporting_address (void)
+        -:  243:{
+    #####:  244:  fputs ("\n", stdout);
+call    0 never executed
+        -:  245:  /* TRANSLATORS: The placeholder indicates the bug-reporting address
+        -:  246:     for this package.  Please add _another line_ saying
+        -:  247:     "Report translation bugs to <...>\n" with the address for translation
+        -:  248:     bugs (typically your translation team's web or email address).  */
+    #####:  249:  printf (_("Report bugs to: %s\n"), PACKAGE_BUGREPORT);
+call    0 never executed
+        -:  250:#ifdef PACKAGE_PACKAGER_BUG_REPORTS
+        -:  251:  printf (_("Report %s bugs to: %s\n"), PACKAGE_PACKAGER,
+        -:  252:          PACKAGE_PACKAGER_BUG_REPORTS);
+        -:  253:#endif
+        -:  254:#ifdef PACKAGE_URL
+    #####:  255:  printf (_("%s home page: <%s>\n"), PACKAGE_NAME, PACKAGE_URL);
+call    0 never executed
+        -:  256:#else
+        -:  257:  printf (_("%s home page: <%s>\n"),
+        -:  258:          PACKAGE_NAME, "https://www.gnu.org/software/" PACKAGE "/");
+        -:  259:#endif
+    #####:  260:  printf (_("General help using GNU software: <%s>\n"),
+call    0 never executed
+        -:  261:          "https://www.gnu.org/gethelp/");
+    #####:  262:}

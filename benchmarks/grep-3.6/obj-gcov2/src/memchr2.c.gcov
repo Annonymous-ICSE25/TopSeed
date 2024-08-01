@@ -1,0 +1,192 @@
+        -:    0:Source:../../lib/memchr2.c
+        -:    0:Programs:50
+        -:    1:/* Copyright (C) 1991, 1993, 1996-1997, 1999-2000, 2003-2004, 2006, 2008-2020
+        -:    2:   Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   Based on strlen implementation by Torbjorn Granlund (tege@sics.se),
+        -:    5:   with help from Dan Sahlin (dan@sics.se) and
+        -:    6:   commentary by Jim Blandy (jimb@ai.mit.edu);
+        -:    7:   adaptation to memchr suggested by Dick Karpinski (dick@cca.ucsf.edu),
+        -:    8:   and implemented in glibc by Roland McGrath (roland@ai.mit.edu).
+        -:    9:   Extension to memchr2 implemented by Eric Blake (ebb9@byu.net).
+        -:   10:
+        -:   11:This program is free software: you can redistribute it and/or modify it
+        -:   12:under the terms of the GNU General Public License as published by the
+        -:   13:Free Software Foundation; either version 3 of the License, or any
+        -:   14:later version.
+        -:   15:
+        -:   16:This program is distributed in the hope that it will be useful,
+        -:   17:but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   18:MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   19:GNU General Public License for more details.
+        -:   20:
+        -:   21:You should have received a copy of the GNU General Public License
+        -:   22:along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   23:
+        -:   24:#include <config.h>
+        -:   25:
+        -:   26:#include "memchr2.h"
+        -:   27:
+        -:   28:#include <limits.h>
+        -:   29:#include <stdint.h>
+        -:   30:#include <string.h>
+        -:   31:
+        -:   32:/* Return the first address of either C1 or C2 (treated as unsigned
+        -:   33:   char) that occurs within N bytes of the memory region S.  If
+        -:   34:   neither byte appears, return NULL.  */
+        -:   35:void *
+function memchr2 called 0 returned 0% blocks executed 0%
+    #####:   36:memchr2 (void const *s, int c1_in, int c2_in, size_t n)
+        -:   37:{
+        -:   38:  /* On 32-bit hardware, choosing longword to be a 32-bit unsigned
+        -:   39:     long instead of a 64-bit uintmax_t tends to give better
+        -:   40:     performance.  On 64-bit hardware, unsigned long is generally 64
+        -:   41:     bits already.  Change this typedef to experiment with
+        -:   42:     performance.  */
+        -:   43:  typedef unsigned long int longword;
+        -:   44:
+        -:   45:  const unsigned char *char_ptr;
+        -:   46:  void const *void_ptr;
+        -:   47:  const longword *longword_ptr;
+        -:   48:  longword repeated_one;
+        -:   49:  longword repeated_c1;
+        -:   50:  longword repeated_c2;
+        -:   51:  unsigned char c1;
+        -:   52:  unsigned char c2;
+        -:   53:
+    #####:   54:  c1 = (unsigned char) c1_in;
+    #####:   55:  c2 = (unsigned char) c2_in;
+        -:   56:
+    #####:   57:  if (c1 == c2)
+branch  0 never executed
+branch  1 never executed
+    #####:   58:    return memchr (s, c1, n);
+        -:   59:
+        -:   60:  /* Handle the first few bytes by reading one byte at a time.
+        -:   61:     Do this until VOID_PTR is aligned on a longword boundary.  */
+    #####:   62:  for (void_ptr = s;
+branch  0 never executed
+branch  1 never executed
+    #####:   63:       n > 0 && (uintptr_t) void_ptr % sizeof (longword) != 0;
+branch  0 never executed
+branch  1 never executed
+    #####:   64:       --n)
+        -:   65:    {
+    #####:   66:      char_ptr = void_ptr;
+    #####:   67:      if (*char_ptr == c1 || *char_ptr == c2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:   68:        return (void *) void_ptr;
+    #####:   69:      void_ptr = char_ptr + 1;
+        -:   70:    }
+        -:   71:
+    #####:   72:  longword_ptr = void_ptr;
+        -:   73:
+        -:   74:  /* All these elucidatory comments refer to 4-byte longwords,
+        -:   75:     but the theory applies equally well to any size longwords.  */
+        -:   76:
+        -:   77:  /* Compute auxiliary longword values:
+        -:   78:     repeated_one is a value which has a 1 in every byte.
+        -:   79:     repeated_c1 has c1 in every byte.
+        -:   80:     repeated_c2 has c2 in every byte.  */
+    #####:   81:  repeated_one = 0x01010101;
+    #####:   82:  repeated_c1 = c1 | (c1 << 8);
+    #####:   83:  repeated_c2 = c2 | (c2 << 8);
+    #####:   84:  repeated_c1 |= repeated_c1 << 16;
+    #####:   85:  repeated_c2 |= repeated_c2 << 16;
+        -:   86:  if (0xffffffffU < (longword) -1)
+        -:   87:    {
+    #####:   88:      repeated_one |= repeated_one << 31 << 1;
+    #####:   89:      repeated_c1 |= repeated_c1 << 31 << 1;
+    #####:   90:      repeated_c2 |= repeated_c2 << 31 << 1;
+        -:   91:      if (8 < sizeof (longword))
+        -:   92:        {
+        -:   93:          size_t i;
+        -:   94:
+        -:   95:          for (i = 64; i < sizeof (longword) * 8; i *= 2)
+        -:   96:            {
+        -:   97:              repeated_one |= repeated_one << i;
+        -:   98:              repeated_c1 |= repeated_c1 << i;
+        -:   99:              repeated_c2 |= repeated_c2 << i;
+        -:  100:            }
+        -:  101:        }
+        -:  102:    }
+        -:  103:
+        -:  104:  /* Instead of the traditional loop which tests each byte, we will test a
+        -:  105:     longword at a time.  The tricky part is testing if *any of the four*
+        -:  106:     bytes in the longword in question are equal to c1 or c2.  We first use
+        -:  107:     an xor with repeated_c1 and repeated_c2, respectively.  This reduces
+        -:  108:     the task to testing whether *any of the four* bytes in longword1 or
+        -:  109:     longword2 is zero.
+        -:  110:
+        -:  111:     Let's consider longword1.  We compute tmp1 =
+        -:  112:       ((longword1 - repeated_one) & ~longword1) & (repeated_one << 7).
+        -:  113:     That is, we perform the following operations:
+        -:  114:       1. Subtract repeated_one.
+        -:  115:       2. & ~longword1.
+        -:  116:       3. & a mask consisting of 0x80 in every byte.
+        -:  117:     Consider what happens in each byte:
+        -:  118:       - If a byte of longword1 is zero, step 1 and 2 transform it into 0xff,
+        -:  119:         and step 3 transforms it into 0x80.  A carry can also be propagated
+        -:  120:         to more significant bytes.
+        -:  121:       - If a byte of longword1 is nonzero, let its lowest 1 bit be at
+        -:  122:         position k (0 <= k <= 7); so the lowest k bits are 0.  After step 1,
+        -:  123:         the byte ends in a single bit of value 0 and k bits of value 1.
+        -:  124:         After step 2, the result is just k bits of value 1: 2^k - 1.  After
+        -:  125:         step 3, the result is 0.  And no carry is produced.
+        -:  126:     So, if longword1 has only non-zero bytes, tmp1 is zero.
+        -:  127:     Whereas if longword1 has a zero byte, call j the position of the least
+        -:  128:     significant zero byte.  Then the result has a zero at positions 0, ...,
+        -:  129:     j-1 and a 0x80 at position j.  We cannot predict the result at the more
+        -:  130:     significant bytes (positions j+1..3), but it does not matter since we
+        -:  131:     already have a non-zero bit at position 8*j+7.
+        -:  132:
+        -:  133:     Similarly, we compute tmp2 =
+        -:  134:       ((longword2 - repeated_one) & ~longword2) & (repeated_one << 7).
+        -:  135:
+        -:  136:     The test whether any byte in longword1 or longword2 is zero is equivalent
+        -:  137:     to testing whether tmp1 is nonzero or tmp2 is nonzero.  We can combine
+        -:  138:     this into a single test, whether (tmp1 | tmp2) is nonzero.  */
+        -:  139:
+    #####:  140:  while (n >= sizeof (longword))
+branch  0 never executed
+branch  1 never executed
+        -:  141:    {
+    #####:  142:      longword longword1 = *longword_ptr ^ repeated_c1;
+    #####:  143:      longword longword2 = *longword_ptr ^ repeated_c2;
+        -:  144:
+    #####:  145:      if (((((longword1 - repeated_one) & ~longword1)
+branch  0 never executed
+branch  1 never executed
+    #####:  146:            | ((longword2 - repeated_one) & ~longword2))
+    #####:  147:           & (repeated_one << 7)) != 0)
+    #####:  148:        break;
+    #####:  149:      longword_ptr++;
+    #####:  150:      n -= sizeof (longword);
+        -:  151:    }
+        -:  152:
+    #####:  153:  char_ptr = (const unsigned char *) longword_ptr;
+        -:  154:
+        -:  155:  /* At this point, we know that either n < sizeof (longword), or one of the
+        -:  156:     sizeof (longword) bytes starting at char_ptr is == c1 or == c2.  On
+        -:  157:     little-endian machines, we could determine the first such byte without
+        -:  158:     any further memory accesses, just by looking at the (tmp1 | tmp2) result
+        -:  159:     from the last loop iteration.  But this does not work on big-endian
+        -:  160:     machines.  Choose code that works in both cases.  */
+        -:  161:
+    #####:  162:  for (; n > 0; --n, ++char_ptr)
+branch  0 never executed
+branch  1 never executed
+        -:  163:    {
+    #####:  164:      if (*char_ptr == c1 || *char_ptr == c2)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####:  165:        return (void *) char_ptr;
+        -:  166:    }
+        -:  167:
+    #####:  168:  return NULL;
+        -:  169:}

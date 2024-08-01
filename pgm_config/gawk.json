@@ -1,0 +1,9 @@
+{
+"pgm_name": "gawk",
+"pgm_dir": "./benchmarks/gawk-5.1.0/obj-llvm/",
+"exec_dir": "",
+"gcov_dir": "",
+"gcov_path": "./benchmarks/gawk-5.1.0/obj-gcov",
+"gcov_file": "*/*.gcov *.gcov",
+"gcda_file": "**/*.gcda *.gcda"
+}

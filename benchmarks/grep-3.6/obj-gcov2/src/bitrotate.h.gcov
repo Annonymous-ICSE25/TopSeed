@@ -1,0 +1,150 @@
+        -:    0:Source:../../lib/bitrotate.h
+        -:    0:Programs:50
+        -:    1:/* bitrotate.h - Rotate bits in integers
+        -:    2:   Copyright (C) 2008-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:/* Written by Simon Josefsson <simon@josefsson.org>, 2008. */
+        -:   18:
+        -:   19:#ifndef _GL_BITROTATE_H
+        -:   20:#define _GL_BITROTATE_H
+        -:   21:
+        -:   22:#include <limits.h>
+        -:   23:#include <stdint.h>
+        -:   24:#include <sys/types.h>
+        -:   25:
+        -:   26:#ifndef _GL_INLINE_HEADER_BEGIN
+        -:   27: #error "Please include config.h first."
+        -:   28:#endif
+        -:   29:_GL_INLINE_HEADER_BEGIN
+        -:   30:#ifndef BITROTATE_INLINE
+        -:   31:# define BITROTATE_INLINE _GL_INLINE
+        -:   32:#endif
+        -:   33:
+        -:   34:#ifdef UINT64_MAX
+        -:   35:/* Given an unsigned 64-bit argument X, return the value corresponding
+        -:   36:   to rotating the bits N steps to the left.  N must be between 1 and
+        -:   37:   63 inclusive. */
+        -:   38:BITROTATE_INLINE uint64_t
+function rotl64 called 0 returned 0% blocks executed 0%
+    #####:   39:rotl64 (uint64_t x, int n)
+        -:   40:{
+    #####:   41:  return ((x << n) | (x >> (64 - n))) & UINT64_MAX;
+        -:   42:}
+        -:   43:
+        -:   44:/* Given an unsigned 64-bit argument X, return the value corresponding
+        -:   45:   to rotating the bits N steps to the right.  N must be between 1 to
+        -:   46:   63 inclusive.*/
+        -:   47:BITROTATE_INLINE uint64_t
+function rotr64 called 0 returned 0% blocks executed 0%
+    #####:   48:rotr64 (uint64_t x, int n)
+        -:   49:{
+    #####:   50:  return ((x >> n) | (x << (64 - n))) & UINT64_MAX;
+        -:   51:}
+        -:   52:#endif
+        -:   53:
+        -:   54:/* Given an unsigned 32-bit argument X, return the value corresponding
+        -:   55:   to rotating the bits N steps to the left.  N must be between 1 and
+        -:   56:   31 inclusive. */
+        -:   57:BITROTATE_INLINE uint32_t
+function rotl32 called 0 returned 0% blocks executed 0%
+    #####:   58:rotl32 (uint32_t x, int n)
+        -:   59:{
+    #####:   60:  return ((x << n) | (x >> (32 - n))) & UINT32_MAX;
+        -:   61:}
+        -:   62:
+        -:   63:/* Given an unsigned 32-bit argument X, return the value corresponding
+        -:   64:   to rotating the bits N steps to the right.  N must be between 1 to
+        -:   65:   31 inclusive.*/
+        -:   66:BITROTATE_INLINE uint32_t
+function rotr32 called 0 returned 0% blocks executed 0%
+    #####:   67:rotr32 (uint32_t x, int n)
+        -:   68:{
+    #####:   69:  return ((x >> n) | (x << (32 - n))) & UINT32_MAX;
+        -:   70:}
+        -:   71:
+        -:   72:/* Given a size_t argument X, return the value corresponding
+        -:   73:   to rotating the bits N steps to the left.  N must be between 1 and
+        -:   74:   (CHAR_BIT * sizeof (size_t) - 1) inclusive.  */
+        -:   75:BITROTATE_INLINE size_t
+function rotl_sz called 0 returned 0% blocks executed 0%
+    #####:   76:rotl_sz (size_t x, int n)
+        -:   77:{
+    #####:   78:  return ((x << n) | (x >> ((CHAR_BIT * sizeof x) - n))) & SIZE_MAX;
+        -:   79:}
+        -:   80:
+        -:   81:/* Given a size_t argument X, return the value corresponding
+        -:   82:   to rotating the bits N steps to the right.  N must be between 1 to
+        -:   83:   (CHAR_BIT * sizeof (size_t) - 1) inclusive.  */
+        -:   84:BITROTATE_INLINE size_t
+function rotr_sz called 0 returned 0% blocks executed 0%
+    #####:   85:rotr_sz (size_t x, int n)
+        -:   86:{
+    #####:   87:  return ((x >> n) | (x << ((CHAR_BIT * sizeof x) - n))) & SIZE_MAX;
+        -:   88:}
+        -:   89:
+        -:   90:/* Given an unsigned 16-bit argument X, return the value corresponding
+        -:   91:   to rotating the bits N steps to the left.  N must be between 1 to
+        -:   92:   15 inclusive, but on most relevant targets N can also be 0 and 16
+        -:   93:   because 'int' is at least 32 bits and the arguments must widen
+        -:   94:   before shifting. */
+        -:   95:BITROTATE_INLINE uint16_t
+function rotl16 called 0 returned 0% blocks executed 0%
+    #####:   96:rotl16 (uint16_t x, int n)
+        -:   97:{
+    #####:   98:  return (((unsigned int) x << n) | ((unsigned int) x >> (16 - n)))
+    #####:   99:         & UINT16_MAX;
+        -:  100:}
+        -:  101:
+        -:  102:/* Given an unsigned 16-bit argument X, return the value corresponding
+        -:  103:   to rotating the bits N steps to the right.  N must be in 1 to 15
+        -:  104:   inclusive, but on most relevant targets N can also be 0 and 16
+        -:  105:   because 'int' is at least 32 bits and the arguments must widen
+        -:  106:   before shifting. */
+        -:  107:BITROTATE_INLINE uint16_t
+function rotr16 called 0 returned 0% blocks executed 0%
+    #####:  108:rotr16 (uint16_t x, int n)
+        -:  109:{
+    #####:  110:  return (((unsigned int) x >> n) | ((unsigned int) x << (16 - n)))
+    #####:  111:         & UINT16_MAX;
+        -:  112:}
+        -:  113:
+        -:  114:/* Given an unsigned 8-bit argument X, return the value corresponding
+        -:  115:   to rotating the bits N steps to the left.  N must be between 1 to 7
+        -:  116:   inclusive, but on most relevant targets N can also be 0 and 8
+        -:  117:   because 'int' is at least 32 bits and the arguments must widen
+        -:  118:   before shifting. */
+        -:  119:BITROTATE_INLINE uint8_t
+function rotl8 called 0 returned 0% blocks executed 0%
+    #####:  120:rotl8 (uint8_t x, int n)
+        -:  121:{
+    #####:  122:  return (((unsigned int) x << n) | ((unsigned int) x >> (8 - n))) & UINT8_MAX;
+        -:  123:}
+        -:  124:
+        -:  125:/* Given an unsigned 8-bit argument X, return the value corresponding
+        -:  126:   to rotating the bits N steps to the right.  N must be in 1 to 7
+        -:  127:   inclusive, but on most relevant targets N can also be 0 and 8
+        -:  128:   because 'int' is at least 32 bits and the arguments must widen
+        -:  129:   before shifting. */
+        -:  130:BITROTATE_INLINE uint8_t
+function rotr8 called 0 returned 0% blocks executed 0%
+    #####:  131:rotr8 (uint8_t x, int n)
+        -:  132:{
+    #####:  133:  return (((unsigned int) x >> n) | ((unsigned int) x << (8 - n))) & UINT8_MAX;
+        -:  134:}
+        -:  135:
+        -:  136:_GL_INLINE_HEADER_END
+        -:  137:
+        -:  138:#endif /* _GL_BITROTATE_H */

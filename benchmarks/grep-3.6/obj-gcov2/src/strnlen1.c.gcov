@@ -1,0 +1,40 @@
+        -:    0:Source:../../lib/strnlen1.c
+        -:    0:Programs:50
+        -:    1:/* Find the length of STRING + 1, but scan at most MAXLEN bytes.
+        -:    2:   Copyright (C) 2005-2006, 2009-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:#include <config.h>
+        -:   18:
+        -:   19:/* Specification.  */
+        -:   20:#include "strnlen1.h"
+        -:   21:
+        -:   22:#include <string.h>
+        -:   23:
+        -:   24:/* Find the length of STRING + 1, but scan at most MAXLEN bytes.
+        -:   25:   If no '\0' terminator is found in that many characters, return MAXLEN.  */
+        -:   26:/* This is the same as strnlen (string, maxlen - 1) + 1.  */
+        -:   27:size_t
+function strnlen1 called 0 returned 0% blocks executed 0%
+    #####:   28:strnlen1 (const char *string, size_t maxlen)
+        -:   29:{
+    #####:   30:  const char *end = (const char *) memchr (string, '\0', maxlen);
+    #####:   31:  if (end != NULL)
+branch  0 never executed
+branch  1 never executed
+    #####:   32:    return end - string + 1;
+        -:   33:  else
+    #####:   34:    return maxlen;
+        -:   35:}

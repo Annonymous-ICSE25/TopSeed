@@ -1,0 +1,3079 @@
+        -:    0:Source:../../src/hd-data1.c
+        -:    0:Programs:20
+        -:    1:/*!
+        -:    2:*  \file hd-data1.c
+        -:    3:*  \brief All top 20 countries data which is composed into the
+        -:    4:*               eternal holiday list.
+        -:    5:*/
+        -:    6:/*
+        -:    7:*  Copyright (c) 1994, 95, 96, 1997, 2000 Thomas Esken
+        -:    8:*  Copyright (c) 2010, 2011, 2013 Free Software Foundation, Inc.
+        -:    9:*
+        -:   10:*  This software doesn't claim completeness, correctness or usability.
+        -:   11:*  On principle I will not be liable for ANY damages or losses (implicit
+        -:   12:*  or explicit), which result from using or handling my software.
+        -:   13:*  If you use this software, you agree without any exception to this
+        -:   14:*  agreement, which binds you LEGALLY !!
+        -:   15:*
+        -:   16:*  This program is free software; you can redistribute it and/or modify
+        -:   17:*  it under the terms of the `GNU General Public License' as published by
+        -:   18:*  the `Free Software Foundation'; either version 3, or (at your option)
+        -:   19:*  any later version.
+        -:   20:*
+        -:   21:*  You should have received a copy of the `GNU General Public License'
+        -:   22:*  along with this program; if not, write to the:
+        -:   23:*
+        -:   24:*/
+        -:   25:
+        -:   26:
+        -:   27:/*
+        -:   28:*  Include header files.
+        -:   29:*/
+        -:   30:#include "tailor.h"
+        -:   31:#include "common.h"
+        -:   32:#include "globals.h"
+        -:   33:#include "hd-astro.h"
+        -:   34:#include "hd-defs.h"
+        -:   35:#include "hd-data.h"
+        -:   36:#include "hd-use.h"
+        -:   37:#include "utils.h"
+        -:   38:#include "hd-data1.h"
+        -:   39:
+        -:   40:
+        -:   41:
+        -:   42:/*
+        -:   43:*  The top 20 countries specific holiday management functions.
+        -:   44:*/
+        -:   45:void
+function au_hdy called 0 returned 0% blocks executed 0%
+    #####:   46:au_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:   47:     Bool *init_data;
+        -:   48:     const Bool detected;
+        -:   49:     int easter;
+        -:   50:     const int year;
+        -:   51:     int *hd_elems;
+        -:   52:     const int fday;
+        -:   53:     const int count;
+        -:   54:/*!
+        -:   55:   Manages all specific holidays celebrated in Australia/Australia-wide.
+        -:   56:*/
+        -:   57:{
+        -:   58:  register int day;
+        -:   59:  register int i;
+        -:   60:
+        -:   61:
+        -:   62:#if HD_TOP20CC
+        -:   63:  ptr_cc_id = "AU";
+        -:   64:  holiday (*init_data, detected, _(hd_text[HD_GOOD_SATURDAY].ht_text),
+        -:   65:	   ptr_cc_id, "#", easter - 1, 0, year, hd_elems, fday, count);
+        -:   66:  if (*init_data)
+        -:   67:    *init_data = FALSE;
+        -:   68:  day = 26;
+        -:   69:  i = weekday_of_date (day, MONTH_MAX, year);
+        -:   70:  if (i > 5)
+        -:   71:    day += 2;
+        -:   72:  else if (i == DAY_MIN)
+        -:   73:    day++;
+        -:   74:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+        -:   75:	   ptr_cc_id, "#", day, MONTH_MAX, year, hd_elems, fday, count);
+        -:   76:  day = eval_holiday (DAY_MIN, 6, year, DAY_MIN, TRUE) + DAY_MAX;
+        -:   77:  holiday (*init_data, detected, _(hd_text[HD_THE_QUEENS_BIRTHDAY].ht_text),
+        -:   78:	   ptr_cc_id, "#", day, 6, year, hd_elems, fday, count);
+        -:   79:#endif /* HD_TOP20CC */
+    #####:   80:  day = DAY_MIN;
+    #####:   81:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####:   82:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -:   83:    {
+    #####:   84:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:   85:	day += ((DAY_MAX - i) + 1);
+        -:   86:    }
+        -:   87:  else
+        -:   88:    {
+    #####:   89:      if (i == DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####:   90:	day++;
+        -:   91:    }
+    #####:   92:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:   93:	   ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####:   94:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:   95:    *init_data = FALSE;
+    #####:   96:  day = 26;
+    #####:   97:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -:   98:    {
+    #####:   99:      i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####:  100:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  101:	day += ((DAY_MAX - i) + 1);
+        -:  102:    }
+    #####:  103:  holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -:  104:	   ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  105:  holiday (*init_data, detected, _(hd_text[HD_ABORIGINES_DAY].ht_text),
+call    0 never executed
+        -:  106:	   ptr_cc_id, DIS_HLS_PREF, 14, 9, year, hd_elems, fday, count);
+    #####:  107:  day = 25;
+    #####:  108:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -:  109:    {
+    #####:  110:      if (weekday_of_date (day, 4, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  111:	day++;
+        -:  112:    }
+    #####:  113:  holiday (*init_data, detected, _(hd_text[HD_ANZAC_DAY].ht_text),
+call    0 never executed
+        -:  114:	   ptr_cc_id, "+", day, 4, year, hd_elems, fday, count);
+    #####:  115:  day = 25;
+    #####:  116:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -:  117:    {
+    #####:  118:      i = weekday_of_date (day, MONTH_MAX, year);
+call    0 never executed
+    #####:  119:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  120:	day += ((DAY_MAX - i) + 1);
+        -:  121:    }
+    #####:  122:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -:  123:	   ptr_cc_id, "+", day, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  124:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  125:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  126:	   count);
+    #####:  127:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -:  128:	   ptr_cc_id, "+", easter + 1, 0, year, hd_elems, fday, count);
+    #####:  129:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -:  130:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####:  131:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  132:	   ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####:  133:  day = eval_holiday (DAY_MIN, 9, year, DAY_MAX, TRUE);
+call    0 never executed
+    #####:  134:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -:  135:	   ptr_cc_id, DIS_HLS_PREF, day, 6, year, hd_elems, fday, count);
+    #####:  136:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE) + DAY_MAX;
+call    0 never executed
+    #####:  137:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -:  138:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####:  139:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  140:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -:  141:	   count);
+    #####:  142:}
+        -:  143:
+        -:  144:
+        -:  145:
+        -:  146:void
+function be_hdy called 0 returned 0% blocks executed 0%
+    #####:  147:be_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  148:     Bool *init_data;
+        -:  149:     const Bool detected;
+        -:  150:     int easter;
+        -:  151:     const int year;
+        -:  152:     int *hd_elems;
+        -:  153:     const int fday;
+        -:  154:     const int count;
+        -:  155:/*!
+        -:  156:   Manages all specific holidays celebrated in Belgium.
+        -:  157:*/
+        -:  158:{
+    #####:  159:  ptr_cc_id = "BE";
+    #####:  160:  holiday (*init_data, detected, _(hd_text[HD_FLEMISH_CULTURE_DAY].ht_text),
+call    0 never executed
+        -:  161:	   ptr_cc_id, DIS_HLS_PREF2, 11, 7, year, hd_elems, fday, count);
+    #####:  162:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  163:    *init_data = FALSE;
+    #####:  164:  holiday (*init_data, detected, _(hd_text[HD_DYNASTY_DAY].ht_text),
+call    0 never executed
+        -:  165:	   ptr_cc_id, DIS_HLS_PREF, 15, 11, year, hd_elems, fday, count);
+    #####:  166:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -:  167:	   ptr_cc_id, "+", DAY_MIN, 11, year, hd_elems, fday, count);
+    #####:  168:  holiday (*init_data, detected, _(hd_text[HD_ALL_SOULS_DAY].ht_text),
+call    0 never executed
+        -:  169:	   ptr_cc_id, DIS_HLS_PREF, 2, 11, year, hd_elems, fday, count);
+    #####:  170:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  171:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  172:	   count);
+    #####:  173:  holiday (*init_data, detected, _(hd_text[HD_CHRISTS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  174:	   ptr_cc_id, "+", easter + 39, 0, year, hd_elems, fday, count);
+    #####:  175:  holiday (*init_data, detected, _(hd_text[HD_FRENCH_CULTURE_DAY].ht_text),
+call    0 never executed
+        -:  176:	   ptr_cc_id, DIS_HLS_PREF2, 27, 9, year, hd_elems, fday, count);
+    #####:  177:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  178:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####:  179:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  180:	   ptr_cc_id, "+", 15, 8, year, hd_elems, fday, count);
+    #####:  181:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE) + DAY_MAX;
+call    0 never executed
+    #####:  182:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -:  183:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####:  184:  holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -:  185:	   ptr_cc_id, "+", 21, 7, year, hd_elems, fday, count);
+    #####:  186:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  187:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -:  188:	   count);
+    #####:  189:  if (year > 1917)
+branch  0 never executed
+branch  1 never executed
+    #####:  190:    holiday (*init_data, detected, _(hd_text[HD_ARMISTICE_DAY].ht_text),
+call    0 never executed
+        -:  191:	     ptr_cc_id, "+", 11, 11, year, hd_elems, fday, count);
+    #####:  192:  base_christian_hdy (init_data, detected, easter, year, hd_elems, fday,
+call    0 never executed
+        -:  193:		      count, ptr_cc_id);
+    #####:  194:}
+        -:  195:
+        -:  196:
+        -:  197:
+        -:  198:void
+function br_hdy called 0 returned 0% blocks executed 0%
+    #####:  199:br_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  200:     Bool *init_data;
+        -:  201:     const Bool detected;
+        -:  202:     int easter;
+        -:  203:     const int year;
+        -:  204:     int *hd_elems;
+        -:  205:     const int fday;
+        -:  206:     const int count;
+        -:  207:/*!
+        -:  208:   Manages all specific holidays celebrated in Brazil.
+        -:  209:*/
+        -:  210:{
+        -:  211:  register int i;
+        -:  212:
+        -:  213:
+    #####:  214:  ptr_cc_id = "BR";
+    #####:  215:  holiday (*init_data, detected, _(hd_text[HD_SAO_PAULO_ANNIVERSARY].ht_text),
+call    0 never executed
+        -:  216:	   ptr_cc_id, DIS_HLS_PREF2, 25, MONTH_MIN, year, hd_elems, fday,
+        -:  217:	   count);
+    #####:  218:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  219:    *init_data = FALSE;
+    #####:  220:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  221:	   _(hd_text[HD_RIO_DE_JANEIRO_ANNIVERSARY].ht_text), ptr_cc_id,
+        -:  222:	   DIS_HLS_PREF2, 20, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  223:  holiday (*init_data, detected, _(hd_text[HD_TIRADENTES_DAY].ht_text),
+call    0 never executed
+        -:  224:	   ptr_cc_id, "+", 21, 4, year, hd_elems, fday, count);
+    #####:  225:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  226:	   _(hd_text[HD_OUR_LADY_APARECIDA_DAY].ht_text), ptr_cc_id, "+", 12,
+        -:  227:	   10, year, hd_elems, fday, count);
+    #####:  228:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -:  229:	   ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 11, year, hd_elems, fday, count);
+    #####:  230:  holiday (*init_data, detected, _(hd_text[HD_ALL_SOULS_DAY].ht_text),
+call    0 never executed
+        -:  231:	   ptr_cc_id, "+", 2, 11, year, hd_elems, fday, count);
+    #####:  232:  for (i = 5; i; i--)
+branch  0 never executed
+branch  1 never executed
+    #####:  233:    holiday (*init_data, detected, _(hd_text[HD_CARNIVAL].ht_text),
+call    0 never executed
+    #####:  234:	     ptr_cc_id, DIS_HLS_PREF, easter - 46 - i, 0, year, hd_elems,
+        -:  235:	     fday, count);
+    #####:  236:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -:  237:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  238:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  239:	   ptr_cc_id, DIS_HLS_PREF2, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  240:	   count);
+    #####:  241:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -:  242:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####:  243:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  244:	   _(hd_text[HD_FEAST_OF_CORPUS_CHRISTI].ht_text), ptr_cc_id, "+",
+        -:  245:	   easter + 60, 0, year, hd_elems, fday, count);
+    #####:  246:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  247:	   ptr_cc_id, DIS_HLS_PREF2, 15, 8, year, hd_elems, fday, count);
+    #####:  248:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  249:	   _(hd_text[HD_MARYS_IMMACULATE_CONCEPTION].ht_text), ptr_cc_id,
+        -:  250:	   DIS_HLS_PREF2, 8, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  251:  holiday (*init_data, detected, _(hd_text[HD_INDEPENDENCE_DAY].ht_text),
+call    0 never executed
+        -:  252:	   ptr_cc_id, "+", 7, 9, year, hd_elems, fday, count);
+    #####:  253:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  254:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####:  255:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:  256:	   ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  257:  holiday (*init_data, detected, _(hd_text[HD_ST_JOSEPHS_DAY].ht_text),
+call    0 never executed
+        -:  258:	   ptr_cc_id, DIS_HLS_PREF2, 19, 3, year, hd_elems, fday, count);
+    #####:  259:  holiday (*init_data, detected, _(hd_text[HD_ST_PETER_AND_ST_PAUL].ht_text),
+call    0 never executed
+        -:  260:	   ptr_cc_id, DIS_HLS_PREF2, 29, 6, year, hd_elems, fday, count);
+    #####:  261:  holiday (*init_data, detected, _(hd_text[HD_RE_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  262:	   "+", 15, 11, year, hd_elems, fday, count);
+    #####:  263:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  264:	   DIS_HLS_PREF2, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems,
+        -:  265:	   fday, count);
+    #####:  266:}
+        -:  267:
+        -:  268:
+        -:  269:
+        -:  270:void
+function ca_hdy called 0 returned 0% blocks executed 0%
+    #####:  271:ca_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  272:     Bool *init_data;
+        -:  273:     const Bool detected;
+        -:  274:     int easter;
+        -:  275:     const int year;
+        -:  276:     int *hd_elems;
+        -:  277:     const int fday;
+        -:  278:     const int count;
+        -:  279:/*!
+        -:  280:   Manages all specific holidays celebrated in Canada.
+        -:  281:*/
+        -:  282:{
+        -:  283:  register int day;
+        -:  284:
+        -:  285:
+        -:  286:#if HD_TOP20CC
+        -:  287:  ptr_cc_id = "CA";
+        -:  288:  day = 26;
+        -:  289:  if (weekday_of_date (day, MONTH_MAX, year) == DAY_MAX)
+        -:  290:    day++;
+        -:  291:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+        -:  292:	   ptr_cc_id, "#", day, MONTH_MAX, year, hd_elems, fday, count);
+        -:  293:  if (*init_data)
+        -:  294:    *init_data = FALSE;
+        -:  295:  day = eval_holiday (DAY_MIN, 8, year, DAY_MIN, TRUE);
+        -:  296:  holiday (*init_data, detected, _(hd_text[HD_CIVIC_HOLIDAY].ht_text),
+        -:  297:	   ptr_cc_id, "#", day, 8, year, hd_elems, fday, count);
+        -:  298:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+        -:  299:	   ptr_cc_id, "#", easter + 1, 0, year, hd_elems, fday, count);
+        -:  300:  day = eval_holiday (24, 5, year, DAY_MIN, FALSE);
+        -:  301:  holiday (*init_data, detected, _(hd_text[HD_VICTORIA_DAY].ht_text),
+        -:  302:	   ptr_cc_id, "#", day, 5, year, hd_elems, fday, count);
+        -:  303:  day = eval_holiday (DAY_MIN, 10, year, DAY_MIN, TRUE) + DAY_MAX;
+        -:  304:  holiday (*init_data, detected, _(hd_text[HD_THANKSGIVING_DAY].ht_text),
+        -:  305:	   ptr_cc_id, "#", day, 10, year, hd_elems, fday, count);
+        -:  306:#endif /* HD_TOP20CC */
+    #####:  307:  holiday (*init_data, detected, _(hd_text[HD_ALL_FOOLS_DAY].ht_text),
+call    0 never executed
+        -:  308:	   ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 4, year, hd_elems, fday, count);
+    #####:  309:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  310:    *init_data = FALSE;
+    #####:  311:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -:  312:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  313:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  314:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  315:	   count);
+    #####:  316:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -:  317:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####:  318:  day = eval_holiday (DAY_MIN, 6, year, DAY_MAX, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####:  319:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -:  320:	   ptr_cc_id, DIS_HLS_PREF, day, 6, year, hd_elems, fday, count);
+    #####:  321:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  322:	   ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####:  323:  holiday (*init_data, detected, _(hd_text[HD_HALLOWEEN].ht_text),
+call    0 never executed
+        -:  324:	   ptr_cc_id, DIS_HLS_PREF, dvec[10 - 1], 10, year, hd_elems, fday,
+        -:  325:	   count);
+    #####:  326:  day = eval_holiday (DAY_MIN, 9, year, DAY_MIN, TRUE);
+call    0 never executed
+    #####:  327:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text),
+call    0 never executed
+        -:  328:	   ptr_cc_id, "+", day, 9, year, hd_elems, fday, count);
+    #####:  329:  holiday (*init_data, detected, _(hd_text[HD_MIDSUMMER_DAY].ht_text),
+call    0 never executed
+        -:  330:	   ptr_cc_id, DIS_HLS_PREF, 21, 6, year, hd_elems, fday, count);
+    #####:  331:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE) + DAY_MAX;
+call    0 never executed
+    #####:  332:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -:  333:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####:  334:  day = DAY_MIN;
+    #####:  335:  if (weekday_of_date (day, MONTH_MIN, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  336:    day++;
+    #####:  337:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:  338:	   ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  339:  holiday (*init_data, detected, _(hd_text[HD_REMEMBRANCE_DAY].ht_text),
+call    0 never executed
+        -:  340:	   ptr_cc_id, DIS_HLS_PREF2, 11, 11, year, hd_elems, fday, count);
+    #####:  341:  holiday (*init_data, detected, _(hd_text[HD_ST_VALENTINES_DAY].ht_text),
+call    0 never executed
+        -:  342:	   ptr_cc_id, DIS_HLS_PREF, 14, 2, year, hd_elems, fday, count);
+    #####:  343:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  344:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -:  345:	   count);
+    #####:  346:  if (year > 1867)
+branch  0 never executed
+branch  1 never executed
+        -:  347:    {
+    #####:  348:      day = DAY_MIN;
+    #####:  349:      if (weekday_of_date (day, 7, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  350:	day++;
+    #####:  351:      holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -:  352:	       ptr_cc_id, "+", day, 7, year, hd_elems, fday, count);
+        -:  353:    }
+    #####:  354:}
+        -:  355:
+        -:  356:
+        -:  357:
+        -:  358:void
+function ch_hdy called 0 returned 0% blocks executed 0%
+    #####:  359:ch_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  360:     Bool *init_data;
+        -:  361:     const Bool detected;
+        -:  362:     int easter;
+        -:  363:     const int year;
+        -:  364:     int *hd_elems;
+        -:  365:     const int fday;
+        -:  366:     const int count;
+        -:  367:/*!
+        -:  368:   Manages all specific holidays celebrated in Switzerland.
+        -:  369:*/
+        -:  370:{
+        -:  371:#if HD_TOP20CC
+        -:  372:  ptr_cc_id = "CH";
+        -:  373:  holiday (*init_data, detected, _(hd_text[HD_CHRISTS_ASCENSION_DAY].ht_text),
+        -:  374:	   ptr_cc_id, "#", easter + 39, 0, year, hd_elems, fday, count);
+        -:  375:  if (*init_data)
+        -:  376:    *init_data = FALSE;
+        -:  377:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+        -:  378:	   ptr_cc_id, "#", easter + 1, 0, year, hd_elems, fday, count);
+        -:  379:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+        -:  380:	   ptr_cc_id, DIS_HLS_PREF2, DAY_MIN, 11, year, hd_elems, fday,
+        -:  381:	   count);
+        -:  382:  holiday (*init_data, detected,
+        -:  383:	   _(hd_text[HD_FEAST_OF_CORPUS_CHRISTI].ht_text), ptr_cc_id,
+        -:  384:	   DIS_HLS_PREF2, easter + 60, 0, year, hd_elems, fday, count);
+        -:  385:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+        -:  386:	   DIS_HLS_PREF2, DAY_MIN, 5, year, hd_elems, fday, count);
+        -:  387:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+        -:  388:	   ptr_cc_id, DIS_HLS_PREF2, 15, 8, year, hd_elems, fday, count);
+        -:  389:  holiday (*init_data, detected,
+        -:  390:	   _(hd_text[HD_MARYS_IMMACULATE_CONCEPTION].ht_text), ptr_cc_id,
+        -:  391:	   DIS_HLS_PREF2, 8, MONTH_MAX, year, hd_elems, fday, count);
+        -:  392:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+        -:  393:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -:  394:	   count);
+        -:  395:  holiday (*init_data, detected, _(hd_text[HD_THREE_KINGS_DAY].ht_text),
+        -:  396:	   ptr_cc_id, DIS_HLS_PREF2, 6, MONTH_MIN, year, hd_elems, fday,
+        -:  397:	   count);
+        -:  398:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+        -:  399:	   ptr_cc_id, "#", easter - 2, 0, year, hd_elems, fday, count);
+        -:  400:  holiday (*init_data, detected, _(hd_text[HD_WHIT_MONDAY].ht_text),
+        -:  401:	   ptr_cc_id, "#", easter + 50, 0, year, hd_elems, fday, count);
+        -:  402:#else /* !HD_TOP20CC */
+    #####:  403:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -:  404:    {
+    #####:  405:      holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  406:	       ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####:  407:      if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  408:	*init_data = FALSE;
+    #####:  409:      holiday (*init_data, detected, _(hd_text[HD_WHIT_MONDAY].ht_text),
+call    0 never executed
+        -:  410:	       ptr_cc_id, "+", easter + 50, 0, year, hd_elems, fday, count);
+    #####:  411:      holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text),
+call    0 never executed
+        -:  412:	       ptr_cc_id, DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year,
+        -:  413:	       hd_elems, fday, count);
+        -:  414:    }
+        -:  415:#endif /* !HD_TOP20CC */
+    #####:  416:  holiday (*init_data, detected, _(hd_text[HD_ST_BERCHTOLDS_DAY].ht_text),
+call    0 never executed
+        -:  417:	   ptr_cc_id, "#", 2, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  418:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  419:    *init_data = FALSE;
+    #####:  420:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -:  421:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  422:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  423:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  424:	   count);
+    #####:  425:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -:  426:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####:  427:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:  428:	   ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  429:  holiday (*init_data, detected, _(hd_text[HD_PENTECOST].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  430:	   "+", easter + 49, 0, year, hd_elems, fday, count);
+    #####:  431:  holiday (*init_data, detected, _(hd_text[HD_ST_STEPHENS_DAY].ht_text),
+call    0 never executed
+        -:  432:	   ptr_cc_id, "+", 26, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  433:  holiday (*init_data, detected, _(hd_text[HD_QUINQUAGESIMA_SUNDAY].ht_text),
+call    0 never executed
+        -:  434:	   ptr_cc_id, DIS_HLS_PREF, easter - 49, 0, year, hd_elems, fday,
+        -:  435:	   count);
+    #####:  436:  if (year > 1992)
+branch  0 never executed
+branch  1 never executed
+    #####:  437:    holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -:  438:	     ptr_cc_id, "+", DAY_MIN, 8, year, hd_elems, fday, count);
+    #####:  439:}
+        -:  440:
+        -:  441:
+        -:  442:
+        -:  443:void
+function cn_hdy called 0 returned 0% blocks executed 0%
+    #####:  444:cn_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  445:     Bool *init_data;
+        -:  446:     const Bool detected;
+        -:  447:     int easter;
+        -:  448:     const int year;
+        -:  449:     int *hd_elems;
+        -:  450:     const int fday;
+        -:  451:     const int count;
+        -:  452:/*!
+        -:  453:   Manages all specific holidays celebrated in China.
+        -:  454:*/
+        -:  455:{
+    #####:  456:  ptr_cc_id = "CN";
+    #####:  457:  use_other_cc = !use_other_cc;
+    #####:  458:  chinese_hdy (init_data, detected, year, hd_elems, fday, count, ptr_cc_id,
+call    0 never executed
+        -:  459:	       FALSE);
+    #####:  460:  use_other_cc = !use_other_cc;
+    #####:  461:  if (year > 1911)
+branch  0 never executed
+branch  1 never executed
+        -:  462:    {
+        -:  463:      register int day;
+        -:  464:
+        -:  465:
+    #####:  466:      holiday (*init_data, detected, _(hd_text[HD_ARBOR_DAY].ht_text),
+call    0 never executed
+        -:  467:	       ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 4, year, hd_elems, fday,
+        -:  468:	       count);
+    #####:  469:      holiday (*init_data, detected, _(hd_text[HD_CHILDRENS_DAY].ht_text),
+call    0 never executed
+        -:  470:	       ptr_cc_id, "+", DAY_MIN, 6, year, hd_elems, fday, count);
+    #####:  471:      for (day = DAY_MIN; day <= 2; day++)
+branch  0 never executed
+branch  1 never executed
+    #####:  472:	holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text),
+call    0 never executed
+        -:  473:		 ptr_cc_id, "+", day, 5, year, hd_elems, fday, count);
+    #####:  474:      for (day = DAY_MIN; day <= 2; day++)
+branch  0 never executed
+branch  1 never executed
+    #####:  475:	holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:  476:		 ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  477:      holiday (*init_data, detected, _(hd_text[HD_TEACHERS_DAY].ht_text),
+call    0 never executed
+        -:  478:	       ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 9, year, hd_elems, fday,
+        -:  479:	       count);
+    #####:  480:      holiday (*init_data, detected, _(hd_text[HD_WOMENS_DAY].ht_text),
+call    0 never executed
+        -:  481:	       ptr_cc_id, "+", 8, 3, year, hd_elems, fday, count);
+    #####:  482:      if (year > 1918)
+branch  0 never executed
+branch  1 never executed
+    #####:  483:	holiday (*init_data, detected, _(hd_text[HD_YOUTH_DAY].ht_text),
+call    0 never executed
+        -:  484:		 ptr_cc_id, "+", 4, 5, year, hd_elems, fday, count);
+    #####:  485:      if (year > 1920)
+branch  0 never executed
+branch  1 never executed
+    #####:  486:	holiday (*init_data, detected,
+call    0 never executed
+    #####:  487:		 _(hd_text[HD_FOUNDING_OF_THE_COMMUNIST_PARTY].ht_text),
+        -:  488:		 ptr_cc_id, "+", DAY_MIN, 7, year, hd_elems, fday, count);
+    #####:  489:      if (year > 1926)
+branch  0 never executed
+branch  1 never executed
+    #####:  490:	holiday (*init_data, detected,
+call    0 never executed
+    #####:  491:		 _(hd_text[HD_ARMED_FORCES_DAY].ht_text), ptr_cc_id, "+",
+        -:  492:		 DAY_MIN, 8, year, hd_elems, fday, count);
+    #####:  493:      if (year > 1948)
+branch  0 never executed
+branch  1 never executed
+    #####:  494:	for (day = DAY_MIN; day <= 2; day++)
+branch  0 never executed
+branch  1 never executed
+    #####:  495:	  holiday (*init_data, detected,
+call    0 never executed
+    #####:  496:		   _(hd_text[HD_NATIONAL_HOLIDAY].ht_text), ptr_cc_id, "+",
+        -:  497:		   day, 10, year, hd_elems, fday, count);
+        -:  498:    }
+    #####:  499:}
+        -:  500:
+        -:  501:
+        -:  502:
+        -:  503:void
+function de_hdy called 0 returned 0% blocks executed 0%
+    #####:  504:de_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  505:     Bool *init_data;
+        -:  506:     const Bool detected;
+        -:  507:     int easter;
+        -:  508:     const int year;
+        -:  509:     int *hd_elems;
+        -:  510:     const int fday;
+        -:  511:     const int count;
+        -:  512:/*!
+        -:  513:   Manages all specific holidays celebrated in Germany.
+        -:  514:*/
+        -:  515:{
+        -:  516:  register int day;
+        -:  517:
+        -:  518:
+        -:  519:#if HD_TOP20CC
+        -:  520:  ptr_cc_id = CC_DE;
+        -:  521:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+        -:  522:	   ptr_cc_id, "#", DAY_MIN, 11, year, hd_elems, fday, count);
+        -:  523:  if (*init_data)
+        -:  524:    *init_data = FALSE;
+        -:  525:  holiday (*init_data, detected, _(hd_text[HD_ALL_SOULS_DAY].ht_text),
+        -:  526:	   ptr_cc_id, DIS_HLS_PREF, 2, 11, year, hd_elems, fday, count);
+        -:  527:  holiday (*init_data, detected, _(hd_text[HD_PEACE_FESTIVAL].ht_text),
+        -:  528:	   ptr_cc_id, DIS_HLS_PREF2, 8, 8, year, hd_elems, fday, count);
+        -:  529:  holiday (*init_data, detected,
+        -:  530:	   _(hd_text[HD_FEAST_OF_CORPUS_CHRISTI].ht_text), ptr_cc_id, "#",
+        -:  531:	   easter + 60, 0, year, hd_elems, fday, count);
+        -:  532:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+        -:  533:	   ptr_cc_id, DIS_HLS_PREF2, 15, 8, year, hd_elems, fday, count);
+        -:  534:  if (year > 1516)
+        -:  535:    holiday (*init_data, detected, _(hd_text[HD_REFORMATION_DAY].ht_text),
+        -:  536:	     ptr_cc_id, DIS_HLS_PREF2, dvec[10 - 1], 10, year, hd_elems, fday,
+        -:  537:	     count);
+        -:  538:  holiday (*init_data, detected, _(hd_text[HD_THREE_KINGS_DAY].ht_text),
+        -:  539:	   ptr_cc_id, DIS_HLS_PREF2, 6, MONTH_MIN, year, hd_elems, fday,
+        -:  540:	   count);
+        -:  541:  day = weekday_of_date (DAY_MIN, 11, year);
+        -:  542:  day = (day < 3) ? 18 - day : 25 - day;
+        -:  543:  holiday (*init_data, detected,
+        -:  544:	   _(hd_text[HD_DAY_OF_PRAYER_AND_REPENTANCE].ht_text), ptr_cc_id,
+        -:  545:	   (year > 1994) ? DIS_HLS_PREF2 : "+", day, 11, year, hd_elems, fday,
+        -:  546:	   count);
+        -:  547:  if (year > 1953)
+        -:  548:    {
+        -:  549:      register int month;
+        -:  550:
+        -:  551:
+        -:  552:      if (year > 1989)
+        -:  553:	{
+        -:  554:	  day = 3;
+        -:  555:	  month = 10;
+        -:  556:	}
+        -:  557:      else
+        -:  558:	{
+        -:  559:	  day = 17;
+        -:  560:	  month = 6;
+        -:  561:	}
+        -:  562:      holiday (*init_data, detected, _(hd_text[HD_GERMAN_UNITY_DAY].ht_text),
+        -:  563:	       ptr_cc_id, "+", day, month, year, hd_elems, fday, count);
+        -:  564:    }
+        -:  565:#else /* !HD_TOP20CC */
+    #####:  566:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+    #####:  567:    if (year > 1953)
+branch  0 never executed
+branch  1 never executed
+        -:  568:      {
+        -:  569:	register int month;
+        -:  570:
+        -:  571:
+    #####:  572:	if (year > 1989)
+branch  0 never executed
+branch  1 never executed
+        -:  573:	  {
+    #####:  574:	    day = 3;
+    #####:  575:	    month = 10;
+        -:  576:	  }
+        -:  577:	else
+        -:  578:	  {
+    #####:  579:	    day = 17;
+    #####:  580:	    month = 6;
+        -:  581:	  }
+    #####:  582:	holiday (*init_data, detected,
+call    0 never executed
+    #####:  583:		 _(hd_text[HD_GERMAN_UNITY_DAY].ht_text), ptr_cc_id, "+", day,
+        -:  584:		 month, year, hd_elems, fday, count);
+    #####:  585:	if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  586:	  *init_data = FALSE;
+        -:  587:      }
+        -:  588:#endif /* !HD_TOP20CC */
+    #####:  589:  holiday (*init_data, detected, _(hd_text[HD_WOMENS_SHROVE_DAY].ht_text),
+call    0 never executed
+        -:  590:	   ptr_cc_id, DIS_HLS_PREF, easter - 52, 0, year, hd_elems, fday,
+        -:  591:	   count);
+    #####:  592:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  593:    *init_data = FALSE;
+    #####:  594:  day = eval_holiday (24, MONTH_MAX, year, DAY_MAX, FALSE);
+call    0 never executed
+    #####:  595:  day -= (DAY_MAX * 4);
+    #####:  596:  holiday (*init_data, detected, _(hd_text[HD_SUNDAY_OF_THE_DEAD].ht_text),
+call    0 never executed
+    #####:  597:	   ptr_cc_id, DIS_HLS_PREF, dvec[11 - 1] + day, 11, year, hd_elems,
+        -:  598:	   fday, count);
+    #####:  599:  day -= DAY_MAX;
+    #####:  600:  holiday (*init_data, detected, _(hd_text[HD_NATIONAL_MOURNING_DAY].ht_text),
+call    0 never executed
+    #####:  601:	   ptr_cc_id, DIS_HLS_PREF, dvec[11 - 1] + day, 11, year, hd_elems,
+        -:  602:	   fday, count);
+    #####:  603:  holiday (*init_data, detected, _(hd_text[HD_ALL_FOOLS_DAY].ht_text),
+call    0 never executed
+        -:  604:	   ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 4, year, hd_elems, fday, count);
+    #####:  605:  holiday (*init_data, detected, _(hd_text[HD_ASH_MONDAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  606:	   DIS_HLS_PREF, easter - 48, 0, year, hd_elems, fday, count);
+    #####:  607:  holiday (*init_data, detected, _(hd_text[HD_ASH_WEDNESDAY].ht_text),
+call    0 never executed
+        -:  608:	   ptr_cc_id, DIS_HLS_PREF, easter - 46, 0, year, hd_elems, fday,
+        -:  609:	   count);
+    #####:  610:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -:  611:	   ptr_cc_id, DIS_HLS_PREF, easter + 39, 0, year, hd_elems, fday,
+        -:  612:	   count);
+    #####:  613:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE);
+call    0 never executed
+    #####:  614:  if (day_of_year (day, 5, year) != easter + 49)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####:  615:    day += DAY_MAX;
+    #####:  616:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -:  617:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####:  618:  holiday (*init_data, detected, _(hd_text[HD_ST_PETER_AND_ST_PAUL].ht_text),
+call    0 never executed
+        -:  619:	   ptr_cc_id, DIS_HLS_PREF, 29, 6, year, hd_elems, fday, count);
+    #####:  620:  holiday (*init_data, detected, _(hd_text[HD_SEVEN_SLEEPERS_DAY].ht_text),
+call    0 never executed
+        -:  621:	   ptr_cc_id, DIS_HLS_PREF, 27, 6, year, hd_elems, fday, count);
+    #####:  622:  holiday (*init_data, detected, _(hd_text[HD_ST_NICHOLAS_EVE].ht_text),
+call    0 never executed
+        -:  623:	   ptr_cc_id, DIS_HLS_PREF, 5, MONTH_MAX, year, hd_elems, fday,
+        -:  624:	   count);
+    #####:  625:  holiday (*init_data, detected, _(hd_text[HD_SHROVE_TUESDAY].ht_text),
+call    0 never executed
+        -:  626:	   ptr_cc_id, DIS_HLS_PREF, easter - 47, 0, year, hd_elems, fday,
+        -:  627:	   count);
+    #####:  628:  day = eval_holiday (DAY_MIN, 10, year, DAY_MAX, TRUE);
+call    0 never executed
+    #####:  629:  holiday (*init_data, detected, _(hd_text[HD_THANKSGIVING_DAY].ht_text),
+call    0 never executed
+        -:  630:	   ptr_cc_id, DIS_HLS_PREF, day, 10, year, hd_elems, fday, count);
+    #####:  631:  holiday (*init_data, detected, _(hd_text[HD_ST_VALENTINES_DAY].ht_text),
+call    0 never executed
+        -:  632:	   ptr_cc_id, DIS_HLS_PREF, 14, 2, year, hd_elems, fday, count);
+    #####:  633:  holiday (*init_data, detected, _(hd_text[HD_VALBORGS_EVE].ht_text),
+call    0 never executed
+        -:  634:	   ptr_cc_id, DIS_HLS_PREF, dvec[4 - 1], 4, year, hd_elems, fday,
+        -:  635:	   count);
+    #####:  636:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  637:	   ptr_cc_id, DIS_HLS_PREF2, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  638:	   count);
+    #####:  639:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  640:	   DIS_HLS_PREF2, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems,
+        -:  641:	   fday, count);
+    #####:  642:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  643:	   "+", 26, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  644:  holiday (*init_data, detected, _(hd_text[HD_CHRISTS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  645:	   ptr_cc_id, "+", easter + 39, 0, year, hd_elems, fday, count);
+    #####:  646:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  647:	   ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####:  648:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  649:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####:  650:  base_christian_hdy (init_data, detected, easter, year, hd_elems, fday,
+call    0 never executed
+        -:  651:		      count, ptr_cc_id);
+    #####:  652:  if (year == 2017)
+branch  0 never executed
+branch  1 never executed
+    #####:  653:    holiday (*init_data, detected, _(hd_text[HD_REFORMATION_DAY].ht_text),
+call    0 never executed
+        -:  654:	     ptr_cc_id, "+", dvec[10 - 1], 10, year, hd_elems, fday,
+        -:  655:	     count);
+    #####:  656:}
+        -:  657:
+        -:  658:
+        -:  659:
+        -:  660:void
+function es_hdy called 0 returned 0% blocks executed 0%
+    #####:  661:es_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  662:     Bool *init_data;
+        -:  663:     const Bool detected;
+        -:  664:     int easter;
+        -:  665:     const int year;
+        -:  666:     int *hd_elems;
+        -:  667:     const int fday;
+        -:  668:     const int count;
+        -:  669:/*!
+        -:  670:   Manages all specific holidays celebrated in Spain.
+        -:  671:*/
+        -:  672:{
+    #####:  673:  ptr_cc_id = "ES";
+    #####:  674:  holiday (*init_data, detected, _(hd_text[HD_ST_JAMES_DAY].ht_text),
+call    0 never executed
+        -:  675:	   ptr_cc_id, DIS_HLS_PREF2, 25, 7, year, hd_elems, fday, count);
+    #####:  676:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  677:    *init_data = FALSE;
+    #####:  678:  holiday (*init_data, detected, _(hd_text[HD_DAY_OF_ANDALUCIA].ht_text),
+call    0 never executed
+        -:  679:	   ptr_cc_id, DIS_HLS_PREF2, 28, 2, year, hd_elems, fday, count);
+    #####:  680:  holiday (*init_data, detected, _(hd_text[HD_DAY_OF_CATALONIA].ht_text),
+call    0 never executed
+        -:  681:	   ptr_cc_id, DIS_HLS_PREF2, 11, 9, year, hd_elems, fday, count);
+    #####:  682:  holiday (*init_data, detected, _(hd_text[HD_DAY_OF_GALICIA].ht_text),
+call    0 never executed
+        -:  683:	   ptr_cc_id, DIS_HLS_PREF2, 25, 7, year, hd_elems, fday, count);
+    #####:  684:  holiday (*init_data, detected, _(hd_text[HD_BASQUE_NATIONAL_DAY].ht_text),
+call    0 never executed
+        -:  685:	   ptr_cc_id, DIS_HLS_PREF2, easter + 1, 0, year, hd_elems, fday,
+        -:  686:	   count);
+    #####:  687:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -:  688:	   ptr_cc_id, "+", DAY_MIN, 11, year, hd_elems, fday, count);
+    #####:  689:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -:  690:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  691:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  692:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  693:	   count);
+    #####:  694:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  695:	   _(hd_text[HD_CONSTITUTION_ANNIVERSARY].ht_text), ptr_cc_id, "+", 6,
+        -:  696:	   MONTH_MAX, year, hd_elems, fday, count);
+    #####:  697:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -:  698:	   ptr_cc_id, DIS_HLS_PREF2, easter + 1, 0, year, hd_elems, fday,
+        -:  699:	   count);
+    #####:  700:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -:  701:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####:  702:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  703:	   ptr_cc_id, "#", easter - 2, 0, year, hd_elems, fday, count);
+    #####:  704:  holiday (*init_data, detected, _(hd_text[HD_ST_JOSEPHS_DAY].ht_text),
+call    0 never executed
+        -:  705:	   ptr_cc_id, DIS_HLS_PREF2, 19, 3, year, hd_elems, fday, count);
+    #####:  706:  holiday (*init_data, detected, _(hd_text[HD_THE_KINGS_BIRTHDAY].ht_text),
+call    0 never executed
+        -:  707:	   ptr_cc_id, DIS_HLS_PREF, 24, 6, year, hd_elems, fday, count);
+    #####:  708:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  709:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####:  710:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  711:	   ptr_cc_id, "#", 15, 8, year, hd_elems, fday, count);
+    #####:  712:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  713:	   _(hd_text[HD_MARYS_IMMACULATE_CONCEPTION].ht_text), ptr_cc_id, "+",
+        -:  714:	   8, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  715:  holiday (*init_data, detected, _(hd_text[HD_MAUNDY_THURSDAY].ht_text),
+call    0 never executed
+        -:  716:	   ptr_cc_id, "+", easter - 3, 0, year, hd_elems, fday, count);
+    #####:  717:  holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -:  718:	   ptr_cc_id, "+", 12, 10, year, hd_elems, fday, count);
+    #####:  719:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:  720:	   ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  721:  holiday (*init_data, detected, _(hd_text[HD_PALM_SUNDAY].ht_text),
+call    0 never executed
+        -:  722:	   ptr_cc_id, DIS_HLS_PREF, easter - DAY_MAX, 0, year, hd_elems, fday,
+        -:  723:	   count);
+    #####:  724:  holiday (*init_data, detected, _(hd_text[HD_ST_STEPHENS_DAY].ht_text),
+call    0 never executed
+        -:  725:	   ptr_cc_id, DIS_HLS_PREF2, 26, MONTH_MAX, year, hd_elems, fday,
+        -:  726:	   count);
+    #####:  727:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  728:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -:  729:	   count);
+    #####:  730:  holiday (*init_data, detected, _(hd_text[HD_THREE_KINGS_DAY].ht_text),
+call    0 never executed
+        -:  731:	   ptr_cc_id, "+", 6, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  732:}
+        -:  733:
+        -:  734:
+        -:  735:
+        -:  736:void
+function fr_hdy called 0 returned 0% blocks executed 0%
+    #####:  737:fr_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  738:     Bool *init_data;
+        -:  739:     const Bool detected;
+        -:  740:     int easter;
+        -:  741:     const int year;
+        -:  742:     int *hd_elems;
+        -:  743:     const int fday;
+        -:  744:     const int count;
+        -:  745:/*!
+        -:  746:   Manages all specific holidays celebrated in France.
+        -:  747:*/
+        -:  748:{
+    #####:  749:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+    #####:  750:    ptr_cc_id = "FR";
+    #####:  751:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -:  752:	   ptr_cc_id, "+", DAY_MIN, 11, year, hd_elems, fday, count);
+    #####:  753:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  754:    *init_data = FALSE;
+    #####:  755:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+call    0 never executed
+        -:  756:	   ptr_cc_id, DIS_HLS_PREF2, 26, MONTH_MAX, year, hd_elems, fday,
+        -:  757:	   count);
+    #####:  758:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  759:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  760:	   count);
+    #####:  761:  holiday (*init_data, detected, _(hd_text[HD_CHRISTS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  762:	   ptr_cc_id, "+", easter + 39, 0, year, hd_elems, fday, count);
+    #####:  763:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  764:	   ptr_cc_id, DIS_HLS_PREF2, easter - 2, 0, year, hd_elems, fday,
+        -:  765:	   count);
+    #####:  766:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  767:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####:  768:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -:  769:	   ptr_cc_id, "+", 15, 8, year, hd_elems, fday, count);
+    #####:  770:  holiday (*init_data, detected, _(hd_text[HD_QUINQUAGESIMA_SUNDAY].ht_text),
+call    0 never executed
+        -:  771:	   ptr_cc_id, DIS_HLS_PREF, easter - 49, 0, year, hd_elems, fday,
+        -:  772:	   count);
+    #####:  773:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -:  774:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -:  775:	   count);
+    #####:  776:  if (year > 1788)
+branch  0 never executed
+branch  1 never executed
+    #####:  777:    holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -:  778:	     ptr_cc_id, "+", 14, 7, year, hd_elems, fday, count);
+    #####:  779:  if (year > 1917)
+branch  0 never executed
+branch  1 never executed
+    #####:  780:    holiday (*init_data, detected, _(hd_text[HD_ARMISTICE_DAY].ht_text),
+call    0 never executed
+        -:  781:	     ptr_cc_id, "+", 11, 11, year, hd_elems, fday, count);
+    #####:  782:  if (year > 1944)
+branch  0 never executed
+branch  1 never executed
+    #####:  783:    holiday (*init_data, detected, _(hd_text[HD_VICTORY_DAY].ht_text),
+call    0 never executed
+        -:  784:	     ptr_cc_id, "+", 8, 5, year, hd_elems, fday, count);
+    #####:  785:  base_christian_hdy (init_data, detected, easter, year, hd_elems, fday,
+call    0 never executed
+        -:  786:		      count, ptr_cc_id);
+    #####:  787:}
+        -:  788:
+        -:  789:
+        -:  790:
+        -:  791:void
+function gb_hdy called 0 returned 0% blocks executed 0%
+    #####:  792:gb_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  793:     Bool *init_data;
+        -:  794:     const Bool detected;
+        -:  795:     int easter;
+        -:  796:     const int year;
+        -:  797:     int *hd_elems;
+        -:  798:     const int fday;
+        -:  799:     const int count;
+        -:  800:/*!
+        -:  801:   Manages all specific holidays celebrated in United Kingdom of Great Britain.
+        -:  802:*/
+        -:  803:{
+        -:  804:  auto Greg_struct tmp_greg;
+        -:  805:  register int day;
+        -:  806:  register int i;
+        -:  807:
+        -:  808:
+        -:  809:#if HD_TOP20CC
+        -:  810:  ptr_cc_id = CC_GB;
+        -:  811:  holiday (*init_data, detected, _(hd_text[HD_BURNS_NIGHT].ht_text),
+        -:  812:	   ptr_cc_id, DIS_HLS_PREF, 25, MONTH_MIN, year, hd_elems, fday,
+        -:  813:	   count);
+        -:  814:  if (*init_data)
+        -:  815:    *init_data = FALSE;
+        -:  816:  day = 12;
+        -:  817:  i = weekday_of_date (day, 7, year);
+        -:  818:  if (i > 5)
+        -:  819:    day += ((DAY_MAX - i) + 1);
+        -:  820:  holiday (*init_data, detected, _(hd_text[HD_BATTLE_OF_BOYNE].ht_text),
+        -:  821:	   ptr_cc_id, DIS_HLS_PREF2, day, 7, year, hd_elems, fday, count);
+        -:  822:  day = 2;
+        -:  823:  i = weekday_of_date (day, MONTH_MIN, year);
+        -:  824:  if (i > 5)
+        -:  825:    day += 2;
+        -:  826:  else if (i == DAY_MIN)
+        -:  827:    day++;
+        -:  828:  holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+        -:  829:	   ptr_cc_id, DIS_HLS_PREF2, day, MONTH_MIN, year, hd_elems, fday,
+        -:  830:	   count);
+        -:  831:  day = eval_holiday (DAY_MIN, 8, year, DAY_MIN, TRUE);
+        -:  832:  holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+        -:  833:	   ptr_cc_id, DIS_HLS_PREF2, day, 8, year, hd_elems, fday, count);
+        -:  834:  day = 17;
+        -:  835:  i = weekday_of_date (day, 3, year);
+        -:  836:  if (i > 5)
+        -:  837:    day += ((DAY_MAX - i) + 1);
+        -:  838:  holiday (*init_data, detected, _(hd_text[HD_ST_PATRICKS_DAY].ht_text),
+        -:  839:	   ptr_cc_id, DIS_HLS_PREF2, day, 3, year, hd_elems, fday, count);
+        -:  840:  day = eval_holiday (dvec[8 - 1], 8, year, DAY_MIN, FALSE);
+        -:  841:  holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+        -:  842:	   ptr_cc_id, "#", day, 8, year, hd_elems, fday, count);
+        -:  843:#else /* !HD_TOP20CC */
+    #####:  844:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -:  845:    {
+    #####:  846:      day = eval_holiday (dvec[8 - 1], 8, year, DAY_MIN, FALSE);
+call    0 never executed
+    #####:  847:      holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+call    0 never executed
+        -:  848:	       ptr_cc_id, "+", day, 8, year, hd_elems, fday, count);
+    #####:  849:      if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  850:	*init_data = FALSE;
+        -:  851:    }
+        -:  852:#endif /* !HD_TOP20CC */
+    #####:  853:  day = 5;
+    #####:  854:  i = weekday_of_date (day, 7, year);
+call    0 never executed
+    #####:  855:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  856:    day += ((DAY_MAX - i) + 1);
+    #####:  857:  holiday (*init_data, detected, _(hd_text[HD_TYNWALD_DAY].ht_text),
+call    0 never executed
+        -:  858:	   ptr_cc_id, DIS_HLS_PREF2, day, 7, year, hd_elems, fday, count);
+    #####:  859:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####:  860:    *init_data = FALSE;
+    #####:  861:  day = 9;
+    #####:  862:  i = weekday_of_date (day, 5, year);
+call    0 never executed
+    #####:  863:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  864:    day += ((DAY_MAX - i) + 1);
+    #####:  865:  holiday (*init_data, detected, _(hd_text[HD_LIBERATION_DAY].ht_text),
+call    0 never executed
+        -:  866:	   ptr_cc_id, DIS_HLS_PREF2, day, 5, year, hd_elems, fday, count);
+    #####:  867:  holiday (*init_data, detected, _(hd_text[HD_ST_DAVIDS_DAY].ht_text),
+call    0 never executed
+        -:  868:	   ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 3, year, hd_elems, fday, count);
+    #####:  869:  holiday (*init_data, detected, _(hd_text[HD_SWALLOW_DAY].ht_text),
+call    0 never executed
+        -:  870:	   ptr_cc_id, DIS_HLS_PREF, 15, 4, year, hd_elems, fday, count);
+    #####:  871:  holiday (*init_data, detected, _(hd_text[HD_ST_GEORGES_DAY].ht_text),
+call    0 never executed
+        -:  872:	   ptr_cc_id, DIS_HLS_PREF, 23, 4, year, hd_elems, fday, count);
+    #####:  873:  holiday (*init_data, detected, _(hd_text[HD_GROTTO_DAY].ht_text),
+call    0 never executed
+        -:  874:	   ptr_cc_id, DIS_HLS_PREF, 25, 7, year, hd_elems, fday, count);
+    #####:  875:  holiday (*init_data, detected, _(hd_text[HD_ST_EDWARDS_DAY].ht_text),
+call    0 never executed
+        -:  876:	   ptr_cc_id, DIS_HLS_PREF, 13, 10, year, hd_elems, fday, count);
+    #####:  877:  day = eval_holiday (dvec[5 - 1], 5, year, DAY_MIN, FALSE);
+call    0 never executed
+    #####:  878:  holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+call    0 never executed
+        -:  879:	   ptr_cc_id, "+", day, 5, year, hd_elems, fday, count);
+    #####:  880:  day = 26;
+    #####:  881:  i = weekday_of_date (day, MONTH_MAX, year);
+call    0 never executed
+    #####:  882:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  883:    day += 2;
+    #####:  884:  else if (i == DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####:  885:    day++;
+    #####:  886:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+call    0 never executed
+        -:  887:	   ptr_cc_id, "+", day, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  888:  day = 25;
+    #####:  889:  i = weekday_of_date (day, MONTH_MAX, year);
+call    0 never executed
+    #####:  890:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  891:    day += ((DAY_MAX - i) + 1);
+    #####:  892:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -:  893:	   ptr_cc_id, "+", day, MONTH_MAX, year, hd_elems, fday, count);
+    #####:  894:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -:  895:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -:  896:	   count);
+    #####:  897:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -:  898:	   ptr_cc_id, "+", easter + 1, 0, year, hd_elems, fday, count);
+    #####:  899:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -:  900:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####:  901:  day = eval_holiday (DAY_MIN, 6, year, DAY_MAX, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####:  902:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -:  903:	   ptr_cc_id, DIS_HLS_PREF, day, 6, year, hd_elems, fday, count);
+    #####:  904:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -:  905:	   ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####:  906:  holiday (*init_data, detected, _(hd_text[HD_HALLOWEEN].ht_text),
+call    0 never executed
+        -:  907:	   ptr_cc_id, DIS_HLS_PREF, dvec[10 - 1], 10, year, hd_elems, fday,
+        -:  908:	   count);
+    #####:  909:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  910:	   _(hd_text[HD_MARYS_ANNUNCIATION_DAY].ht_text), ptr_cc_id,
+        -:  911:	   DIS_HLS_PREF, 25, 3, year, hd_elems, fday, count);
+    #####:  912:  day = eval_holiday (DAY_MIN, 5, year, DAY_MIN, TRUE);
+call    0 never executed
+    #####:  913:  holiday (*init_data, detected, _(hd_text[HD_MAY_DAY].ht_text),
+call    0 never executed
+        -:  914:	   ptr_cc_id, "+", day, 5, year, hd_elems, fday, count);
+    #####:  915:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -:  916:	   ptr_cc_id, DIS_HLS_PREF, easter - 21, 0, year, hd_elems, fday,
+        -:  917:	   count);
+    #####:  918:  day = DAY_MIN;
+    #####:  919:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####:  920:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####:  921:    day += ((DAY_MAX - i) + 1);
+    #####:  922:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -:  923:	   ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####:  924:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  925:	   (year == 1999) ? "+" : DIS_HLS_PREF, dvec[MONTH_MAX - 1],
+        -:  926:	   MONTH_MAX, year, hd_elems, fday, count);
+        -:  927:  /*
+        -:  928:     So we first need to buffer the Gregorian Reformation period actually used.
+        -:  929:   */
+    #####:  930:  tmp_greg.first_day = greg->first_day;
+    #####:  931:  tmp_greg.last_day = greg->last_day;
+    #####:  932:  tmp_greg.month = greg->month;
+    #####:  933:  tmp_greg.year = greg->year;
+        -:  934:  /*
+        -:  935:     Then we set the Gregorian Reformation period to the first date
+        -:  936:     which is out of the range of dates Gcal is able to manage,
+        -:  937:     for computing the Easter Sunday of a Julian date, means
+        -:  938:     we behave as if no Gregorian Reformation has ever happened.
+        -:  939:   */
+    #####:  940:  greg->last_day = greg->first_day = DAY_MIN;
+    #####:  941:  greg->month = MONTH_MIN;
+    #####:  942:  greg->year = YEAR_MAX + 1;
+        -:  943:  /*
+        -:  944:     Compute the Julian `day_of_year' number for the
+        -:  945:     BEGINNING_OF_FINANCIAL_YEAR (Lady Day) holiday.
+        -:  946:   */
+    #####:  947:  day = day_of_year (25, 3, year);
+call    0 never executed
+        -:  948:  /*
+        -:  949:     Now we set the Gregorian Reformation period to the date respected in the U.K.
+        -:  950:   */
+    #####:  951:  greg->year = 1752;
+    #####:  952:  greg->month = 9;
+    #####:  953:  greg->first_day = 3;
+    #####:  954:  greg->last_day = 13;
+        -:  955:  /*
+        -:  956:     The computation is done for the next date after the given Gregorian
+        -:  957:     Reformation period, but for the current year (Gregorian date).
+        -:  958:     If this is not proper, I would like to hear *your* solution how
+        -:  959:     to compute it in the right way!
+        -:  960:   */
+    #####:  961:  if (year > greg->year)
+branch  0 never executed
+branch  1 never executed
+    #####:  962:    day += julian_gregorian_diff (greg->last_day + 1, greg->month, year);
+call    0 never executed
+        -:  963:  /*
+        -:  964:     And restore the buffered Gregorian Reformation date actually used.
+        -:  965:   */
+    #####:  966:  greg->year = tmp_greg.year;
+    #####:  967:  greg->month = tmp_greg.month;
+    #####:  968:  greg->last_day = tmp_greg.last_day;
+    #####:  969:  greg->first_day = tmp_greg.first_day;
+    #####:  970:  holiday (*init_data, detected,
+call    0 never executed
+    #####:  971:	   _(hd_text[HD_BEGINNING_OF_FINANCIAL_YEAR].ht_text), ptr_cc_id,
+        -:  972:	   DIS_HLS_PREF, day, 0, year, hd_elems, fday, count);
+    #####:  973:  if (year > 1604)
+branch  0 never executed
+branch  1 never executed
+    #####:  974:    holiday (*init_data, detected, _(hd_text[HD_GUY_FAWKES_DAY].ht_text),
+call    0 never executed
+        -:  975:	     ptr_cc_id, DIS_HLS_PREF, 5, 11, year, hd_elems, fday, count);
+    #####:  976:}
+        -:  977:
+        -:  978:
+        -:  979:
+        -:  980:void
+function il_hdy called 0 returned 0% blocks executed 0%
+    #####:  981:il_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -:  982:     Bool *init_data;
+        -:  983:     const Bool detected;
+        -:  984:     int easter;
+        -:  985:     const int year;
+        -:  986:     int *hd_elems;
+        -:  987:     const int fday;
+        -:  988:     const int count;
+        -:  989:/*!
+        -:  990:   Manages all specific holidays celebrated in Israel.
+        -:  991:*/
+        -:  992:{
+    #####:  993:  ptr_cc_id = "IL";
+    #####:  994:  use_other_cc = !use_other_cc;
+    #####:  995:  hebrew_hdy (init_data, detected, year, hd_elems, fday, count, ptr_cc_id);
+call    0 never executed
+    #####:  996:  use_other_cc = !use_other_cc;
+    #####:  997:  if (year > 1999)
+branch  0 never executed
+branch  1 never executed
+    #####:  998:    holiday (*init_data, detected, _(hd_text[HD_VICTORY_DAY].ht_text),
+call    0 never executed
+        -:  999:	     ptr_cc_id, DIS_HLS_PREF, 9, 5, year, hd_elems, fday, count);
+    #####: 1000:}
+        -: 1001:
+        -: 1002:
+        -: 1003:
+        -: 1004:void
+function it_hdy called 0 returned 0% blocks executed 0%
+    #####: 1005:it_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1006:     Bool *init_data;
+        -: 1007:     const Bool detected;
+        -: 1008:     int easter;
+        -: 1009:     const int year;
+        -: 1010:     int *hd_elems;
+        -: 1011:     const int fday;
+        -: 1012:     const int count;
+        -: 1013:/*!
+        -: 1014:   Manages all specific holidays celebrated in Italy.
+        -: 1015:*/
+        -: 1016:{
+        -: 1017:  register int day;
+        -: 1018:  register int month;
+        -: 1019:  register int i;
+        -: 1020:
+        -: 1021:
+    #####: 1022:  ptr_cc_id = "IT";
+    #####: 1023:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -: 1024:	   ptr_cc_id, "+", DAY_MIN, 11, year, hd_elems, fday, count);
+    #####: 1025:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1026:    *init_data = FALSE;
+    #####: 1027:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+call    0 never executed
+        -: 1028:	   ptr_cc_id, "+", 26, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1029:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 1030:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1031:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -: 1032:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -: 1033:	   count);
+    #####: 1034:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -: 1035:	   ptr_cc_id, "+", easter + 1, 0, year, hd_elems, fday, count);
+    #####: 1036:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -: 1037:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####: 1038:  holiday (*init_data, detected, _(hd_text[HD_MAY_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1039:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####: 1040:  holiday (*init_data, detected, _(hd_text[HD_MIDSUMMER_DAY].ht_text),
+call    0 never executed
+        -: 1041:	   ptr_cc_id, DIS_HLS_PREF, 24, 6, year, hd_elems, fday, count);
+    #####: 1042:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -: 1043:	   ptr_cc_id, "+", 15, 8, year, hd_elems, fday, count);
+    #####: 1044:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1045:	   _(hd_text[HD_MARYS_IMMACULATE_CONCEPTION].ht_text), ptr_cc_id, "+",
+        -: 1046:	   8, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1047:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE) + DAY_MAX;
+call    0 never executed
+    #####: 1048:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -: 1049:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####: 1050:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1051:	   ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1052:  day = 2;
+    #####: 1053:  month = 6;
+    #####: 1054:  i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 1055:  if (i > 3)
+branch  0 never executed
+branch  1 never executed
+    #####: 1056:    day += (DAY_MAX - i);
+    #####: 1057:  else if (i > 1)
+branch  0 never executed
+branch  1 never executed
+        -: 1058:    {
+    #####: 1059:      i -= 2;
+    #####: 1060:      day = dvec[--month - 1] - i;
+        -: 1061:    }
+        -: 1062:  else
+    #####: 1063:    day -= i;
+    #####: 1064:  holiday (*init_data, detected, _(hd_text[HD_RE_DAY].ht_text),
+call    0 never executed
+        -: 1065:	   ptr_cc_id, DIS_HLS_PREF, day, month, year, hd_elems, fday, count);
+    #####: 1066:  holiday (*init_data, detected, _(hd_text[HD_ST_PETER_AND_ST_PAUL].ht_text),
+call    0 never executed
+        -: 1067:	   ptr_cc_id, DIS_HLS_PREF, 29, 6, year, hd_elems, fday, count);
+    #####: 1068:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1069:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -: 1070:	   count);
+    #####: 1071:  holiday (*init_data, detected, _(hd_text[HD_THREE_KINGS_DAY].ht_text),
+call    0 never executed
+        -: 1072:	   ptr_cc_id, "+", 6, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1073:  holiday (*init_data, detected, _(hd_text[HD_VENICE_CARNIVAL].ht_text),
+call    0 never executed
+        -: 1074:	   ptr_cc_id, DIS_HLS_PREF, easter - 58, 0, year, hd_elems, fday,
+        -: 1075:	   count);
+    #####: 1076:  if (year > 1917)
+branch  0 never executed
+branch  1 never executed
+        -: 1077:    {
+    #####: 1078:      day = 4;
+    #####: 1079:      i = weekday_of_date (day, 11, year);
+call    0 never executed
+    #####: 1080:      if (i > 3)
+branch  0 never executed
+branch  1 never executed
+    #####: 1081:	day += (DAY_MAX - i);
+        -: 1082:      else
+    #####: 1083:	day -= i;
+    #####: 1084:      holiday (*init_data, detected, _(hd_text[HD_ARMISTICE_DAY].ht_text),
+call    0 never executed
+        -: 1085:	       ptr_cc_id, DIS_HLS_PREF, day, 11, year, hd_elems, fday, count);
+        -: 1086:    }
+    #####: 1087:  if (year > 1944)
+branch  0 never executed
+branch  1 never executed
+    #####: 1088:    holiday (*init_data, detected, _(hd_text[HD_LIBERATION_DAY].ht_text),
+call    0 never executed
+        -: 1089:	     ptr_cc_id, "+", 25, 4, year, hd_elems, fday, count);
+    #####: 1090:}
+        -: 1091:
+        -: 1092:
+        -: 1093:
+        -: 1094:void
+function jp_hdy called 0 returned 0% blocks executed 0%
+    #####: 1095:jp_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1096:     Bool *init_data;
+        -: 1097:     const Bool detected;
+        -: 1098:     int easter;
+        -: 1099:     const int year;
+        -: 1100:     int *hd_elems;
+        -: 1101:     const int fday;
+        -: 1102:     const int count;
+        -: 1103:/*!
+        -: 1104:   Manages all specific holidays celebrated in Japan.
+        -: 1105:*/
+        -: 1106:{
+    #####: 1107:  ptr_cc_id = "JP";
+    #####: 1108:  if (year < 1873)
+branch  0 never executed
+branch  1 never executed
+        -: 1109:    {
+    #####: 1110:      use_other_cc = !use_other_cc;
+    #####: 1111:      japanese_hdy (init_data, detected, year, hd_elems, fday, count,
+call    0 never executed
+        -: 1112:		    ptr_cc_id, FALSE);
+    #####: 1113:      use_other_cc = !use_other_cc;
+        -: 1114:    }
+        -: 1115:  else
+        -: 1116:    {
+        -: 1117:      register int hour;
+        -: 1118:      register int min;
+        -: 1119:      register int i;
+        -: 1120:      auto int day;
+        -: 1121:      auto int month;
+    #####: 1122:      auto int y = year;
+        -: 1123:
+        -: 1124:
+        -: 1125:      /*
+        -: 1126:         Astronomical calculations are based on China/Japan local time.
+        -: 1127:       */
+    #####: 1128:      if (year < 1888)
+branch  0 never executed
+branch  1 never executed
+        -: 1129:	{
+        -: 1130:	  /*
+        -: 1131:	     Meridian Beijing (116 25' degrees East), UTC/GMT time difference.
+        -: 1132:	   */
+    #####: 1133:	  hour = 7;
+    #####: 1134:	  min = 45;
+        -: 1135:	}
+        -: 1136:      else
+        -: 1137:	{
+        -: 1138:	  /*
+        -: 1139:	     UTC/GMT-9 for the meridian 135 degrees East.
+        -: 1140:	   */
+    #####: 1141:	  hour = 9;
+    #####: 1142:	  min = 0;
+        -: 1143:	}
+    #####: 1144:      day = 15;
+    #####: 1145:      if (weekday_of_date (day, MONTH_MIN, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1146:	day++;
+    #####: 1147:      holiday (*init_data, detected, _(hd_text[HD_COMING_OF_AGE_DAY].ht_text),
+call    0 never executed
+        -: 1148:	       ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1149:      if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1150:	*init_data = FALSE;
+    #####: 1151:      day = eval_holiday (DAY_MIN, 2, year, 4, TRUE);
+call    0 never executed
+    #####: 1152:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1153:	       _(hd_text[HD_SAPPORO_SNOW_FESTIVAL].ht_text), ptr_cc_id,
+        -: 1154:	       DIS_HLS_PREF, day, 2, year, hd_elems, fday, count);
+    #####: 1155:      day = 2;
+    #####: 1156:      if (weekday_of_date (day, 2, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1157:	day++;
+    #####: 1158:      holiday (*init_data, detected, _(hd_text[HD_SPRING_FESTIVAL].ht_text),
+call    0 never executed
+        -: 1159:	       ptr_cc_id, DIS_HLS_PREF, day, 2, year, hd_elems, fday, count);
+    #####: 1160:      day = 3;
+    #####: 1161:      if (weekday_of_date (day, 3, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1162:	day++;
+    #####: 1163:      holiday (*init_data, detected, _(hd_text[HD_PEACH_FESTIVAL].ht_text),
+call    0 never executed
+        -: 1164:	       ptr_cc_id, DIS_HLS_PREF, day, 3, year, hd_elems, fday, count);
+    #####: 1165:      day = 8;
+    #####: 1166:      if (weekday_of_date (day, 4, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1167:	day++;
+    #####: 1168:      holiday (*init_data, detected, _(hd_text[HD_BUDDHAS_BIRTHDAY].ht_text),
+call    0 never executed
+        -: 1169:	       ptr_cc_id, DIS_HLS_PREF, day, 4, year, hd_elems, fday, count);
+    #####: 1170:      day = 29;
+    #####: 1171:      if (weekday_of_date (day, 4, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1172:	day++;
+    #####: 1173:      holiday (*init_data, detected, _(hd_text[HD_GREENERY_DAY].ht_text),
+call    0 never executed
+        -: 1174:	       ptr_cc_id, "+", day, 4, year, hd_elems, fday, count);
+    #####: 1175:      day = 7;
+    #####: 1176:      if (weekday_of_date (day, 7, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1177:	day++;
+    #####: 1178:      holiday (*init_data, detected, _(hd_text[HD_STAR_FESTIVAL].ht_text),
+call    0 never executed
+        -: 1179:	       ptr_cc_id, DIS_HLS_PREF, day, 7, year, hd_elems, fday, count);
+    #####: 1180:      day = 20;
+    #####: 1181:      if (weekday_of_date (day, 7, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1182:	day++;
+    #####: 1183:      holiday (*init_data, detected, _(hd_text[HD_MARINE_DAY].ht_text),
+call    0 never executed
+        -: 1184:	       ptr_cc_id, "+", day, 7, year, hd_elems, fday, count);
+    #####: 1185:      day = 13;
+    #####: 1186:      if (weekday_of_date (day, 8, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1187:	day++;
+    #####: 1188:      for (i = 0; i < 4; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1189:	holiday (*init_data, detected,
+call    0 never executed
+    #####: 1190:		 _(hd_text[HD_FEAST_OF_FORTUNE].ht_text), ptr_cc_id,
+        -: 1191:		 DIS_HLS_PREF, day + i, 8, year, hd_elems, fday, count);
+    #####: 1192:      day = 9;
+    #####: 1193:      if (weekday_of_date (day, 9, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1194:	day++;
+    #####: 1195:      holiday (*init_data, detected, _(hd_text[HD_CHRYSANTHENUM_DAY].ht_text),
+call    0 never executed
+        -: 1196:	       ptr_cc_id, DIS_HLS_PREF, day, 9, year, hd_elems, fday, count);
+    #####: 1197:      day = 15;
+    #####: 1198:      if (weekday_of_date (day, 9, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1199:	day++;
+    #####: 1200:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1201:	       _(hd_text[HD_RESPECT_FOR_THE_AGED_DAY].ht_text), ptr_cc_id,
+        -: 1202:	       "+", day, 9, year, hd_elems, fday, count);
+    #####: 1203:      day = 10;
+    #####: 1204:      if (weekday_of_date (day, 10, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1205:	day++;
+    #####: 1206:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1207:	       _(hd_text[HD_HEALTH_AND_SPORTS_DAY].ht_text), ptr_cc_id, "+",
+        -: 1208:	       day, 10, year, hd_elems, fday, count);
+    #####: 1209:      day = 15;
+    #####: 1210:      if (weekday_of_date (day, 11, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1211:	day++;
+    #####: 1212:      holiday (*init_data, detected, _(hd_text[HD_7_5_3_FESTIVAL].ht_text),
+call    0 never executed
+        -: 1213:	       ptr_cc_id, DIS_HLS_PREF, day, 11, year, hd_elems, fday, count);
+    #####: 1214:      day = 23;
+    #####: 1215:      if (weekday_of_date (day, 11, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1216:	day++;
+    #####: 1217:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1218:	       _(hd_text[HD_LABOUR_THANKSGIVING_DAY].ht_text), ptr_cc_id, "+",
+        -: 1219:	       day, 11, year, hd_elems, fday, count);
+    #####: 1220:      day = 13;
+    #####: 1221:      if (weekday_of_date (day, MONTH_MAX, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1222:	day++;
+    #####: 1223:      holiday (*init_data, detected, _(hd_text[HD_SOOT_SWEEPING_DAY].ht_text),
+call    0 never executed
+        -: 1224:	       ptr_cc_id, DIS_HLS_PREF, day, MONTH_MAX, year, hd_elems, fday,
+        -: 1225:	       count);
+    #####: 1226:      day = 23;
+    #####: 1227:      if (weekday_of_date (day, MONTH_MAX, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1228:	day++;
+    #####: 1229:      holiday (*init_data, detected, _(hd_text[HD_EMPERORS_BIRTHDAY].ht_text),
+call    0 never executed
+        -: 1230:	       ptr_cc_id, "+", day, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1231:      day = 5;
+    #####: 1232:      if (weekday_of_date (day, 5, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1233:	day++;
+    #####: 1234:      holiday (*init_data, detected, _(hd_text[HD_CHILDRENS_DAY].ht_text),
+call    0 never executed
+        -: 1235:	       ptr_cc_id, "+", day, 5, year, hd_elems, fday, count);
+    #####: 1236:      day = 3;
+    #####: 1237:      if (weekday_of_date (day, 11, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1238:	day++;
+    #####: 1239:      holiday (*init_data, detected, _(hd_text[HD_CULTURE_DAY].ht_text),
+call    0 never executed
+        -: 1240:	       ptr_cc_id, "+", day, 11, year, hd_elems, fday, count);
+    #####: 1241:      day = 4;
+    #####: 1242:      i = weekday_of_date (day, 5, year);
+call    0 never executed
+    #####: 1243:      if (i < 6)
+branch  0 never executed
+branch  1 never executed
+    #####: 1244:	holiday (*init_data, detected,
+call    0 never executed
+    #####: 1245:		 _(hd_text[HD_NATIONAL_HOLIDAY].ht_text), ptr_cc_id, "+", day,
+        -: 1246:		 5, year, hd_elems, fday, count);
+    #####: 1247:      holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+call    0 never executed
+        -: 1248:	       ptr_cc_id, DIS_HLS_PREF2, dvec[MONTH_MAX - 1], MONTH_MAX, year,
+        -: 1249:	       hd_elems, fday, count);
+    #####: 1250:      holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1251:	       ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday,
+        -: 1252:	       count);
+    #####: 1253:      holiday (*init_data, detected, _(hd_text[HD_ST_VALENTINES_DAY].ht_text),
+call    0 never executed
+        -: 1254:	       ptr_cc_id, DIS_HLS_PREF, 14, 2, year, hd_elems, fday, count);
+    #####: 1255:      holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+call    0 never executed
+        -: 1256:	       ptr_cc_id, DIS_HLS_PREF2, 2, MONTH_MIN, year, hd_elems, fday,
+        -: 1257:	       count);
+    #####: 1258:      holiday (*init_data, detected, _(hd_text[HD_BANK_HOLIDAY].ht_text),
+call    0 never executed
+        -: 1259:	       ptr_cc_id, DIS_HLS_PREF2, 3, MONTH_MIN, year, hd_elems, fday,
+        -: 1260:	       count);
+    #####: 1261:      if (equinox_solstice (NH_VE, &day, &month, &y, hour, min) !=
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1262:	  (double) SPECIAL_VALUE)
+        -: 1263:	{
+    #####: 1264:	  if (weekday_of_date (day, month, y) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1265:	    (void) next_date (&day, &month, &y);
+call    0 never executed
+    #####: 1266:	  holiday (*init_data, detected, _(hd_text[HD_EQUINOX_DAY].ht_text),
+call    0 never executed
+        -: 1267:		   ptr_cc_id, "+", day, month, y, hd_elems, fday, count);
+        -: 1268:	}
+        -: 1269:      else
+    #####: 1270:	y = year;
+    #####: 1271:      if (equinox_solstice (NH_AE, &day, &month, &y, hour, min) !=
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1272:	  (double) SPECIAL_VALUE)
+        -: 1273:	{
+    #####: 1274:	  if (weekday_of_date (day, month, y) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1275:	    (void) next_date (&day, &month, &y);
+call    0 never executed
+    #####: 1276:	  holiday (*init_data, detected, _(hd_text[HD_EQUINOX_DAY].ht_text),
+call    0 never executed
+        -: 1277:		   ptr_cc_id, "+", day, month, y, hd_elems, fday, count);
+        -: 1278:	}
+        -: 1279:      else
+    #####: 1280:	y = year;
+    #####: 1281:      if (equinox_solstice (NH_WS, &day, &month, &y, hour, min) !=
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1282:	  (double) SPECIAL_VALUE)
+    #####: 1283:	holiday (*init_data, detected,
+call    0 never executed
+    #####: 1284:		 _(hd_text[HD_JAPANESE_NEW_YEARS_DAY].ht_text), ptr_cc_id,
+        -: 1285:		 DIS_HLS_PREF, day, month, y, hd_elems, fday, count);
+        -: 1286:      else
+    #####: 1287:	y = year;
+    #####: 1288:      if (sun_longitude (315.0, &day, &month, &y, hour, min, FALSE) !=
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -: 1289:	  (double) SPECIAL_VALUE)
+        -: 1290:	{
+    #####: 1291:	  (void) prev_date (&day, &month, &y);
+call    0 never executed
+    #####: 1292:	  if (y == year)
+branch  0 never executed
+branch  1 never executed
+    #####: 1293:	    holiday (*init_data, detected,
+call    0 never executed
+    #####: 1294:		     _(hd_text[HD_SEASON_CHANGE].ht_text), ptr_cc_id,
+        -: 1295:		     DIS_HLS_PREF, day, month, y, hd_elems, fday, count);
+        -: 1296:	}
+    #####: 1297:      if (year > 1946)
+branch  0 never executed
+branch  1 never executed
+        -: 1298:	{
+    #####: 1299:	  day = 3;
+    #####: 1300:	  if (weekday_of_date (day, 5, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1301:	    day++;
+    #####: 1302:	  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1303:		   _(hd_text[HD_CONSTITUTION_ANNIVERSARY].ht_text), ptr_cc_id,
+        -: 1304:		   "+", day, 5, year, hd_elems, fday, count);
+    #####: 1305:	  day = 11;
+    #####: 1306:	  if (weekday_of_date (day, 2, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1307:	    day++;
+    #####: 1308:	  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1309:		   _(hd_text[HD_NATIONAL_FOUNDATION_DAY].ht_text), ptr_cc_id,
+        -: 1310:		   "+", day, 2, year, hd_elems, fday, count);
+        -: 1311:	}
+        -: 1312:    }
+    #####: 1313:}
+        -: 1314:
+        -: 1315:
+        -: 1316:
+        -: 1317:void
+function kr_hdy called 0 returned 0% blocks executed 0%
+    #####: 1318:kr_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1319:     Bool *init_data;
+        -: 1320:     const Bool detected;
+        -: 1321:     int easter;
+        -: 1322:     const int year;
+        -: 1323:     int *hd_elems;
+        -: 1324:     const int fday;
+        -: 1325:     const int count;
+        -: 1326:/*!
+        -: 1327:   Manages all specific holidays celebrated in Republic of Korea.
+        -: 1328:*/
+        -: 1329:{
+    #####: 1330:  ptr_cc_id = "KR";
+    #####: 1331:  use_other_cc = !use_other_cc;
+    #####: 1332:  if ((year > 1909) && (year < 1945))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1333:    japanese_hdy (init_data, detected, year, hd_elems, fday, count, ptr_cc_id,
+call    0 never executed
+        -: 1334:		  FALSE);
+        -: 1335:  else
+    #####: 1336:    chinese_hdy (init_data, detected, year, hd_elems, fday, count, ptr_cc_id,
+call    0 never executed
+        -: 1337:		 FALSE);
+    #####: 1338:  use_other_cc = !use_other_cc;
+    #####: 1339:  if (year > 1911)
+branch  0 never executed
+branch  1 never executed
+        -: 1340:    {
+        -: 1341:      register int day;
+        -: 1342:
+        -: 1343:
+    #####: 1344:      holiday (*init_data, detected, _(hd_text[HD_PARENTS_DAY].ht_text),
+call    0 never executed
+        -: 1345:	       ptr_cc_id, DIS_HLS_PREF, 8, 5, year, hd_elems, fday, count);
+    #####: 1346:      holiday (*init_data, detected, _(hd_text[HD_ARBOR_DAY].ht_text),
+call    0 never executed
+        -: 1347:	       ptr_cc_id, "+", 5, 4, year, hd_elems, fday, count);
+    #####: 1348:      holiday (*init_data, detected, _(hd_text[HD_CHILDRENS_DAY].ht_text),
+call    0 never executed
+        -: 1349:	       ptr_cc_id, "+", 5, 5, year, hd_elems, fday, count);
+    #####: 1350:      holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 1351:	       ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1352:      holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -: 1353:	       ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -: 1354:	       count);
+    #####: 1355:      holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text),
+call    0 never executed
+        -: 1356:	       ptr_cc_id, DIS_HLS_PREF2, 10, 3, year, hd_elems, fday, count);
+    #####: 1357:      for (day = DAY_MIN; day <= 2; day++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1358:	holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1359:		 ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1360:      holiday (*init_data, detected, _(hd_text[HD_TEACHERS_DAY].ht_text),
+call    0 never executed
+        -: 1361:	       ptr_cc_id, DIS_HLS_PREF, 15, 5, year, hd_elems, fday, count);
+    #####: 1362:      holiday (*init_data, detected, _(hd_text[HD_ALPHABET_DAY].ht_text),
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -: 1363:	       ptr_cc_id, (year > 1995) ? DIS_HLS_PREF : "+", 9, 10, year,
+        -: 1364:	       hd_elems, fday, count);
+    #####: 1365:      if (year > 1918)
+branch  0 never executed
+branch  1 never executed
+    #####: 1366:	holiday (*init_data, detected,
+call    0 never executed
+    #####: 1367:		 _(hd_text[HD_INDEPENDENCE_MOVEMENT_DAY].ht_text), ptr_cc_id,
+        -: 1368:		 "+", DAY_MIN, 3, year, hd_elems, fday, count);
+    #####: 1369:      if (year > 1944)
+branch  0 never executed
+branch  1 never executed
+    #####: 1370:	holiday (*init_data, detected, _(hd_text[HD_LIBERATION_DAY].ht_text),
+call    0 never executed
+        -: 1371:		 ptr_cc_id, "+", 15, 8, year, hd_elems, fday, count);
+    #####: 1372:      if (year > 1947)
+branch  0 never executed
+branch  1 never executed
+        -: 1373:	{
+    #####: 1374:	  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1375:		   _(hd_text[HD_ARMED_FORCES_DAY].ht_text), ptr_cc_id, "+",
+        -: 1376:		   DAY_MIN, 10, year, hd_elems, fday, count);
+    #####: 1377:	  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1378:		   _(hd_text[HD_CONSTITUTION_ANNIVERSARY].ht_text), ptr_cc_id,
+        -: 1379:		   DIS_HLS_PREF, 17, 7, year, hd_elems, fday, count);
+    #####: 1380:	  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1381:		   _(hd_text[HD_NATIONAL_FOUNDATION_DAY].ht_text), ptr_cc_id,
+        -: 1382:		   "+", 3, 10, year, hd_elems, fday, count);
+        -: 1383:	}
+    #####: 1384:      if (year > 1952)
+branch  0 never executed
+branch  1 never executed
+    #####: 1385:	holiday (*init_data, detected, _(hd_text[HD_REMEMBRANCE_DAY].ht_text),
+call    0 never executed
+        -: 1386:		 ptr_cc_id, "+", 6, 6, year, hd_elems, fday, count);
+        -: 1387:    }
+    #####: 1388:}
+        -: 1389:
+        -: 1390:
+        -: 1391:
+        -: 1392:void
+function mx_hdy called 0 returned 0% blocks executed 0%
+    #####: 1393:mx_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1394:     Bool *init_data;
+        -: 1395:     const Bool detected;
+        -: 1396:     int easter;
+        -: 1397:     const int year;
+        -: 1398:     int *hd_elems;
+        -: 1399:     const int fday;
+        -: 1400:     const int count;
+        -: 1401:/*!
+        -: 1402:   Manages all specific holidays celebrated in Mexico.
+        -: 1403:*/
+        -: 1404:{
+        -: 1405:  register int day;
+        -: 1406:
+        -: 1407:
+    #####: 1408:  ptr_cc_id = "MX";
+    #####: 1409:  holiday (*init_data, detected, _(hd_text[HD_BENITO_JUAREZ_DAY].ht_text),
+call    0 never executed
+        -: 1410:	   ptr_cc_id, "+", 21, 3, year, hd_elems, fday, count);
+    #####: 1411:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1412:    *init_data = FALSE;
+    #####: 1413:  holiday (*init_data, detected, _(hd_text[HD_BATTLE_OF_PUEBLA].ht_text),
+call    0 never executed
+        -: 1414:	   ptr_cc_id, "#", 5, 5, year, hd_elems, fday, count);
+    #####: 1415:  holiday (*init_data, detected, _(hd_text[HD_GUADALUPE_VIRGINS_DAY].ht_text),
+call    0 never executed
+        -: 1416:	   ptr_cc_id, "#", 12, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1417:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -: 1418:	   ptr_cc_id, "#", DAY_MIN, 11, year, hd_elems, fday, count);
+    #####: 1419:  holiday (*init_data, detected, _(hd_text[HD_ALL_SOULS_DAY].ht_text),
+call    0 never executed
+        -: 1420:	   ptr_cc_id, DIS_HLS_PREF, 2, 11, year, hd_elems, fday, count);
+    #####: 1421:  for (day = DAY_MAX; day; day--)
+branch  0 never executed
+branch  1 never executed
+    #####: 1422:    holiday (*init_data, detected, _(hd_text[HD_CARNIVAL].ht_text),
+call    0 never executed
+    #####: 1423:	     ptr_cc_id, DIS_HLS_PREF, easter - 46 - day, 0, year, hd_elems,
+        -: 1424:	     fday, count);
+    #####: 1425:  holiday (*init_data, detected, _(hd_text[HD_CHILDRENS_DAY].ht_text),
+call    0 never executed
+        -: 1426:	   ptr_cc_id, DIS_HLS_PREF, dvec[4 - 1], 4, year, hd_elems, fday,
+        -: 1427:	   count);
+    #####: 1428:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 1429:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1430:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -: 1431:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -: 1432:	   count);
+    #####: 1433:  holiday (*init_data, detected, _(hd_text[HD_COLUMBUS_DAY].ht_text),
+call    0 never executed
+        -: 1434:	   ptr_cc_id, "#", 12, 10, year, hd_elems, fday, count);
+    #####: 1435:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1436:	   _(hd_text[HD_CONSTITUTION_ANNIVERSARY].ht_text), ptr_cc_id, "+", 5,
+        -: 1437:	   2, year, hd_elems, fday, count);
+    #####: 1438:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -: 1439:	   ptr_cc_id, DIS_HLS_PREF, easter + 1, 0, year, hd_elems, fday,
+        -: 1440:	   count);
+    #####: 1441:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -: 1442:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####: 1443:  day = eval_holiday (DAY_MIN, 6, year, DAY_MAX, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 1444:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -: 1445:	   ptr_cc_id, DIS_HLS_PREF, day, 6, year, hd_elems, fday, count);
+    #####: 1446:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1447:	   _(hd_text[HD_FEAST_OF_CORPUS_CHRISTI].ht_text), ptr_cc_id,
+        -: 1448:	   DIS_HLS_PREF, easter + 60, 0, year, hd_elems, fday, count);
+    #####: 1449:  holiday (*init_data, detected, _(hd_text[HD_FLAG_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1450:	   DIS_HLS_PREF, 24, 2, year, hd_elems, fday, count);
+    #####: 1451:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -: 1452:	   ptr_cc_id, "#", easter - 2, 0, year, hd_elems, fday, count);
+    #####: 1453:  holiday (*init_data, detected, _(hd_text[HD_HOLY_INNOCENTS_DAY].ht_text),
+call    0 never executed
+        -: 1454:	   ptr_cc_id, DIS_HLS_PREF, 28, MONTH_MAX, year, hd_elems, fday,
+        -: 1455:	   count);
+    #####: 1456:  holiday (*init_data, detected, _(hd_text[HD_INDEPENDENCE_DAY].ht_text),
+call    0 never executed
+        -: 1457:	   ptr_cc_id, "+", 16, 9, year, hd_elems, fday, count);
+    #####: 1458:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1459:	   _(hd_text[HD_INDEPENDENCE_PROCLAMATION].ht_text), ptr_cc_id,
+        -: 1460:	   DIS_HLS_PREF, 15, 9, year, hd_elems, fday, count);
+    #####: 1461:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1462:	   "+", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####: 1463:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -: 1464:	   ptr_cc_id, DIS_HLS_PREF, 15, 8, year, hd_elems, fday, count);
+    #####: 1465:  holiday (*init_data, detected, _(hd_text[HD_MAUNDY_THURSDAY].ht_text),
+call    0 never executed
+        -: 1466:	   ptr_cc_id, "#", easter - 3, 0, year, hd_elems, fday, count);
+    #####: 1467:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -: 1468:	   ptr_cc_id, DIS_HLS_PREF2, 10, 5, year, hd_elems, fday, count);
+    #####: 1469:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1470:	   ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1471:  if (!(year % 6))
+branch  0 never executed
+branch  1 never executed
+    #####: 1472:    holiday (*init_data, detected,
+call    0 never executed
+    #####: 1473:	     _(hd_text[HD_PRESIDENTIAL_INAUGURATION].ht_text), ptr_cc_id, "+",
+        -: 1474:	     DAY_MIN, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1475:  holiday (*init_data, detected, _(hd_text[HD_PRESIDENTS_INFORM].ht_text),
+call    0 never executed
+        -: 1476:	   ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 9, year, hd_elems, fday, count);
+    #####: 1477:  holiday (*init_data, detected, _(hd_text[HD_REVOLUTION_DAY].ht_text),
+call    0 never executed
+        -: 1478:	   ptr_cc_id, DIS_HLS_PREF, 20, 11, year, hd_elems, fday, count);
+    #####: 1479:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1480:	   DIS_HLS_PREF2, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems,
+        -: 1481:	   fday, count);
+    #####: 1482:  holiday (*init_data, detected, _(hd_text[HD_THREE_KINGS_DAY].ht_text),
+call    0 never executed
+        -: 1483:	   ptr_cc_id, DIS_HLS_PREF, 6, MONTH_MIN, year, hd_elems, fday,
+        -: 1484:	   count);
+    #####: 1485:}
+        -: 1486:
+        -: 1487:
+        -: 1488:
+        -: 1489:void
+function nl_hdy called 0 returned 0% blocks executed 0%
+    #####: 1490:nl_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1491:     Bool *init_data;
+        -: 1492:     const Bool detected;
+        -: 1493:     int easter;
+        -: 1494:     const int year;
+        -: 1495:     int *hd_elems;
+        -: 1496:     const int fday;
+        -: 1497:     const int count;
+        -: 1498:/*!
+        -: 1499:   Manages all specific holidays celebrated in the Netherlands.
+        -: 1500:*/
+        -: 1501:{
+        -: 1502:  register int day;
+        -: 1503:
+        -: 1504:
+    #####: 1505:  ptr_cc_id = "NL";
+    #####: 1506:  holiday (*init_data, detected, _(hd_text[HD_EINDHOVENS_LIBERATION].ht_text),
+call    0 never executed
+        -: 1507:	   ptr_cc_id, DIS_HLS_PREF2, 18, 9, year, hd_elems, fday, count);
+    #####: 1508:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1509:    *init_data = FALSE;
+    #####: 1510:  day = eval_holiday (DAY_MIN, 9, year, 2, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 1511:  holiday (*init_data, detected, _(hd_text[HD_PRINCESS_DAY].ht_text),
+call    0 never executed
+        -: 1512:	   ptr_cc_id, DIS_HLS_PREF, day, 9, year, hd_elems, fday, count);
+    #####: 1513:  holiday (*init_data, detected, _(hd_text[HD_WORLD_ANIMAL_DAY].ht_text),
+call    0 never executed
+        -: 1514:	   ptr_cc_id, DIS_HLS_PREF, 4, 10, year, hd_elems, fday, count);
+    #####: 1515:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+call    0 never executed
+        -: 1516:	   ptr_cc_id, "+", 26, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1517:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -: 1518:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -: 1519:	   count);
+    #####: 1520:  holiday (*init_data, detected, _(hd_text[HD_CHRISTS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -: 1521:	   ptr_cc_id, "+", easter + 39, 0, year, hd_elems, fday, count);
+    #####: 1522:  day = eval_holiday (DAY_MIN, 6, year, DAY_MAX, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 1523:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -: 1524:	   ptr_cc_id, DIS_HLS_PREF, day, 6, year, hd_elems, fday, count);
+    #####: 1525:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -: 1526:	   ptr_cc_id, DIS_HLS_PREF2, easter - 2, 0, year, hd_elems, fday,
+        -: 1527:	   count);
+    #####: 1528:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE);
+call    0 never executed
+    #####: 1529:  if (day_of_year (day, 5, year) != easter + 49)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 1530:    day += DAY_MAX;
+    #####: 1531:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -: 1532:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####: 1533:  holiday (*init_data, detected, _(hd_text[HD_ST_NICHOLAS_DAY].ht_text),
+call    0 never executed
+        -: 1534:	   ptr_cc_id, DIS_HLS_PREF, 5, MONTH_MAX, year, hd_elems, fday,
+        -: 1535:	   count);
+    #####: 1536:  if (year > 1890 && year < 1949)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1537:    holiday (*init_data, detected, _(hd_text[HD_THE_QUEENS_BIRTHDAY].ht_text),
+call    0 never executed
+        -: 1538:	     ptr_cc_id, "+", 31, 8, year, hd_elems, fday, count);
+    #####: 1539:  else if (year > 1948 && year < 2014)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1540:    holiday (*init_data, detected, _(hd_text[HD_THE_QUEENS_BIRTHDAY].ht_text),
+call    0 never executed
+        -: 1541:	     ptr_cc_id, "+", 30, 4, year, hd_elems, fday, count);
+    #####: 1542:  else if (year > 2013)
+branch  0 never executed
+branch  1 never executed
+    #####: 1543:    holiday (*init_data, detected, _(hd_text[HD_THE_KINGS_BIRTHDAY].ht_text),
+call    0 never executed
+        -: 1544:	     ptr_cc_id, "+", 27, 4, year, hd_elems, fday, count);
+    #####: 1545:  holiday (*init_data, detected, _(hd_text[HD_REMEMBRANCE_DAY].ht_text),
+call    0 never executed
+        -: 1546:	   ptr_cc_id, DIS_HLS_PREF, 4, 5, year, hd_elems, fday, count);
+    #####: 1547:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1548:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -: 1549:	   count);
+    #####: 1550:  if ((year > 1944) && !(year % 5))
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+    #####: 1551:    holiday (*init_data, detected, _(hd_text[HD_LIBERATION_DAY].ht_text),
+call    0 never executed
+        -: 1552:	     ptr_cc_id, "+", 5, 5, year, hd_elems, fday, count);
+    #####: 1553:  base_christian_hdy (init_data, detected, easter, year, hd_elems, fday,
+call    0 never executed
+        -: 1554:		      count, ptr_cc_id);
+    #####: 1555:}
+        -: 1556:
+        -: 1557:
+        -: 1558:
+        -: 1559:void
+function nz_hdy called 0 returned 0% blocks executed 0%
+    #####: 1560:nz_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1561:     Bool *init_data;
+        -: 1562:     const Bool detected;
+        -: 1563:     int easter;
+        -: 1564:     const int year;
+        -: 1565:     int *hd_elems;
+        -: 1566:     const int fday;
+        -: 1567:     const int count;
+        -: 1568:/*!
+        -: 1569:   Manages all specific holidays celebrated in New Zealand.
+        -: 1570:*/
+        -: 1571:{
+        -: 1572:  register int day;
+        -: 1573:  register int i;
+        -: 1574:
+        -: 1575:
+    #####: 1576:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+    #####: 1577:    ptr_cc_id = "NZ";
+    #####: 1578:  day = 29;
+    #####: 1579:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####: 1580:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1581:    day += ((DAY_MAX - i) + 1);
+        -: 1582:  else
+    #####: 1583:    day += (DAY_MIN - i);
+    #####: 1584:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1585:	   _(hd_text[HD_ANNIVERSARY_OF_AUCKLAND].ht_text), ptr_cc_id,
+        -: 1586:	   DIS_HLS_PREF2, day, 0, year, hd_elems, fday, count);
+    #####: 1587:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1588:    *init_data = FALSE;
+    #####: 1589:  day = eval_holiday (DAY_MIN, 9, year, DAY_MIN, TRUE) + (3 * DAY_MAX);
+call    0 never executed
+    #####: 1590:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1591:	   _(hd_text[HD_ANNIVERSARY_OF_CANTERBURY_SOUTH].ht_text), ptr_cc_id,
+        -: 1592:	   DIS_HLS_PREF2, day, 9, year, hd_elems, fday, count);
+    #####: 1593:  day = day_of_year (30, 11, year);
+call    0 never executed
+    #####: 1594:  i = weekday_of_date (30, 11, year);
+call    0 never executed
+    #####: 1595:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1596:    day += ((DAY_MAX - i) + 1);
+        -: 1597:  else
+    #####: 1598:    day += (DAY_MIN - i);
+    #####: 1599:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1600:	   _(hd_text[HD_ANNIVERSARY_OF_CHATHAM_ISLANDS].ht_text), ptr_cc_id,
+        -: 1601:	   DIS_HLS_PREF2, day, 0, year, hd_elems, fday, count);
+    #####: 1602:  day = day_of_year (DAY_MIN, 2, year);
+call    0 never executed
+    #####: 1603:  i = weekday_of_date (DAY_MIN, 2, year);
+call    0 never executed
+    #####: 1604:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1605:    day += ((DAY_MAX - i) + 1);
+        -: 1606:  else
+    #####: 1607:    day += (DAY_MIN - i);
+    #####: 1608:  holiday (*init_data, detected, _(hd_text[HD_ANNIVERSARY_OF_NELSON].ht_text),
+call    0 never executed
+        -: 1609:	   ptr_cc_id, DIS_HLS_PREF2, day, 0, year, hd_elems, fday, count);
+    #####: 1610:  day = 23;
+    #####: 1611:  i = weekday_of_date (day, 3, year);
+call    0 never executed
+    #####: 1612:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1613:    day += ((DAY_MAX - i) + 1);
+        -: 1614:  else
+    #####: 1615:    day += (DAY_MIN - i);
+    #####: 1616:  holiday (*init_data, detected, _(hd_text[HD_ANNIVERSARY_OF_OTAGO].ht_text),
+call    0 never executed
+        -: 1617:	   ptr_cc_id, DIS_HLS_PREF2, day, 3, year, hd_elems, fday, count);
+    #####: 1618:  day = 17;
+    #####: 1619:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####: 1620:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1621:    day += ((DAY_MAX - i) + 1);
+        -: 1622:  else
+    #####: 1623:    day += (DAY_MIN - i);
+    #####: 1624:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1625:	   _(hd_text[HD_ANNIVERSARY_OF_SOUTHLAND].ht_text), ptr_cc_id,
+        -: 1626:	   DIS_HLS_PREF2, day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1627:  day = eval_holiday (DAY_MIN, 3, year, DAY_MIN, TRUE) + DAY_MAX;
+call    0 never executed
+    #####: 1628:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1629:	   _(hd_text[HD_ANNIVERSARY_OF_TARANAKI].ht_text), ptr_cc_id,
+        -: 1630:	   DIS_HLS_PREF2, day, 3, year, hd_elems, fday, count);
+    #####: 1631:  day = 22;
+    #####: 1632:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####: 1633:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1634:    day += ((DAY_MAX - i) + 1);
+        -: 1635:  else
+    #####: 1636:    day += (DAY_MIN - i);
+    #####: 1637:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1638:	   _(hd_text[HD_ANNIVERSARY_OF_WELLINGTON].ht_text), ptr_cc_id,
+        -: 1639:	   DIS_HLS_PREF2, day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1640:  day = day_of_year (DAY_MIN, MONTH_MAX, year);
+call    0 never executed
+    #####: 1641:  i = weekday_of_date (DAY_MIN, MONTH_MAX, year);
+call    0 never executed
+    #####: 1642:  if (i > 4)
+branch  0 never executed
+branch  1 never executed
+    #####: 1643:    day += ((DAY_MAX - i) + 1);
+        -: 1644:  else
+    #####: 1645:    day += (DAY_MIN - i);
+    #####: 1646:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1647:	   _(hd_text[HD_ANNIVERSARY_OF_WESTLAND].ht_text), ptr_cc_id,
+        -: 1648:	   DIS_HLS_PREF2, day, 0, year, hd_elems, fday, count);
+    #####: 1649:  holiday (*init_data, detected, _(hd_text[HD_ANZAC_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1650:	   "+", 25, 4, year, hd_elems, fday, count);
+    #####: 1651:  day = 26;
+    #####: 1652:  i = weekday_of_date (day, MONTH_MAX, year);
+call    0 never executed
+    #####: 1653:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1654:    day += 2;
+    #####: 1655:  else if (i == DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1656:    day++;
+    #####: 1657:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+call    0 never executed
+        -: 1658:	   ptr_cc_id, "+", day, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1659:  day = 25;
+    #####: 1660:  i = weekday_of_date (day, MONTH_MAX, year);
+call    0 never executed
+    #####: 1661:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1662:    day += ((DAY_MAX - i) + 1);
+    #####: 1663:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 1664:	   ptr_cc_id, "+", day, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1665:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -: 1666:	   ptr_cc_id, "+", easter + 1, 0, year, hd_elems, fday, count);
+    #####: 1667:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -: 1668:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####: 1669:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -: 1670:	   ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####: 1671:  day = eval_holiday (DAY_MIN, 10, year, DAY_MIN, TRUE) + (3 * DAY_MAX);
+call    0 never executed
+    #####: 1672:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text),
+call    0 never executed
+        -: 1673:	   ptr_cc_id, "+", day, 10, year, hd_elems, fday, count);
+    #####: 1674:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1675:	   _(hd_text[HD_ANNIVERSARY_OF_HAWKES_BAY].ht_text), ptr_cc_id,
+        -: 1676:	   DIS_HLS_PREF2, day - 3, 10, year, hd_elems, fday, count);
+    #####: 1677:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1678:	   _(hd_text[HD_ANNIVERSARY_OF_MARLBOROUGH].ht_text), ptr_cc_id,
+    #####: 1679:	   DIS_HLS_PREF2, day_of_year (day, 10, year) + DAY_MAX, 0, year,
+call    0 never executed
+        -: 1680:	   hd_elems, fday, count);
+    #####: 1681:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1682:	   _(hd_text[HD_ANNIVERSARY_OF_CANTERBURY_NORTH].ht_text), ptr_cc_id,
+    #####: 1683:	   DIS_HLS_PREF2, day_of_year (day, 10, year) + (2 * DAY_MAX) + 4, 0,
+call    0 never executed
+        -: 1684:	   year, hd_elems, fday, count);
+    #####: 1685:  holiday (*init_data, detected, _(hd_text[HD_NATIONAL_HOLIDAY].ht_text),
+call    0 never executed
+        -: 1686:	   ptr_cc_id, "+", 6, 2, year, hd_elems, fday, count);
+    #####: 1687:  day = DAY_MIN;
+    #####: 1688:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####: 1689:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1690:    day += ((DAY_MAX - i) + 1);
+    #####: 1691:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1692:	   ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1693:  day = 2;
+    #####: 1694:  i = weekday_of_date (day, MONTH_MIN, year);
+call    0 never executed
+    #####: 1695:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1696:    day += 2;
+    #####: 1697:  else if (i == DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1698:    day++;
+    #####: 1699:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1700:	   ptr_cc_id, "+", day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1701:  day = eval_holiday (DAY_MIN, 6, year, DAY_MIN, TRUE);
+call    0 never executed
+    #####: 1702:  holiday (*init_data, detected, _(hd_text[HD_THE_QUEENS_BIRTHDAY].ht_text),
+call    0 never executed
+        -: 1703:	   ptr_cc_id, "+", day, 6, year, hd_elems, fday, count);
+    #####: 1704:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1705:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -: 1706:	   count);
+    #####: 1707:}
+        -: 1708:
+        -: 1709:
+        -: 1710:
+        -: 1711:void
+function pt_hdy called 0 returned 0% blocks executed 0%
+    #####: 1712:pt_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1713:     Bool *init_data;
+        -: 1714:     const Bool detected;
+        -: 1715:     int easter;
+        -: 1716:     const int year;
+        -: 1717:     int *hd_elems;
+        -: 1718:     const int fday;
+        -: 1719:     const int count;
+        -: 1720:/*!
+        -: 1721:   Manages all specific holidays celebrated in Portugal.
+        -: 1722:*/
+        -: 1723:{
+    #####: 1724:  ptr_cc_id = "PT";
+    #####: 1725:  holiday (*init_data, detected, _(hd_text[HD_CAMOES_DAY].ht_text),
+call    0 never executed
+        -: 1726:	   ptr_cc_id, "+", 10, 6, year, hd_elems, fday, count);
+    #####: 1727:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1728:    *init_data = FALSE;
+    #####: 1729:  holiday (*init_data, detected, _(hd_text[HD_ALL_SAINTS_DAY].ht_text),
+call    0 never executed
+        -: 1730:	   ptr_cc_id, "+", DAY_MIN, 11, year, hd_elems, fday, count);
+    #####: 1731:  holiday (*init_data, detected, _(hd_text[HD_ASH_MONDAY].ht_text),
+call    0 never executed
+        -: 1732:	   ptr_cc_id, DIS_HLS_PREF2, easter - 48, 0, year, hd_elems, fday,
+        -: 1733:	   count);
+    #####: 1734:  holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1735:	   DIS_HLS_PREF2, 26, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1736:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 1737:	   ptr_cc_id, "+", 25, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1738:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -: 1739:	   ptr_cc_id, DIS_HLS_PREF2, 24, MONTH_MAX, year, hd_elems, fday,
+        -: 1740:	   count);
+    #####: 1741:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -: 1742:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####: 1743:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -: 1744:	   ptr_cc_id, "#", easter + 1, 0, year, hd_elems, fday, count);
+    #####: 1745:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1746:	   _(hd_text[HD_FEAST_OF_CORPUS_CHRISTI].ht_text), ptr_cc_id, "+",
+        -: 1747:	   easter + 60, 0, year, hd_elems, fday, count);
+    #####: 1748:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -: 1749:	   ptr_cc_id, "+", easter - 2, 0, year, hd_elems, fday, count);
+    #####: 1750:  holiday (*init_data, detected, _(hd_text[HD_INDEPENDENCE_DAY].ht_text),
+call    0 never executed
+        -: 1751:	   ptr_cc_id, "+", DAY_MIN, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1752:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1753:	   "#", DAY_MIN, 5, year, hd_elems, fday, count);
+    #####: 1754:  holiday (*init_data, detected, _(hd_text[HD_MARYS_ASCENSION_DAY].ht_text),
+call    0 never executed
+        -: 1755:	   ptr_cc_id, "+", 15, 8, year, hd_elems, fday, count);
+    #####: 1756:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1757:	   _(hd_text[HD_MARYS_IMMACULATE_CONCEPTION].ht_text), ptr_cc_id, "+",
+        -: 1758:	   8, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1759:  holiday (*init_data, detected, _(hd_text[HD_MAUNDY_THURSDAY].ht_text),
+call    0 never executed
+        -: 1760:	   ptr_cc_id, DIS_HLS_PREF2, easter - 3, 0, year, hd_elems, fday,
+        -: 1761:	   count);
+    #####: 1762:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1763:	   ptr_cc_id, "+", DAY_MIN, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1764:  holiday (*init_data, detected, _(hd_text[HD_RE_DAY].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1765:	   "+", 5, 10, year, hd_elems, fday, count);
+    #####: 1766:  holiday (*init_data, detected, _(hd_text[HD_SHROVE_TUESDAY].ht_text),
+call    0 never executed
+        -: 1767:	   ptr_cc_id, DIS_HLS_PREF2, easter - 47, 0, year, hd_elems, fday,
+        -: 1768:	   count);
+    #####: 1769:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1770:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -: 1771:	   count);
+    #####: 1772:  if (year > 1944)
+branch  0 never executed
+branch  1 never executed
+    #####: 1773:    holiday (*init_data, detected, _(hd_text[HD_LIBERATION_DAY].ht_text),
+call    0 never executed
+        -: 1774:	     ptr_cc_id, "+", 25, 4, year, hd_elems, fday, count);
+    #####: 1775:}
+        -: 1776:
+        -: 1777:
+        -: 1778:
+        -: 1779:void
+function ru_hdy called 0 returned 0% blocks executed 0%
+    #####: 1780:ru_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1781:     Bool *init_data;
+        -: 1782:     const Bool detected;
+        -: 1783:     int easter;
+        -: 1784:     const int year;
+        -: 1785:     int *hd_elems;
+        -: 1786:     const int fday;
+        -: 1787:     const int count;
+        -: 1788:/*!
+        -: 1789:   Manages all specific holidays celebrated in Russian Federation.
+        -: 1790:*/
+        -: 1791:{
+        -: 1792:  register int i;
+        -: 1793:  auto int greg_diff;
+        -: 1794:  auto int d;
+        -: 1795:  auto int m;
+        -: 1796:  auto int y;
+        -: 1797:
+        -: 1798:
+    #####: 1799:  ptr_cc_id = "RU";
+        -: 1800:  /*
+        -: 1801:     The Christians in Russia compute all holiday dates which are
+        -: 1802:     depending on Easter Sunday's date in the way done by the
+        -: 1803:     Orthodox Christian Eastern churches old calendar.
+        -: 1804:   */
+    #####: 1805:  easter = orthodox_easter (year, &greg_diff, 1924, 3, 10, 22);
+call    0 never executed
+    #####: 1806:  holiday (*init_data, detected, _(hd_text[HD_COSMONAUTS_DAY].ht_text),
+call    0 never executed
+        -: 1807:	   ptr_cc_id, DIS_HLS_PREF, 12, 4, year, hd_elems, fday, count);
+    #####: 1808:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1809:    *init_data = FALSE;
+    #####: 1810:  d = 23;
+    #####: 1811:  i = weekday_of_date (d, 2, year);
+call    0 never executed
+    #####: 1812:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1813:    d += ((DAY_MAX - i) + 1);
+    #####: 1814:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1815:	   _(hd_text[HD_DEFENDERS_OF_MOTHERLAND_DAY].ht_text), ptr_cc_id, "+",
+        -: 1816:	   d, 2, year, hd_elems, fday, count);
+    #####: 1817:  d = DAY_MIN;
+    #####: 1818:  i = weekday_of_date (d, 5, year);
+call    0 never executed
+    #####: 1819:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1820:    d += ((DAY_MAX - i) + 1);
+    #####: 1821:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text),
+call    0 never executed
+        -: 1822:	   ptr_cc_id, "+", d, 5, year, hd_elems, fday, count);
+    #####: 1823:  d = 2;
+    #####: 1824:  i = weekday_of_date (d, 5, year);
+call    0 never executed
+    #####: 1825:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1826:    d += 2;
+    #####: 1827:  else if (i == DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1828:    d++;
+    #####: 1829:  holiday (*init_data, detected, _(hd_text[HD_SPRING_FESTIVAL].ht_text),
+call    0 never executed
+        -: 1830:	   ptr_cc_id, "+", d, 5, year, hd_elems, fday, count);
+    #####: 1831:  d = DAY_MIN;
+    #####: 1832:  i = weekday_of_date (d, MONTH_MIN, year);
+call    0 never executed
+    #####: 1833:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1834:    d += ((DAY_MAX - i) + 1);
+    #####: 1835:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1836:	   ptr_cc_id, "+", d, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1837:  d = 2;
+    #####: 1838:  i = weekday_of_date (d, MONTH_MIN, year);
+call    0 never executed
+    #####: 1839:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1840:    d += 2;
+    #####: 1841:  else if (i == DAY_MIN)
+branch  0 never executed
+branch  1 never executed
+    #####: 1842:    d++;
+    #####: 1843:  holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 1844:	   ptr_cc_id, "+", d, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1845:  d = DAY_MIN;
+    #####: 1846:  if (year != 1924)
+branch  0 never executed
+branch  1 never executed
+    #####: 1847:    d += greg_diff;
+    #####: 1848:  holiday (*init_data, detected,
+call    0 never executed
+    #####: 1849:	   _(hd_text[HD_ORTHODOX_NEW_YEARS_DAY].ht_text), ptr_cc_id,
+        -: 1850:	   DIS_HLS_PREF, d, 0, year, hd_elems, fday, count);
+    #####: 1851:  holiday (*init_data, detected, _(hd_text[HD_SYLVESTER].ht_text), ptr_cc_id,
+call    0 never executed
+        -: 1852:	   DIS_HLS_PREF, dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems, fday,
+        -: 1853:	   count);
+    #####: 1854:  d = 8;
+    #####: 1855:  i = weekday_of_date (d, 3, year);
+call    0 never executed
+    #####: 1856:  if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1857:    d += ((DAY_MAX - i) + 1);
+    #####: 1858:  holiday (*init_data, detected, _(hd_text[HD_WOMENS_DAY].ht_text),
+call    0 never executed
+        -: 1859:	   ptr_cc_id, "+", d, 3, year, hd_elems, fday, count);
+    #####: 1860:  if (year != 1924)
+branch  0 never executed
+branch  1 never executed
+        -: 1861:    {
+    #####: 1862:      d = 24;
+    #####: 1863:      m = MONTH_MAX;
+    #####: 1864:      y = year - 1;
+    #####: 1865:      for (i = 0; i < greg_diff; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1866:	(void) next_date (&d, &m, &y);
+call    0 never executed
+    #####: 1867:      holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+call    0 never executed
+        -: 1868:	       ptr_cc_id, DIS_HLS_PREF, d, m, year, hd_elems, fday, count);
+    #####: 1869:      (void) next_date (&d, &m, &y);
+call    0 never executed
+    #####: 1870:      holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 1871:	       ptr_cc_id, "+", d, m, year, hd_elems, fday, count);
+    #####: 1872:      (void) next_date (&d, &m, &y);
+call    0 never executed
+    #####: 1873:      holiday (*init_data, detected, _(hd_text[HD_BOXING_DAY].ht_text),
+call    0 never executed
+        -: 1874:	       ptr_cc_id, DIS_HLS_PREF, d, m, year, hd_elems, fday, count);
+        -: 1875:    }
+    #####: 1876:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+call    0 never executed
+        -: 1877:	   ptr_cc_id, DIS_HLS_PREF, easter - 2, 0, year, hd_elems, fday,
+        -: 1878:	   count);
+    #####: 1879:  holiday (*init_data, detected, _(hd_text[HD_EASTER_MONDAY].ht_text),
+call    0 never executed
+        -: 1880:	   ptr_cc_id, DIS_HLS_PREF, easter + 1, 0, year, hd_elems, fday,
+        -: 1881:	   count);
+    #####: 1882:  holiday (*init_data, detected, _(hd_text[HD_EASTER_SUNDAY].ht_text),
+call    0 never executed
+        -: 1883:	   ptr_cc_id, "+", easter, 0, year, hd_elems, fday, count);
+    #####: 1884:  if (year > 1944)
+branch  0 never executed
+branch  1 never executed
+        -: 1885:    {
+    #####: 1886:      d = 9;
+    #####: 1887:      i = weekday_of_date (d, 5, year);
+call    0 never executed
+    #####: 1888:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1889:	d += ((DAY_MAX - i) + 1);
+    #####: 1890:      holiday (*init_data, detected, _(hd_text[HD_VICTORY_DAY].ht_text),
+call    0 never executed
+        -: 1891:	       ptr_cc_id, "+", d, 5, year, hd_elems, fday, count);
+        -: 1892:    }
+    #####: 1893:  if (year > 1991)
+branch  0 never executed
+branch  1 never executed
+        -: 1894:    {
+    #####: 1895:      d = 12;
+    #####: 1896:      i = weekday_of_date (d, 6, year);
+call    0 never executed
+    #####: 1897:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1898:	d += ((DAY_MAX - i) + 1);
+    #####: 1899:      holiday (*init_data, detected, _(hd_text[HD_INDEPENDENCE_DAY].ht_text),
+call    0 never executed
+        -: 1900:	       ptr_cc_id, "+", d, 6, year, hd_elems, fday, count);
+    #####: 1901:      d = 12;
+    #####: 1902:      i = weekday_of_date (d, MONTH_MAX, year);
+call    0 never executed
+    #####: 1903:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1904:	d += ((DAY_MAX - i) + 1);
+    #####: 1905:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1906:	       _(hd_text[HD_CONSTITUTION_ANNIVERSARY].ht_text), ptr_cc_id,
+        -: 1907:	       "+", d, MONTH_MAX, year, hd_elems, fday, count);
+    #####: 1908:      d = 7;
+    #####: 1909:      i = weekday_of_date (d, 11, year);
+call    0 never executed
+    #####: 1910:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 1911:	d += ((DAY_MAX - i) + 1);
+    #####: 1912:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1913:	       _(hd_text[HD_DAY_OF_RECONCILIATION].ht_text), ptr_cc_id, "+",
+        -: 1914:	       d, 11, year, hd_elems, fday, count);
+        -: 1915:    }
+    #####: 1916:  else if (year > 1916)
+branch  0 never executed
+branch  1 never executed
+    #####: 1917:    for (i = 6; i <= 7; i++)
+branch  0 never executed
+branch  1 never executed
+    #####: 1918:      holiday (*init_data, detected, _(hd_text[HD_REVOLUTION_DAY].ht_text),
+call    0 never executed
+        -: 1919:	       ptr_cc_id, "+", i, 11, year, hd_elems, fday, count);
+    #####: 1920:}
+        -: 1921:
+        -: 1922:
+        -: 1923:
+        -: 1924:void
+function us_hdy called 0 returned 0% blocks executed 0%
+    #####: 1925:us_hdy (init_data, detected, easter, year, hd_elems, fday, count)
+        -: 1926:     Bool *init_data;
+        -: 1927:     const Bool detected;
+        -: 1928:     int easter;
+        -: 1929:     const int year;
+        -: 1930:     int *hd_elems;
+        -: 1931:     const int fday;
+        -: 1932:     const int count;
+        -: 1933:/*!
+        -: 1934:   Manages all specific holidays celebrated in United States.
+        -: 1935:*/
+        -: 1936:{
+        -: 1937:  register int day;
+        -: 1938:  register int month;
+    #####: 1939:  register int i = 0;
+        -: 1940:
+        -: 1941:
+        -: 1942:#if HD_TOP20CC
+        -: 1943:  ptr_cc_id = CC_US;
+        -: 1944:  observe_us_hdy = SAFR_SUMO;
+        -: 1945:  day = eval_holiday (DAY_MIN, 2, year, DAY_MIN, TRUE) + (2 * DAY_MAX);
+        -: 1946:  holiday (*init_data, detected, _(hd_text[HD_PRESIDENTS_DAY].ht_text),
+        -: 1947:	   ptr_cc_id, "#", day, 2, year, hd_elems, fday, count);
+        -: 1948:  if (*init_data)
+        -: 1949:    *init_data = FALSE;
+        -: 1950:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_EVE].ht_text),
+        -: 1951:	   ptr_cc_id, DIS_HLS_PREF, 24, MONTH_MAX, year, hd_elems, fday,
+        -: 1952:	   count);
+        -: 1953:  day = eval_holiday (DAY_MIN, 10, year, DAY_MIN, TRUE) + DAY_MAX;
+        -: 1954:  holiday (*init_data, detected, _(hd_text[HD_COLUMBUS_DAY].ht_text),
+        -: 1955:	   ptr_cc_id, "#", day, 10, year, hd_elems, fday, count);
+        -: 1956:  holiday (*init_data, detected, _(hd_text[HD_GOOD_FRIDAY].ht_text),
+        -: 1957:	   ptr_cc_id, DIS_HLS_PREF2, easter - 2, 0, year, hd_elems, fday,
+        -: 1958:	   count);
+        -: 1959:  holiday (*init_data, detected,
+        -: 1960:	   _(hd_text[HD_PRESIDENT_LINCOLNS_BIRTHDAY].ht_text), ptr_cc_id,
+        -: 1961:	   DIS_HLS_PREF2, 12, 2, year, hd_elems, fday, count);
+        -: 1962:  holiday (*init_data, detected, _(hd_text[HD_SHROVE_TUESDAY].ht_text),
+        -: 1963:	   ptr_cc_id, DIS_HLS_PREF, easter - 47, 0, year, hd_elems, fday,
+        -: 1964:	   count);
+        -: 1965:  if (year > 1844)
+        -: 1966:    {
+        -: 1967:      day = eval_holiday (DAY_MIN, 11, year, DAY_MIN, TRUE) + 1;
+        -: 1968:      holiday (*init_data, detected, _(hd_text[HD_ELECTION_DAY].ht_text),
+        -: 1969:	       ptr_cc_id, DIS_HLS_PREF2, day, 11, year, hd_elems, fday,
+        -: 1970:	       count);
+        -: 1971:    }
+        -: 1972:  if ((year > 1964) && !((1965 - year) & 3))
+        -: 1973:    {
+        -: 1974:      day = 20;
+        -: 1975:      if (weekday_of_date (day, MONTH_MIN, year) == DAY_MAX)
+        -: 1976:	day++;
+        -: 1977:      holiday (*init_data, detected,
+        -: 1978:	       _(hd_text[HD_PRESIDENTIAL_INAUGURATION].ht_text), ptr_cc_id,
+        -: 1979:	       DIS_HLS_PREF2, day, MONTH_MIN, year, hd_elems, fday, count);
+        -: 1980:    }
+        -: 1981:#else /* !HD_TOP20CC */
+    #####: 1982:  if (!use_other_cc)
+branch  0 never executed
+branch  1 never executed
+        -: 1983:    {
+    #####: 1984:      day = eval_holiday (DAY_MIN, 10, year, DAY_MIN, TRUE) + DAY_MAX;
+call    0 never executed
+    #####: 1985:      holiday (*init_data, detected, _(hd_text[HD_COLUMBUS_DAY].ht_text),
+call    0 never executed
+        -: 1986:	       ptr_cc_id, "+", day, 10, year, hd_elems, fday, count);
+    #####: 1987:      if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 1988:	*init_data = FALSE;
+    #####: 1989:      day =
+    #####: 1990:	eval_holiday (DAY_MIN, MONTH_MIN, year, DAY_MIN,
+call    0 never executed
+        -: 1991:		      TRUE) + (2 * DAY_MAX);
+    #####: 1992:      holiday (*init_data, detected,
+call    0 never executed
+    #####: 1993:	       _(hd_text[HD_MARTIN_LUTHER_KINGS_DAY].ht_text), ptr_cc_id, "+",
+        -: 1994:	       day, MONTH_MIN, year, hd_elems, fday, count);
+    #####: 1995:      day = eval_holiday (DAY_MIN, 2, year, DAY_MIN, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 1996:      holiday (*init_data, detected, _(hd_text[HD_PRESIDENTS_DAY].ht_text),
+call    0 never executed
+        -: 1997:	       ptr_cc_id, "+", day, 2, year, hd_elems, fday, count);
+        -: 1998:    }
+        -: 1999:#endif /* !HD_TOP20CC */
+    #####: 2000:  day = 25;
+    #####: 2001:  month = MONTH_MAX;
+    #####: 2002:  switch (observe_us_hdy)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 2003:    {
+    #####: 2004:    case SASA_SUSU:
+    #####: 2005:      break;
+    #####: 2006:    case SASA_SUMO:
+        -: 2007:    case SASAFR_SUMO:
+    #####: 2008:      if (weekday_of_date (day, month, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 2009:	day++;
+    #####: 2010:      break;
+    #####: 2011:    case SAMO_SUMO:
+    #####: 2012:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2013:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 2014:	day += ((DAY_MAX - i) + 1);
+    #####: 2015:      break;
+    #####: 2016:    case SAFR_SUMO:
+    #####: 2017:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2018:      if (i == DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 2019:	day++;
+    #####: 2020:      else if (i == 6)
+branch  0 never executed
+branch  1 never executed
+    #####: 2021:	day--;
+    #####: 2022:      break;
+    #####: 2023:    default:
+    #####: 2024:      abort ();			/* Error, invalid case. */
+call    0 never executed
+        -: 2025:    }
+    #####: 2026:  holiday (*init_data, detected, _(hd_text[HD_CHRISTMAS_DAY].ht_text),
+call    0 never executed
+        -: 2027:	   ptr_cc_id, "+", day, month, year, hd_elems, fday, count);
+    #####: 2028:  if (*init_data)
+branch  0 never executed
+branch  1 never executed
+    #####: 2029:    *init_data = FALSE;
+    #####: 2030:  day = 4;
+    #####: 2031:  month = 7;
+    #####: 2032:  switch (observe_us_hdy)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 2033:    {
+    #####: 2034:    case SASA_SUSU:
+    #####: 2035:      break;
+    #####: 2036:    case SASA_SUMO:
+        -: 2037:    case SASAFR_SUMO:
+    #####: 2038:      if (weekday_of_date (day, month, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 2039:	day++;
+    #####: 2040:      break;
+    #####: 2041:    case SAMO_SUMO:
+    #####: 2042:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2043:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 2044:	day += ((DAY_MAX - i) + 1);
+    #####: 2045:      break;
+    #####: 2046:    case SAFR_SUMO:
+    #####: 2047:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2048:      if (i == DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 2049:	day++;
+    #####: 2050:      else if (i == 6)
+branch  0 never executed
+branch  1 never executed
+    #####: 2051:	day--;
+    #####: 2052:      break;
+    #####: 2053:    default:
+    #####: 2054:      abort ();			/* Error, invalid case. */
+call    0 never executed
+        -: 2055:    }
+    #####: 2056:  holiday (*init_data, detected, _(hd_text[HD_INDEPENDENCE_DAY].ht_text),
+call    0 never executed
+        -: 2057:	   ptr_cc_id, "+", day, month, year, hd_elems, fday, count);
+    #####: 2058:  day = DAY_MIN;
+    #####: 2059:  month = MONTH_MIN;
+    #####: 2060:  switch (observe_us_hdy)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 2061:    {
+    #####: 2062:    case SASA_SUSU:
+    #####: 2063:      break;
+    #####: 2064:    case SASA_SUMO:
+        -: 2065:    case SASAFR_SUMO:
+    #####: 2066:      if (weekday_of_date (day, month, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 2067:	day++;
+    #####: 2068:      break;
+    #####: 2069:    case SAMO_SUMO:
+    #####: 2070:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2071:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 2072:	day += ((DAY_MAX - i) + 1);
+    #####: 2073:      break;
+    #####: 2074:    case SAFR_SUMO:
+    #####: 2075:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2076:      if (i == DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 2077:	day++;
+    #####: 2078:      else if (i == 6)
+branch  0 never executed
+branch  1 never executed
+    #####: 2079:	i = SPECIAL_VALUE;
+    #####: 2080:      break;
+    #####: 2081:    default:
+    #####: 2082:      abort ();			/* Error, invalid case. */
+call    0 never executed
+        -: 2083:    }
+    #####: 2084:  if (i != SPECIAL_VALUE)
+branch  0 never executed
+branch  1 never executed
+    #####: 2085:    holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 2086:	     ptr_cc_id, "+", day, month, year, hd_elems, fday, count);
+    #####: 2087:  if ((observe_us_hdy == SAFR_SUMO)
+branch  0 never executed
+branch  1 never executed
+    #####: 2088:      && (weekday_of_date (DAY_MIN, MONTH_MIN, year + 1) == 6))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 2089:    holiday (*init_data, detected, _(hd_text[HD_NEW_YEARS_DAY].ht_text),
+call    0 never executed
+        -: 2090:	     ptr_cc_id, "+", dvec[MONTH_MAX - 1], MONTH_MAX, year, hd_elems,
+        -: 2091:	     fday, count);
+    #####: 2092:  day = 11;
+    #####: 2093:  month = 11;
+    #####: 2094:  switch (observe_us_hdy)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+        -: 2095:    {
+    #####: 2096:    case SASA_SUSU:
+    #####: 2097:      break;
+    #####: 2098:    case SASA_SUMO:
+    #####: 2099:      if (weekday_of_date (day, month, year) == DAY_MAX)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+    #####: 2100:	day++;
+    #####: 2101:      break;
+    #####: 2102:    case SAMO_SUMO:
+    #####: 2103:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2104:      if (i > 5)
+branch  0 never executed
+branch  1 never executed
+    #####: 2105:	day += ((DAY_MAX - i) + 1);
+    #####: 2106:      break;
+    #####: 2107:    case SAFR_SUMO:
+        -: 2108:    case SASAFR_SUMO:
+    #####: 2109:      i = weekday_of_date (day, month, year);
+call    0 never executed
+    #####: 2110:      if (i == DAY_MAX)
+branch  0 never executed
+branch  1 never executed
+    #####: 2111:	day++;
+    #####: 2112:      else if (i == 6)
+branch  0 never executed
+branch  1 never executed
+    #####: 2113:	day--;
+    #####: 2114:      break;
+    #####: 2115:    default:
+    #####: 2116:      abort ();			/* Error, invalid case. */
+call    0 never executed
+        -: 2117:    }
+    #####: 2118:  holiday (*init_data, detected, _(hd_text[HD_VETERANS_DAY].ht_text),
+call    0 never executed
+        -: 2119:	   ptr_cc_id, "+", day, month, year, hd_elems, fday, count);
+    #####: 2120:  day = eval_holiday (DAY_MIN, 9, year, DAY_MIN, TRUE);
+call    0 never executed
+    #####: 2121:  holiday (*init_data, detected, _(hd_text[HD_LABOUR_DAY].ht_text),
+call    0 never executed
+        -: 2122:	   ptr_cc_id, "+", day, 9, year, hd_elems, fday, count);
+    #####: 2123:  holiday (*init_data, detected, _(hd_text[HD_GRANDPARENTS_DAY].ht_text),
+call    0 never executed
+        -: 2124:	   ptr_cc_id, DIS_HLS_PREF, day + 6, 9, year, hd_elems, fday, count);
+    #####: 2125:  day = eval_holiday (dvec[5 - 1], 5, year, DAY_MIN, FALSE);
+call    0 never executed
+    #####: 2126:  holiday (*init_data, detected, _(hd_text[HD_REMEMBRANCE_DAY].ht_text),
+call    0 never executed
+        -: 2127:	   ptr_cc_id, "+", day, 5, year, hd_elems, fday, count);
+    #####: 2128:  day = eval_holiday (DAY_MIN, 11, year, 4, TRUE) + (3 * DAY_MAX);
+call    0 never executed
+    #####: 2129:  holiday (*init_data, detected, _(hd_text[HD_THANKSGIVING_DAY].ht_text),
+call    0 never executed
+        -: 2130:	   ptr_cc_id, "+", day, 11, year, hd_elems, fday, count);
+    #####: 2131:  holiday (*init_data, detected, _(hd_text[HD_ALL_FOOLS_DAY].ht_text),
+call    0 never executed
+        -: 2132:	   ptr_cc_id, DIS_HLS_PREF, DAY_MIN, 4, year, hd_elems, fday, count);
+    #####: 2133:  day = eval_holiday (DAY_MIN, 5, year, 6, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 2134:  holiday (*init_data, detected, _(hd_text[HD_ARMED_FORCES_DAY].ht_text),
+call    0 never executed
+        -: 2135:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####: 2136:  holiday (*init_data, detected, _(hd_text[HD_BOSSES_DAY].ht_text),
+call    0 never executed
+        -: 2137:	   ptr_cc_id, DIS_HLS_PREF, 16, 10, year, hd_elems, fday, count);
+    #####: 2138:  day = eval_holiday (DAY_MIN, 10, year, DAY_MAX, TRUE) + DAY_MAX;
+call    0 never executed
+    #####: 2139:  holiday (*init_data, detected, _(hd_text[HD_CHILDRENS_DAY].ht_text),
+call    0 never executed
+        -: 2140:	   ptr_cc_id, DIS_HLS_PREF, day, 10, year, hd_elems, fday, count);
+    #####: 2141:  holiday (*init_data, detected, _(hd_text[HD_CITIZENSHIP_DAY].ht_text),
+call    0 never executed
+        -: 2142:	   ptr_cc_id, DIS_HLS_PREF, 17, 9, year, hd_elems, fday, count);
+    #####: 2143:  day = eval_holiday (DAY_MIN, 6, year, DAY_MAX, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 2144:  holiday (*init_data, detected, _(hd_text[HD_FATHERS_DAY].ht_text),
+call    0 never executed
+        -: 2145:	   ptr_cc_id, DIS_HLS_PREF, day, 6, year, hd_elems, fday, count);
+    #####: 2146:  day = eval_holiday (DAY_MIN, 8, year, DAY_MAX, TRUE);
+call    0 never executed
+    #####: 2147:  holiday (*init_data, detected, _(hd_text[HD_FRIENDSHIP_DAY].ht_text),
+call    0 never executed
+        -: 2148:	   ptr_cc_id, DIS_HLS_PREF, day, 8, year, hd_elems, fday, count);
+    #####: 2149:  holiday (*init_data, detected, _(hd_text[HD_HALLOWEEN].ht_text),
+call    0 never executed
+        -: 2150:	   ptr_cc_id, DIS_HLS_PREF, dvec[10 - 1], 10, year, hd_elems, fday,
+        -: 2151:	   count);
+    #####: 2152:  holiday (*init_data, detected, _(hd_text[HD_GROUNDHOG_DAY].ht_text),
+call    0 never executed
+        -: 2153:	   ptr_cc_id, DIS_HLS_PREF, 2, 2, year, hd_elems, fday, count);
+    #####: 2154:  for (day = 26; day <= dvec[MONTH_MAX - 1]; day++)
+branch  0 never executed
+branch  1 never executed
+    #####: 2155:    holiday (*init_data, detected, _(hd_text[HD_KWANZAA].ht_text),
+call    0 never executed
+        -: 2156:	     ptr_cc_id, DIS_HLS_PREF, day, MONTH_MAX, year, hd_elems, fday,
+        -: 2157:	     count);
+    #####: 2158:  day = eval_holiday (DAY_MIN, 5, year, DAY_MAX, TRUE) + DAY_MAX;
+call    0 never executed
+    #####: 2159:  holiday (*init_data, detected, _(hd_text[HD_MOTHERS_DAY].ht_text),
+call    0 never executed
+        -: 2160:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####: 2161:  holiday (*init_data, detected, _(hd_text[HD_MOTHER_IN_LAWS_DAY].ht_text),
+call    0 never executed
+        -: 2162:	   ptr_cc_id, DIS_HLS_PREF, 26, 10, year, hd_elems, fday, count);
+    #####: 2163:  holiday (*init_data, detected, _(hd_text[HD_NURSES_DAY].ht_text),
+call    0 never executed
+        -: 2164:	   ptr_cc_id, DIS_HLS_PREF, 6, 5, year, hd_elems, fday, count);
+    #####: 2165:  day = eval_holiday (DAY_MIN, 7, year, DAY_MAX, TRUE) + (3 * DAY_MAX);
+call    0 never executed
+    #####: 2166:  holiday (*init_data, detected, _(hd_text[HD_PARENTS_DAY].ht_text),
+call    0 never executed
+        -: 2167:	   ptr_cc_id, DIS_HLS_PREF, day, 7, year, hd_elems, fday, count);
+    #####: 2168:  day = eval_holiday (DAY_MIN, 5, year, 4, TRUE);
+call    0 never executed
+    #####: 2169:  holiday (*init_data, detected, _(hd_text[HD_PRAYER_DAY].ht_text),
+call    0 never executed
+        -: 2170:	   ptr_cc_id, DIS_HLS_PREF, day, 5, year, hd_elems, fday, count);
+    #####: 2171:  holiday (*init_data, detected, _(hd_text[HD_ST_PATRICKS_DAY].ht_text),
+call    0 never executed
+        -: 2172:	   ptr_cc_id, DIS_HLS_PREF, 17, 3, year, hd_elems, fday, count);
+    #####: 2173:  holiday (*init_data, detected, _(hd_text[HD_ST_VALENTINES_DAY].ht_text),
+call    0 never executed
+        -: 2174:	   ptr_cc_id, DIS_HLS_PREF, 14, 2, year, hd_elems, fday, count);
+    #####: 2175:  day = eval_holiday (DAY_MIN, 10, year, 6, TRUE) + (2 * DAY_MAX);
+call    0 never executed
+    #####: 2176:  holiday (*init_data, detected, _(hd_text[HD_SWEETEST_DAY].ht_text),
+call    0 never executed
+        -: 2177:	   ptr_cc_id, DIS_HLS_PREF, day, 10, year, hd_elems, fday, count);
+    #####: 2178:}

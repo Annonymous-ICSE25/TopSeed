@@ -1,0 +1,372 @@
+        -:    0:Source:../../lib/mbchar.h
+        -:    0:Programs:50
+        -:    1:/* Multibyte character data type.
+        -:    2:   Copyright (C) 2001, 2005-2007, 2009-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:/* Written by Bruno Haible <bruno@clisp.org>.  */
+        -:   18:
+        -:   19:/* A multibyte character is a short subsequence of a char* string,
+        -:   20:   representing a single wide character.
+        -:   21:
+        -:   22:   We use multibyte characters instead of wide characters because of
+        -:   23:   the following goals:
+        -:   24:   1) correct multibyte handling, i.e. operate according to the LC_CTYPE
+        -:   25:      locale,
+        -:   26:   2) ease of maintenance, i.e. the maintainer needs not know all details
+        -:   27:      of the ISO C 99 standard,
+        -:   28:   3) don't fail grossly if the input is not in the encoding set by the
+        -:   29:      locale, because often different encodings are in use in the same
+        -:   30:      countries (ISO-8859-1/UTF-8, EUC-JP/Shift_JIS, ...),
+        -:   31:   4) fast in the case of ASCII characters,
+        -:   32:   5) portability, i.e. don't make unportable assumptions about wchar_t.
+        -:   33:
+        -:   34:   Multibyte characters are only accessed through the mb* macros.
+        -:   35:
+        -:   36:   mb_ptr (mbc)
+        -:   37:     return a pointer to the beginning of the multibyte sequence.
+        -:   38:
+        -:   39:   mb_len (mbc)
+        -:   40:     returns the number of bytes occupied by the multibyte sequence.
+        -:   41:     Always > 0.
+        -:   42:
+        -:   43:   mb_iseq (mbc, sc)
+        -:   44:     returns true if mbc is the standard ASCII character sc.
+        -:   45:
+        -:   46:   mb_isnul (mbc)
+        -:   47:     returns true if mbc is the nul character.
+        -:   48:
+        -:   49:   mb_cmp (mbc1, mbc2)
+        -:   50:     returns a positive, zero, or negative value depending on whether mbc1
+        -:   51:     sorts after, same or before mbc2.
+        -:   52:
+        -:   53:   mb_casecmp (mbc1, mbc2)
+        -:   54:     returns a positive, zero, or negative value depending on whether mbc1
+        -:   55:     sorts after, same or before mbc2, modulo upper/lowercase conversion.
+        -:   56:
+        -:   57:   mb_equal (mbc1, mbc2)
+        -:   58:     returns true if mbc1 and mbc2 are equal.
+        -:   59:
+        -:   60:   mb_caseequal (mbc1, mbc2)
+        -:   61:     returns true if mbc1 and mbc2 are equal modulo upper/lowercase conversion.
+        -:   62:
+        -:   63:   mb_isalnum (mbc)
+        -:   64:     returns true if mbc is alphanumeric.
+        -:   65:
+        -:   66:   mb_isalpha (mbc)
+        -:   67:     returns true if mbc is alphabetic.
+        -:   68:
+        -:   69:   mb_isascii(mbc)
+        -:   70:     returns true if mbc is plain ASCII.
+        -:   71:
+        -:   72:   mb_isblank (mbc)
+        -:   73:     returns true if mbc is a blank.
+        -:   74:
+        -:   75:   mb_iscntrl (mbc)
+        -:   76:     returns true if mbc is a control character.
+        -:   77:
+        -:   78:   mb_isdigit (mbc)
+        -:   79:     returns true if mbc is a decimal digit.
+        -:   80:
+        -:   81:   mb_isgraph (mbc)
+        -:   82:     returns true if mbc is a graphic character.
+        -:   83:
+        -:   84:   mb_islower (mbc)
+        -:   85:     returns true if mbc is lowercase.
+        -:   86:
+        -:   87:   mb_isprint (mbc)
+        -:   88:     returns true if mbc is a printable character.
+        -:   89:
+        -:   90:   mb_ispunct (mbc)
+        -:   91:     returns true if mbc is a punctuation character.
+        -:   92:
+        -:   93:   mb_isspace (mbc)
+        -:   94:     returns true if mbc is a space character.
+        -:   95:
+        -:   96:   mb_isupper (mbc)
+        -:   97:     returns true if mbc is uppercase.
+        -:   98:
+        -:   99:   mb_isxdigit (mbc)
+        -:  100:     returns true if mbc is a hexadecimal digit.
+        -:  101:
+        -:  102:   mb_width (mbc)
+        -:  103:     returns the number of columns on the output device occupied by mbc.
+        -:  104:     Always >= 0.
+        -:  105:
+        -:  106:   mb_putc (mbc, stream)
+        -:  107:     outputs mbc on stream, a byte oriented FILE stream opened for output.
+        -:  108:
+        -:  109:   mb_setascii (&mbc, sc)
+        -:  110:     assigns the standard ASCII character sc to mbc.
+        -:  111:
+        -:  112:   mb_copy (&destmbc, &srcmbc)
+        -:  113:     copies srcmbc to destmbc.
+        -:  114:
+        -:  115:   Here are the function prototypes of the macros.
+        -:  116:
+        -:  117:   extern const char *  mb_ptr (const mbchar_t mbc);
+        -:  118:   extern size_t        mb_len (const mbchar_t mbc);
+        -:  119:   extern bool          mb_iseq (const mbchar_t mbc, char sc);
+        -:  120:   extern bool          mb_isnul (const mbchar_t mbc);
+        -:  121:   extern int           mb_cmp (const mbchar_t mbc1, const mbchar_t mbc2);
+        -:  122:   extern int           mb_casecmp (const mbchar_t mbc1, const mbchar_t mbc2);
+        -:  123:   extern bool          mb_equal (const mbchar_t mbc1, const mbchar_t mbc2);
+        -:  124:   extern bool          mb_caseequal (const mbchar_t mbc1, const mbchar_t mbc2);
+        -:  125:   extern bool          mb_isalnum (const mbchar_t mbc);
+        -:  126:   extern bool          mb_isalpha (const mbchar_t mbc);
+        -:  127:   extern bool          mb_isascii (const mbchar_t mbc);
+        -:  128:   extern bool          mb_isblank (const mbchar_t mbc);
+        -:  129:   extern bool          mb_iscntrl (const mbchar_t mbc);
+        -:  130:   extern bool          mb_isdigit (const mbchar_t mbc);
+        -:  131:   extern bool          mb_isgraph (const mbchar_t mbc);
+        -:  132:   extern bool          mb_islower (const mbchar_t mbc);
+        -:  133:   extern bool          mb_isprint (const mbchar_t mbc);
+        -:  134:   extern bool          mb_ispunct (const mbchar_t mbc);
+        -:  135:   extern bool          mb_isspace (const mbchar_t mbc);
+        -:  136:   extern bool          mb_isupper (const mbchar_t mbc);
+        -:  137:   extern bool          mb_isxdigit (const mbchar_t mbc);
+        -:  138:   extern int           mb_width (const mbchar_t mbc);
+        -:  139:   extern void          mb_putc (const mbchar_t mbc, FILE *stream);
+        -:  140:   extern void          mb_setascii (mbchar_t *new, char sc);
+        -:  141:   extern void          mb_copy (mbchar_t *new, const mbchar_t *old);
+        -:  142: */
+        -:  143:
+        -:  144:#ifndef _MBCHAR_H
+        -:  145:#define _MBCHAR_H 1
+        -:  146:
+        -:  147:#include <stdbool.h>
+        -:  148:#include <string.h>
+        -:  149:
+        -:  150:/* Tru64 with Desktop Toolkit C has a bug: <stdio.h> must be included before
+        -:  151:   <wchar.h>.
+        -:  152:   BSD/OS 4.1 has a bug: <stdio.h> and <time.h> must be included before
+        -:  153:   <wchar.h>.  */
+        -:  154:#include <stdio.h>
+        -:  155:#include <time.h>
+        -:  156:#include <wchar.h>
+        -:  157:#include <wctype.h>
+        -:  158:
+        -:  159:#ifndef _GL_INLINE_HEADER_BEGIN
+        -:  160: #error "Please include config.h first."
+        -:  161:#endif
+        -:  162:_GL_INLINE_HEADER_BEGIN
+        -:  163:#ifndef MBCHAR_INLINE
+        -:  164:# define MBCHAR_INLINE _GL_INLINE
+        -:  165:#endif
+        -:  166:
+        -:  167:#define MBCHAR_BUF_SIZE 24
+        -:  168:
+        -:  169:struct mbchar
+        -:  170:{
+        -:  171:  const char *ptr;      /* pointer to current character */
+        -:  172:  size_t bytes;         /* number of bytes of current character, > 0 */
+        -:  173:  bool wc_valid;        /* true if wc is a valid wide character */
+        -:  174:  wchar_t wc;           /* if wc_valid: the current character */
+        -:  175:  char buf[MBCHAR_BUF_SIZE]; /* room for the bytes, used for file input only */
+        -:  176:};
+        -:  177:
+        -:  178:/* EOF (not a real character) is represented with bytes = 0 and
+        -:  179:   wc_valid = false.  */
+        -:  180:
+        -:  181:typedef struct mbchar mbchar_t;
+        -:  182:
+        -:  183:/* Access the current character.  */
+        -:  184:#define mb_ptr(mbc) ((mbc).ptr)
+        -:  185:#define mb_len(mbc) ((mbc).bytes)
+        -:  186:
+        -:  187:/* Comparison of characters.  */
+        -:  188:#define mb_iseq(mbc, sc) ((mbc).wc_valid && (mbc).wc == (sc))
+        -:  189:#define mb_isnul(mbc) ((mbc).wc_valid && (mbc).wc == 0)
+        -:  190:#define mb_cmp(mbc1, mbc2) \
+        -:  191:  ((mbc1).wc_valid                                                      \
+        -:  192:   ? ((mbc2).wc_valid                                                   \
+        -:  193:      ? (int) (mbc1).wc - (int) (mbc2).wc                               \
+        -:  194:      : -1)                                                             \
+        -:  195:   : ((mbc2).wc_valid                                                   \
+        -:  196:      ? 1                                                               \
+        -:  197:      : (mbc1).bytes == (mbc2).bytes                                    \
+        -:  198:        ? memcmp ((mbc1).ptr, (mbc2).ptr, (mbc1).bytes)                 \
+        -:  199:        : (mbc1).bytes < (mbc2).bytes                                   \
+        -:  200:          ? (memcmp ((mbc1).ptr, (mbc2).ptr, (mbc1).bytes) > 0 ? 1 : -1) \
+        -:  201:          : (memcmp ((mbc1).ptr, (mbc2).ptr, (mbc2).bytes) >= 0 ? 1 : -1)))
+        -:  202:#define mb_casecmp(mbc1, mbc2) \
+        -:  203:  ((mbc1).wc_valid                                                      \
+        -:  204:   ? ((mbc2).wc_valid                                                   \
+        -:  205:      ? (int) towlower ((mbc1).wc) - (int) towlower ((mbc2).wc)         \
+        -:  206:      : -1)                                                             \
+        -:  207:   : ((mbc2).wc_valid                                                   \
+        -:  208:      ? 1                                                               \
+        -:  209:      : (mbc1).bytes == (mbc2).bytes                                    \
+        -:  210:        ? memcmp ((mbc1).ptr, (mbc2).ptr, (mbc1).bytes)                 \
+        -:  211:        : (mbc1).bytes < (mbc2).bytes                                   \
+        -:  212:          ? (memcmp ((mbc1).ptr, (mbc2).ptr, (mbc1).bytes) > 0 ? 1 : -1) \
+        -:  213:          : (memcmp ((mbc1).ptr, (mbc2).ptr, (mbc2).bytes) >= 0 ? 1 : -1)))
+        -:  214:#define mb_equal(mbc1, mbc2) \
+        -:  215:  ((mbc1).wc_valid && (mbc2).wc_valid                                   \
+        -:  216:   ? (mbc1).wc == (mbc2).wc                                             \
+        -:  217:   : (mbc1).bytes == (mbc2).bytes                                       \
+        -:  218:     && memcmp ((mbc1).ptr, (mbc2).ptr, (mbc1).bytes) == 0)
+        -:  219:#define mb_caseequal(mbc1, mbc2) \
+        -:  220:  ((mbc1).wc_valid && (mbc2).wc_valid                                   \
+        -:  221:   ? towlower ((mbc1).wc) == towlower ((mbc2).wc)                       \
+        -:  222:   : (mbc1).bytes == (mbc2).bytes                                       \
+        -:  223:     && memcmp ((mbc1).ptr, (mbc2).ptr, (mbc1).bytes) == 0)
+        -:  224:
+        -:  225:/* <ctype.h>, <wctype.h> classification.  */
+        -:  226:#define mb_isascii(mbc) \
+        -:  227:  ((mbc).wc_valid && (mbc).wc >= 0 && (mbc).wc <= 127)
+        -:  228:#define mb_isalnum(mbc) ((mbc).wc_valid && iswalnum ((mbc).wc))
+        -:  229:#define mb_isalpha(mbc) ((mbc).wc_valid && iswalpha ((mbc).wc))
+        -:  230:#define mb_isblank(mbc) ((mbc).wc_valid && iswblank ((mbc).wc))
+        -:  231:#define mb_iscntrl(mbc) ((mbc).wc_valid && iswcntrl ((mbc).wc))
+        -:  232:#define mb_isdigit(mbc) ((mbc).wc_valid && iswdigit ((mbc).wc))
+        -:  233:#define mb_isgraph(mbc) ((mbc).wc_valid && iswgraph ((mbc).wc))
+        -:  234:#define mb_islower(mbc) ((mbc).wc_valid && iswlower ((mbc).wc))
+        -:  235:#define mb_isprint(mbc) ((mbc).wc_valid && iswprint ((mbc).wc))
+        -:  236:#define mb_ispunct(mbc) ((mbc).wc_valid && iswpunct ((mbc).wc))
+        -:  237:#define mb_isspace(mbc) ((mbc).wc_valid && iswspace ((mbc).wc))
+        -:  238:#define mb_isupper(mbc) ((mbc).wc_valid && iswupper ((mbc).wc))
+        -:  239:#define mb_isxdigit(mbc) ((mbc).wc_valid && iswxdigit ((mbc).wc))
+        -:  240:
+        -:  241:/* Extra <wchar.h> function.  */
+        -:  242:
+        -:  243:/* Unprintable characters appear as a small box of width 1.  */
+        -:  244:#define MB_UNPRINTABLE_WIDTH 1
+        -:  245:
+        -:  246:MBCHAR_INLINE int
+function mb_width_aux called 0 returned 0% blocks executed 0%
+    #####:  247:mb_width_aux (wint_t wc)
+        -:  248:{
+    #####:  249:  int w = wcwidth (wc);
+call    0 never executed
+        -:  250:  /* For unprintable characters, arbitrarily return 0 for control characters
+        -:  251:     and MB_UNPRINTABLE_WIDTH otherwise.  */
+    #####:  252:  return (w >= 0 ? w : iswcntrl (wc) ? 0 : MB_UNPRINTABLE_WIDTH);
+branch  0 never executed
+branch  1 never executed
+        -:  253:}
+        -:  254:
+        -:  255:#define mb_width(mbc) \
+        -:  256:  ((mbc).wc_valid ? mb_width_aux ((mbc).wc) : MB_UNPRINTABLE_WIDTH)
+        -:  257:
+        -:  258:/* Output.  */
+        -:  259:#define mb_putc(mbc, stream)  fwrite ((mbc).ptr, 1, (mbc).bytes, (stream))
+        -:  260:
+        -:  261:/* Assignment.  */
+        -:  262:#define mb_setascii(mbc, sc) \
+        -:  263:  ((mbc)->ptr = (mbc)->buf, (mbc)->bytes = 1, (mbc)->wc_valid = 1, \
+        -:  264:   (mbc)->wc = (mbc)->buf[0] = (sc))
+        -:  265:
+        -:  266:/* Copying a character.  */
+        -:  267:MBCHAR_INLINE void
+function mb_copy called 0 returned 0% blocks executed 0%
+    #####:  268:mb_copy (mbchar_t *new_mbc, const mbchar_t *old_mbc)
+        -:  269:{
+    #####:  270:  if (old_mbc->ptr == &old_mbc->buf[0])
+branch  0 never executed
+branch  1 never executed
+        -:  271:    {
+    #####:  272:      memcpy (&new_mbc->buf[0], &old_mbc->buf[0], old_mbc->bytes);
+    #####:  273:      new_mbc->ptr = &new_mbc->buf[0];
+        -:  274:    }
+        -:  275:  else
+    #####:  276:    new_mbc->ptr = old_mbc->ptr;
+    #####:  277:  new_mbc->bytes = old_mbc->bytes;
+    #####:  278:  if ((new_mbc->wc_valid = old_mbc->wc_valid))
+branch  0 never executed
+branch  1 never executed
+    #####:  279:    new_mbc->wc = old_mbc->wc;
+    #####:  280:}
+        -:  281:
+        -:  282:
+        -:  283:/* is_basic(c) tests whether the single-byte character c is in the
+        -:  284:   ISO C "basic character set".
+        -:  285:   This is a convenience function, and is in this file only to share code
+        -:  286:   between mbiter_multi.h and mbfile_multi.h.  */
+        -:  287:#if (' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
+        -:  288:    && ('%' == 37) && ('&' == 38) && ('\'' == 39) && ('(' == 40) \
+        -:  289:    && (')' == 41) && ('*' == 42) && ('+' == 43) && (',' == 44) \
+        -:  290:    && ('-' == 45) && ('.' == 46) && ('/' == 47) && ('0' == 48) \
+        -:  291:    && ('1' == 49) && ('2' == 50) && ('3' == 51) && ('4' == 52) \
+        -:  292:    && ('5' == 53) && ('6' == 54) && ('7' == 55) && ('8' == 56) \
+        -:  293:    && ('9' == 57) && (':' == 58) && (';' == 59) && ('<' == 60) \
+        -:  294:    && ('=' == 61) && ('>' == 62) && ('?' == 63) && ('A' == 65) \
+        -:  295:    && ('B' == 66) && ('C' == 67) && ('D' == 68) && ('E' == 69) \
+        -:  296:    && ('F' == 70) && ('G' == 71) && ('H' == 72) && ('I' == 73) \
+        -:  297:    && ('J' == 74) && ('K' == 75) && ('L' == 76) && ('M' == 77) \
+        -:  298:    && ('N' == 78) && ('O' == 79) && ('P' == 80) && ('Q' == 81) \
+        -:  299:    && ('R' == 82) && ('S' == 83) && ('T' == 84) && ('U' == 85) \
+        -:  300:    && ('V' == 86) && ('W' == 87) && ('X' == 88) && ('Y' == 89) \
+        -:  301:    && ('Z' == 90) && ('[' == 91) && ('\\' == 92) && (']' == 93) \
+        -:  302:    && ('^' == 94) && ('_' == 95) && ('a' == 97) && ('b' == 98) \
+        -:  303:    && ('c' == 99) && ('d' == 100) && ('e' == 101) && ('f' == 102) \
+        -:  304:    && ('g' == 103) && ('h' == 104) && ('i' == 105) && ('j' == 106) \
+        -:  305:    && ('k' == 107) && ('l' == 108) && ('m' == 109) && ('n' == 110) \
+        -:  306:    && ('o' == 111) && ('p' == 112) && ('q' == 113) && ('r' == 114) \
+        -:  307:    && ('s' == 115) && ('t' == 116) && ('u' == 117) && ('v' == 118) \
+        -:  308:    && ('w' == 119) && ('x' == 120) && ('y' == 121) && ('z' == 122) \
+        -:  309:    && ('{' == 123) && ('|' == 124) && ('}' == 125) && ('~' == 126)
+        -:  310:/* The character set is ISO-646, not EBCDIC. */
+        -:  311:# define IS_BASIC_ASCII 1
+        -:  312:
+        -:  313:extern const unsigned int is_basic_table[];
+        -:  314:
+        -:  315:MBCHAR_INLINE bool
+function is_basic called 0 returned 0% blocks executed 0%
+    #####:  316:is_basic (char c)
+        -:  317:{
+    #####:  318:  return (is_basic_table [(unsigned char) c >> 5] >> ((unsigned char) c & 31))
+    #####:  319:         & 1;
+        -:  320:}
+        -:  321:
+        -:  322:#else
+        -:  323:
+        -:  324:MBCHAR_INLINE bool
+        -:  325:is_basic (char c)
+        -:  326:{
+        -:  327:  switch (c)
+        -:  328:    {
+        -:  329:    case '\t': case '\v': case '\f':
+        -:  330:    case ' ': case '!': case '"': case '#': case '%':
+        -:  331:    case '&': case '\'': case '(': case ')': case '*':
+        -:  332:    case '+': case ',': case '-': case '.': case '/':
+        -:  333:    case '0': case '1': case '2': case '3': case '4':
+        -:  334:    case '5': case '6': case '7': case '8': case '9':
+        -:  335:    case ':': case ';': case '<': case '=': case '>':
+        -:  336:    case '?':
+        -:  337:    case 'A': case 'B': case 'C': case 'D': case 'E':
+        -:  338:    case 'F': case 'G': case 'H': case 'I': case 'J':
+        -:  339:    case 'K': case 'L': case 'M': case 'N': case 'O':
+        -:  340:    case 'P': case 'Q': case 'R': case 'S': case 'T':
+        -:  341:    case 'U': case 'V': case 'W': case 'X': case 'Y':
+        -:  342:    case 'Z':
+        -:  343:    case '[': case '\\': case ']': case '^': case '_':
+        -:  344:    case 'a': case 'b': case 'c': case 'd': case 'e':
+        -:  345:    case 'f': case 'g': case 'h': case 'i': case 'j':
+        -:  346:    case 'k': case 'l': case 'm': case 'n': case 'o':
+        -:  347:    case 'p': case 'q': case 'r': case 's': case 't':
+        -:  348:    case 'u': case 'v': case 'w': case 'x': case 'y':
+        -:  349:    case 'z': case '{': case '|': case '}': case '~':
+        -:  350:      return 1;
+        -:  351:    default:
+        -:  352:      return 0;
+        -:  353:    }
+        -:  354:}
+        -:  355:
+        -:  356:#endif
+        -:  357:
+        -:  358:_GL_INLINE_HEADER_END
+        -:  359:
+        -:  360:#endif /* _MBCHAR_H */

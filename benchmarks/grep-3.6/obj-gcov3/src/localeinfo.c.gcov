@@ -1,0 +1,196 @@
+        -:    0:Source:../../lib/localeinfo.c
+        -:    0:Programs:50
+        -:    1:/* locale information
+        -:    2:
+        -:    3:   Copyright 2016-2020 Free Software Foundation, Inc.
+        -:    4:
+        -:    5:   This program is free software; you can redistribute it and/or modify
+        -:    6:   it under the terms of the GNU General Public License as published by
+        -:    7:   the Free Software Foundation; either version 3, or (at your option)
+        -:    8:   any later version.
+        -:    9:
+        -:   10:   This program is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   13:   GNU General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU General Public License
+        -:   16:   along with this program; if not, write to the Free Software
+        -:   17:   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA
+        -:   18:   02110-1301, USA.  */
+        -:   19:
+        -:   20:/* Written by Paul Eggert.  */
+        -:   21:
+        -:   22:#include <config.h>
+        -:   23:
+        -:   24:#include <localeinfo.h>
+        -:   25:
+        -:   26:#include <verify.h>
+        -:   27:
+        -:   28:#include <limits.h>
+        -:   29:#include <locale.h>
+        -:   30:#include <stdlib.h>
+        -:   31:#include <string.h>
+        -:   32:#include <wctype.h>
+        -:   33:
+        -:   34:/* The sbclen implementation relies on this.  */
+        -:   35:verify (MB_LEN_MAX <= SCHAR_MAX);
+        -:   36:
+        -:   37:/* Return true if the locale uses UTF-8.  */
+        -:   38:
+        -:   39:static bool
+function is_using_utf8 called 50 returned 100% blocks executed 86%
+       50:   40:is_using_utf8 (void)
+        -:   41:{
+        -:   42:  wchar_t wc;
+       50:   43:  mbstate_t mbs = {0};
+       50:   44:  return mbrtowc (&wc, "\xc4\x80", 2, &mbs) == 2 && wc == 0x100;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:   45:}
+        -:   46:
+        -:   47:/* Return true if the locale is compatible enough with the C locale so
+        -:   48:   that the locale is single-byte, bytes are in collating-sequence
+        -:   49:   order, and there are no multi-character collating elements.  */
+        -:   50:
+        -:   51:static bool
+function using_simple_locale called 50 returned 100% blocks executed 33%
+       50:   52:using_simple_locale (bool multibyte)
+        -:   53:{
+        -:   54:  /* The native character set is known to be compatible with
+        -:   55:     the C locale.  The following test isn't perfect, but it's good
+        -:   56:     enough in practice, as only ASCII and EBCDIC are in common use
+        -:   57:     and this test correctly accepts ASCII and rejects EBCDIC.  */
+        -:   58:  enum { native_c_charset =
+        -:   59:    ('\b' == 8 && '\t' == 9 && '\n' == 10 && '\v' == 11 && '\f' == 12
+        -:   60:     && '\r' == 13 && ' ' == 32 && '!' == 33 && '"' == 34 && '#' == 35
+        -:   61:     && '%' == 37 && '&' == 38 && '\'' == 39 && '(' == 40 && ')' == 41
+        -:   62:     && '*' == 42 && '+' == 43 && ',' == 44 && '-' == 45 && '.' == 46
+        -:   63:     && '/' == 47 && '0' == 48 && '9' == 57 && ':' == 58 && ';' == 59
+        -:   64:     && '<' == 60 && '=' == 61 && '>' == 62 && '?' == 63 && 'A' == 65
+        -:   65:     && 'Z' == 90 && '[' == 91 && '\\' == 92 && ']' == 93 && '^' == 94
+        -:   66:     && '_' == 95 && 'a' == 97 && 'z' == 122 && '{' == 123 && '|' == 124
+        -:   67:     && '}' == 125 && '~' == 126)
+        -:   68:  };
+        -:   69:
+       50:   70:  if (!native_c_charset || multibyte)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       50:   71:    return false;
+        -:   72:
+        -:   73:  /* As a heuristic, use strcoll to compare native character order.
+        -:   74:     If this agrees with byte order the locale should be simple.
+        -:   75:     This heuristic should work for all known practical locales,
+        -:   76:     although it would be invalid for artificially-constructed locales
+        -:   77:     where the native order is the collating-sequence order but there
+        -:   78:     are multi-character collating elements.  */
+    #####:   79:  for (int i = 0; i < UCHAR_MAX; i++)
+branch  0 never executed
+branch  1 never executed
+    #####:   80:    if (0 <= strcoll (((char []) {i, 0}), ((char []) {i + 1, 0})))
+branch  0 never executed
+branch  1 never executed
+    #####:   81:      return false;
+        -:   82:
+    #####:   83:  return true;
+        -:   84:}
+        -:   85:
+        -:   86:/* Initialize *LOCALEINFO from the current locale.  */
+        -:   87:
+        -:   88:void
+function init_localeinfo called 50 returned 100% blocks executed 100%
+       50:   89:init_localeinfo (struct localeinfo *localeinfo)
+        -:   90:{
+       50:   91:  localeinfo->multibyte = MB_CUR_MAX > 1;
+call    0 returned 100%
+       50:   92:  localeinfo->simple = using_simple_locale (localeinfo->multibyte);
+call    0 returned 100%
+       50:   93:  localeinfo->using_utf8 = is_using_utf8 ();
+call    0 returned 100%
+        -:   94:
+    12850:   95:  for (int i = CHAR_MIN; i <= CHAR_MAX; i++)
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+        -:   96:    {
+    12800:   97:      char c = i;
+    12800:   98:      unsigned char uc = i;
+    12800:   99:      mbstate_t s = {0};
+        -:  100:      wchar_t wc;
+    12800:  101:      size_t len = mbrtowc (&wc, &c, 1, &s);
+call    0 returned 100%
+    12800:  102:      localeinfo->sbclen[uc] = len <= 1 ? 1 : - (int) - len;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+    12800:  103:      localeinfo->sbctowc[uc] = len <= 1 ? wc : WEOF;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:  104:    }
+       50:  105:}
+        -:  106:
+        -:  107:/* The set of wchar_t values C such that there's a useful locale
+        -:  108:   somewhere where C != towupper (C) && C != towlower (towupper (C)).
+        -:  109:   For example, 0x00B5 (U+00B5 MICRO SIGN) is in this table, because
+        -:  110:   towupper (0x00B5) == 0x039C (U+039C GREEK CAPITAL LETTER MU), and
+        -:  111:   towlower (0x039C) == 0x03BC (U+03BC GREEK SMALL LETTER MU).  */
+        -:  112:static short const lonesome_lower[] =
+        -:  113:  {
+        -:  114:    0x00B5, 0x0131, 0x017F, 0x01C5, 0x01C8, 0x01CB, 0x01F2, 0x0345,
+        -:  115:    0x03C2, 0x03D0, 0x03D1, 0x03D5, 0x03D6, 0x03F0, 0x03F1,
+        -:  116:
+        -:  117:    /* U+03F2 GREEK LUNATE SIGMA SYMBOL lacks a specific uppercase
+        -:  118:       counterpart in locales predating Unicode 4.0.0 (April 2003).  */
+        -:  119:    0x03F2,
+        -:  120:
+        -:  121:    0x03F5, 0x1E9B, 0x1FBE,
+        -:  122:  };
+        -:  123:
+        -:  124:/* Verify that the worst case fits.  This is 1 for towupper, 1 for
+        -:  125:   towlower, and 1 for each entry in LONESOME_LOWER.  */
+        -:  126:verify (1 + 1 + sizeof lonesome_lower / sizeof *lonesome_lower
+        -:  127:        <= CASE_FOLDED_BUFSIZE);
+        -:  128:
+        -:  129:/* Find the characters equal to C after case-folding, other than C
+        -:  130:   itself, and store them into FOLDED.  Return the number of characters
+        -:  131:   stored; this is zero if C is WEOF.  */
+        -:  132:
+        -:  133:int
+function case_folded_counterparts called 0 returned 0% blocks executed 0%
+    #####:  134:case_folded_counterparts (wint_t c, wchar_t folded[CASE_FOLDED_BUFSIZE])
+        -:  135:{
+        -:  136:  int i;
+    #####:  137:  int n = 0;
+    #####:  138:  wint_t uc = towupper (c);
+    #####:  139:  wint_t lc = towlower (uc);
+    #####:  140:  if (uc != c)
+branch  0 never executed
+branch  1 never executed
+    #####:  141:    folded[n++] = uc;
+    #####:  142:  if (lc != uc && lc != c && towupper (lc) == uc)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+    #####:  143:    folded[n++] = lc;
+    #####:  144:  for (i = 0; i < sizeof lonesome_lower / sizeof *lonesome_lower; i++)
+branch  0 never executed
+branch  1 never executed
+        -:  145:    {
+    #####:  146:      wint_t li = lonesome_lower[i];
+    #####:  147:      if (li != lc && li != uc && li != c && towupper (li) == uc)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+    #####:  148:        folded[n++] = li;
+        -:  149:    }
+    #####:  150:  return n;
+        -:  151:}

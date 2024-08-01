@@ -1,0 +1,45 @@
+        -:    0:Source:../../lib/xalloc-die.c
+        -:    0:Programs:50
+        -:    1:/* Report a memory allocation failure and exit.
+        -:    2:
+        -:    3:   Copyright (C) 1997-2000, 2002-2004, 2006, 2009-2020 Free Software
+        -:    4:   Foundation, Inc.
+        -:    5:
+        -:    6:   This program is free software: you can redistribute it and/or modify
+        -:    7:   it under the terms of the GNU General Public License as published by
+        -:    8:   the Free Software Foundation; either version 3 of the License, or
+        -:    9:   (at your option) any later version.
+        -:   10:
+        -:   11:   This program is distributed in the hope that it will be useful,
+        -:   12:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:   GNU General Public License for more details.
+        -:   15:
+        -:   16:   You should have received a copy of the GNU General Public License
+        -:   17:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:
+        -:   21:#include "xalloc.h"
+        -:   22:
+        -:   23:#include <stdlib.h>
+        -:   24:
+        -:   25:#include "error.h"
+        -:   26:#include "exitfail.h"
+        -:   27:
+        -:   28:#include "gettext.h"
+        -:   29:#define _(msgid) gettext (msgid)
+        -:   30:
+        -:   31:void
+function xalloc_die called 0 returned 0% blocks executed 0%
+    #####:   32:xalloc_die (void)
+        -:   33:{
+    #####:   34:  error (exit_failure, 0, "%s", _("memory exhausted"));
+call    0 never executed
+        -:   35:
+        -:   36:  /* _Noreturn cannot be given to error, since it may return if
+        -:   37:     its first argument is 0.  To help compilers understand the
+        -:   38:     xalloc_die does not return, call abort.  Also, the abort is a
+        -:   39:     safety feature if exit_failure is 0 (which shouldn't happen).  */
+    #####:   40:  abort ();
+        -:   41:}

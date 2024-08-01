@@ -1,0 +1,266 @@
+        -:    0:Source:../../lib/mbuiter.h
+        -:    0:Programs:50
+        -:    1:/* Iterating through multibyte strings: macros for multi-byte encodings.
+        -:    2:   Copyright (C) 2001, 2005, 2007, 2009-2020 Free Software Foundation, Inc.
+        -:    3:
+        -:    4:   This program is free software: you can redistribute it and/or modify
+        -:    5:   it under the terms of the GNU General Public License as published by
+        -:    6:   the Free Software Foundation; either version 3 of the License, or
+        -:    7:   (at your option) any later version.
+        -:    8:
+        -:    9:   This program is distributed in the hope that it will be useful,
+        -:   10:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   11:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   12:   GNU General Public License for more details.
+        -:   13:
+        -:   14:   You should have received a copy of the GNU General Public License
+        -:   15:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   16:
+        -:   17:/* Written by Bruno Haible <bruno@clisp.org>.  */
+        -:   18:
+        -:   19:/* The macros in this file implement forward iteration through a
+        -:   20:   multi-byte string, without knowing its length a-priori.
+        -:   21:
+        -:   22:   With these macros, an iteration loop that looks like
+        -:   23:
+        -:   24:      char *iter;
+        -:   25:      for (iter = buf; *iter != '\0'; iter++)
+        -:   26:        {
+        -:   27:          do_something (*iter);
+        -:   28:        }
+        -:   29:
+        -:   30:   becomes
+        -:   31:
+        -:   32:      mbui_iterator_t iter;
+        -:   33:      for (mbui_init (iter, buf); mbui_avail (iter); mbui_advance (iter))
+        -:   34:        {
+        -:   35:          do_something (mbui_cur_ptr (iter), mb_len (mbui_cur (iter)));
+        -:   36:        }
+        -:   37:
+        -:   38:   The benefit of these macros over plain use of mbrtowc is:
+        -:   39:   - Handling of invalid multibyte sequences is possible without
+        -:   40:     making the code more complicated, while still preserving the
+        -:   41:     invalid multibyte sequences.
+        -:   42:
+        -:   43:   Compared to mbiter.h, the macros here don't need to know the string's
+        -:   44:   length a-priori.  The downside is that at each step, the look-ahead
+        -:   45:   that guards against overrunning the terminating '\0' is more expensive.
+        -:   46:   The mbui_* macros are therefore suitable when there is a high probability
+        -:   47:   that only the first few multibyte characters need to be inspected.
+        -:   48:   Whereas the mbi_* macros are better if usually the iteration runs
+        -:   49:   through the entire string.
+        -:   50:
+        -:   51:   mbui_iterator_t
+        -:   52:     is a type usable for variable declarations.
+        -:   53:
+        -:   54:   mbui_init (iter, startptr)
+        -:   55:     initializes the iterator, starting at startptr.
+        -:   56:
+        -:   57:   mbui_avail (iter)
+        -:   58:     returns true if there are more multibyte characters available before
+        -:   59:     the end of string is reached. In this case, mbui_cur (iter) is
+        -:   60:     initialized to the next multibyte character.
+        -:   61:
+        -:   62:   mbui_advance (iter)
+        -:   63:     advances the iterator by one multibyte character.
+        -:   64:
+        -:   65:   mbui_cur (iter)
+        -:   66:     returns the current multibyte character, of type mbchar_t.  All the
+        -:   67:     macros defined in mbchar.h can be used on it.
+        -:   68:
+        -:   69:   mbui_cur_ptr (iter)
+        -:   70:     return a pointer to the beginning of the current multibyte character.
+        -:   71:
+        -:   72:   mbui_reloc (iter, ptrdiff)
+        -:   73:     relocates iterator when the string is moved by ptrdiff bytes.
+        -:   74:
+        -:   75:   mbui_copy (&destiter, &srciter)
+        -:   76:     copies srciter to destiter.
+        -:   77:
+        -:   78:   Here are the function prototypes of the macros.
+        -:   79:
+        -:   80:   extern void          mbui_init (mbui_iterator_t iter, const char *startptr);
+        -:   81:   extern bool          mbui_avail (mbui_iterator_t iter);
+        -:   82:   extern void          mbui_advance (mbui_iterator_t iter);
+        -:   83:   extern mbchar_t      mbui_cur (mbui_iterator_t iter);
+        -:   84:   extern const char *  mbui_cur_ptr (mbui_iterator_t iter);
+        -:   85:   extern void          mbui_reloc (mbui_iterator_t iter, ptrdiff_t ptrdiff);
+        -:   86:   extern void          mbui_copy (mbui_iterator_t *new, const mbui_iterator_t *old);
+        -:   87: */
+        -:   88:
+        -:   89:#ifndef _MBUITER_H
+        -:   90:#define _MBUITER_H 1
+        -:   91:
+        -:   92:#include <assert.h>
+        -:   93:#include <stdbool.h>
+        -:   94:#include <stddef.h>
+        -:   95:#include <stdlib.h>
+        -:   96:#include <string.h>
+        -:   97:
+        -:   98:/* Tru64 with Desktop Toolkit C has a bug: <stdio.h> must be included before
+        -:   99:   <wchar.h>.
+        -:  100:   BSD/OS 4.1 has a bug: <stdio.h> and <time.h> must be included before
+        -:  101:   <wchar.h>.  */
+        -:  102:#include <stdio.h>
+        -:  103:#include <time.h>
+        -:  104:#include <wchar.h>
+        -:  105:
+        -:  106:#include "mbchar.h"
+        -:  107:#include "strnlen1.h"
+        -:  108:
+        -:  109:#ifndef _GL_INLINE_HEADER_BEGIN
+        -:  110: #error "Please include config.h first."
+        -:  111:#endif
+        -:  112:_GL_INLINE_HEADER_BEGIN
+        -:  113:#ifndef MBUITER_INLINE
+        -:  114:# define MBUITER_INLINE _GL_INLINE
+        -:  115:#endif
+        -:  116:
+        -:  117:struct mbuiter_multi
+        -:  118:{
+        -:  119:  bool in_shift;        /* true if next byte may not be interpreted as ASCII */
+        -:  120:  mbstate_t state;      /* if in_shift: current shift state */
+        -:  121:  bool next_done;       /* true if mbui_avail has already filled the following */
+        -:  122:  struct mbchar cur;    /* the current character:
+        -:  123:        const char *cur.ptr             pointer to current character
+        -:  124:        The following are only valid after mbui_avail.
+        -:  125:        size_t cur.bytes                number of bytes of current character
+        -:  126:        bool cur.wc_valid               true if wc is a valid wide character
+        -:  127:        wchar_t cur.wc                  if wc_valid: the current character
+        -:  128:        */
+        -:  129:};
+        -:  130:
+        -:  131:MBUITER_INLINE void
+function mbuiter_multi_next called 0 returned 0% blocks executed 0%
+    #####:  132:mbuiter_multi_next (struct mbuiter_multi *iter)
+        -:  133:{
+    #####:  134:  if (iter->next_done)
+branch  0 never executed
+branch  1 never executed
+    #####:  135:    return;
+    #####:  136:  if (iter->in_shift)
+branch  0 never executed
+branch  1 never executed
+    #####:  137:    goto with_shift;
+        -:  138:  /* Handle most ASCII characters quickly, without calling mbrtowc().  */
+    #####:  139:  if (is_basic (*iter->cur.ptr))
+call    0 never executed
+branch  1 never executed
+branch  2 never executed
+        -:  140:    {
+        -:  141:      /* These characters are part of the basic character set.  ISO C 99
+        -:  142:         guarantees that their wide character code is identical to their
+        -:  143:         char code.  */
+    #####:  144:      iter->cur.bytes = 1;
+    #####:  145:      iter->cur.wc = *iter->cur.ptr;
+    #####:  146:      iter->cur.wc_valid = true;
+        -:  147:    }
+        -:  148:  else
+        -:  149:    {
+    #####:  150:      assert (mbsinit (&iter->state));
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  151:      iter->in_shift = true;
+    #####:  152:    with_shift:
+    #####:  153:      iter->cur.bytes = mbrtowc (&iter->cur.wc, iter->cur.ptr,
+call    0 never executed
+call    1 never executed
+        -:  154:                                 strnlen1 (iter->cur.ptr, MB_CUR_MAX),
+        -:  155:                                 &iter->state);
+    #####:  156:      if (iter->cur.bytes == (size_t) -1)
+branch  0 never executed
+branch  1 never executed
+        -:  157:        {
+        -:  158:          /* An invalid multibyte sequence was encountered.  */
+    #####:  159:          iter->cur.bytes = 1;
+    #####:  160:          iter->cur.wc_valid = false;
+        -:  161:          /* Whether to set iter->in_shift = false and reset iter->state
+        -:  162:             or not is not very important; the string is bogus anyway.  */
+        -:  163:        }
+    #####:  164:      else if (iter->cur.bytes == (size_t) -2)
+branch  0 never executed
+branch  1 never executed
+        -:  165:        {
+        -:  166:          /* An incomplete multibyte character at the end.  */
+    #####:  167:          iter->cur.bytes = strlen (iter->cur.ptr);
+    #####:  168:          iter->cur.wc_valid = false;
+        -:  169:          /* Whether to set iter->in_shift = false and reset iter->state
+        -:  170:             or not is not important; the string end is reached anyway.  */
+        -:  171:        }
+        -:  172:      else
+        -:  173:        {
+    #####:  174:          if (iter->cur.bytes == 0)
+branch  0 never executed
+branch  1 never executed
+        -:  175:            {
+        -:  176:              /* A null wide character was encountered.  */
+    #####:  177:              iter->cur.bytes = 1;
+    #####:  178:              assert (*iter->cur.ptr == '\0');
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+    #####:  179:              assert (iter->cur.wc == 0);
+branch  0 never executed
+branch  1 never executed
+call    2 never executed
+        -:  180:            }
+    #####:  181:          iter->cur.wc_valid = true;
+        -:  182:
+        -:  183:          /* When in the initial state, we can go back treating ASCII
+        -:  184:             characters more quickly.  */
+    #####:  185:          if (mbsinit (&iter->state))
+branch  0 never executed
+branch  1 never executed
+    #####:  186:            iter->in_shift = false;
+        -:  187:        }
+        -:  188:    }
+    #####:  189:  iter->next_done = true;
+        -:  190:}
+        -:  191:
+        -:  192:MBUITER_INLINE void
+function mbuiter_multi_reloc called 0 returned 0% blocks executed 0%
+    #####:  193:mbuiter_multi_reloc (struct mbuiter_multi *iter, ptrdiff_t ptrdiff)
+        -:  194:{
+    #####:  195:  iter->cur.ptr += ptrdiff;
+    #####:  196:}
+        -:  197:
+        -:  198:MBUITER_INLINE void
+function mbuiter_multi_copy called 0 returned 0% blocks executed 0%
+    #####:  199:mbuiter_multi_copy (struct mbuiter_multi *new_iter, const struct mbuiter_multi *old_iter)
+        -:  200:{
+    #####:  201:  if ((new_iter->in_shift = old_iter->in_shift))
+branch  0 never executed
+branch  1 never executed
+    #####:  202:    memcpy (&new_iter->state, &old_iter->state, sizeof (mbstate_t));
+        -:  203:  else
+    #####:  204:    memset (&new_iter->state, 0, sizeof (mbstate_t));
+    #####:  205:  new_iter->next_done = old_iter->next_done;
+    #####:  206:  mb_copy (&new_iter->cur, &old_iter->cur);
+call    0 never executed
+    #####:  207:}
+        -:  208:
+        -:  209:/* Iteration macros.  */
+        -:  210:typedef struct mbuiter_multi mbui_iterator_t;
+        -:  211:#define mbui_init(iter, startptr) \
+        -:  212:  ((iter).cur.ptr = (startptr), \
+        -:  213:   (iter).in_shift = false, memset (&(iter).state, '\0', sizeof (mbstate_t)), \
+        -:  214:   (iter).next_done = false)
+        -:  215:#define mbui_avail(iter) \
+        -:  216:  (mbuiter_multi_next (&(iter)), !mb_isnul ((iter).cur))
+        -:  217:#define mbui_advance(iter) \
+        -:  218:  ((iter).cur.ptr += (iter).cur.bytes, (iter).next_done = false)
+        -:  219:
+        -:  220:/* Access to the current character.  */
+        -:  221:#define mbui_cur(iter) (iter).cur
+        -:  222:#define mbui_cur_ptr(iter) (iter).cur.ptr
+        -:  223:
+        -:  224:/* Relocation.  */
+        -:  225:#define mbui_reloc(iter, ptrdiff) mbuiter_multi_reloc (&iter, ptrdiff)
+        -:  226:
+        -:  227:/* Copying an iterator.  */
+        -:  228:#define mbui_copy mbuiter_multi_copy
+        -:  229:
+        -:  230:_GL_INLINE_HEADER_END
+        -:  231:
+        -:  232:#endif /* _MBUITER_H */

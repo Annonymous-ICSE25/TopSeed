@@ -1,0 +1,38 @@
+        -:    0:Source:../../lib/dup-safer.c
+        -:    0:Programs:50
+        -:    1:/* Invoke dup, but avoid some glitches.
+        -:    2:
+        -:    3:   Copyright (C) 2001, 2004-2006, 2009-2020 Free Software Foundation, Inc.
+        -:    4:
+        -:    5:   This program is free software: you can redistribute it and/or modify
+        -:    6:   it under the terms of the GNU General Public License as published by
+        -:    7:   the Free Software Foundation; either version 3 of the License, or
+        -:    8:   (at your option) any later version.
+        -:    9:
+        -:   10:   This program is distributed in the hope that it will be useful,
+        -:   11:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   12:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   13:   GNU General Public License for more details.
+        -:   14:
+        -:   15:   You should have received a copy of the GNU General Public License
+        -:   16:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   17:
+        -:   18:/* Written by Paul Eggert.  */
+        -:   19:
+        -:   20:#include <config.h>
+        -:   21:
+        -:   22:#include "unistd-safer.h"
+        -:   23:
+        -:   24:#include <fcntl.h>
+        -:   25:#include <unistd.h>
+        -:   26:
+        -:   27:/* Like dup, but do not return STDIN_FILENO, STDOUT_FILENO, or
+        -:   28:   STDERR_FILENO.  */
+        -:   29:
+        -:   30:int
+function dup_safer called 0 returned 0% blocks executed 0%
+    #####:   31:dup_safer (int fd)
+        -:   32:{
+    #####:   33:  return fcntl (fd, F_DUPFD, STDERR_FILENO + 1);
+call    0 never executed
+        -:   34:}

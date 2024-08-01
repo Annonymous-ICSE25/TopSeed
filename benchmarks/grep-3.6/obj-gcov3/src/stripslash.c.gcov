@@ -1,0 +1,50 @@
+        -:    0:Source:../../lib/stripslash.c
+        -:    0:Programs:50
+        -:    1:/* stripslash.c -- remove redundant trailing slashes from a file name
+        -:    2:
+        -:    3:   Copyright (C) 1990, 2001, 2003-2006, 2009-2020 Free Software Foundation,
+        -:    4:   Inc.
+        -:    5:
+        -:    6:   This program is free software: you can redistribute it and/or modify
+        -:    7:   it under the terms of the GNU General Public License as published by
+        -:    8:   the Free Software Foundation; either version 3 of the License, or
+        -:    9:   (at your option) any later version.
+        -:   10:
+        -:   11:   This program is distributed in the hope that it will be useful,
+        -:   12:   but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:   GNU General Public License for more details.
+        -:   15:
+        -:   16:   You should have received a copy of the GNU General Public License
+        -:   17:   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+        -:   18:
+        -:   19:#include <config.h>
+        -:   20:
+        -:   21:#include "dirname.h"
+        -:   22:
+        -:   23:/* Remove trailing slashes from FILE.  Return true if a trailing slash
+        -:   24:   was removed.  This is useful when using file name completion from a
+        -:   25:   shell that adds a "/" after directory names (such as tcsh and
+        -:   26:   bash), because on symlinks to directories, several system calls
+        -:   27:   have different semantics according to whether a trailing slash is
+        -:   28:   present.  */
+        -:   29:
+        -:   30:bool
+function strip_trailing_slashes called 0 returned 0% blocks executed 0%
+    #####:   31:strip_trailing_slashes (char *file)
+        -:   32:{
+    #####:   33:  char *base = last_component (file);
+        -:   34:  char *base_lim;
+        -:   35:  bool had_slash;
+        -:   36:
+        -:   37:  /* last_component returns "" for file system roots, but we need to turn
+        -:   38:     "///" into "/".  */
+    #####:   39:  if (! *base)
+branch  0 never executed
+branch  1 never executed
+    #####:   40:    base = file;
+    #####:   41:  base_lim = base + base_len (base);
+    #####:   42:  had_slash = (*base_lim != '\0');
+    #####:   43:  *base_lim = '\0';
+    #####:   44:  return had_slash;
+        -:   45:}
