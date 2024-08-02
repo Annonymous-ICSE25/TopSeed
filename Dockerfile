@@ -6,6 +6,7 @@ ARG SOURCE_DIR=/root/topseed/
 EXPOSE 2024
 # install requirements
 RUN apt-get update && \
+    apt-get install -y gdb && \
     apt-get install -yq tzdata && \
     ln -fs /usr/share/zoneinfo/Amercia/New_York /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata 
