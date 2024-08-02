@@ -117,4 +117,19 @@ build_all() {
     done
 }
 
-build_all
+benchmark=$1
+
+if [ -z $benchmark ]; then
+    build_all
+else
+    m=0
+    for each in $bmks; do
+        url=${bmks_url[m]}
+        dir=${bmks_dir[m]}
+        if [ $each = $benchmark ]; then
+            build_each $each $url $dir
+            break
+        fi 
+        m=$(($m+1))
+    done
+fi
