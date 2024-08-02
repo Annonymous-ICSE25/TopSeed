@@ -1,15 +1,15 @@
 import os
-import json
 import glob
+import json
 import argparse
 import datetime
-import numpy as np
 
-
-from collections import defaultdict
-from utils import execute_klee, execute_update_ds, execute_update_distributions, execute_sample_weight
-from utils import exploration, exploitation
+from utils import execute_klee
 from utils import utilFunctions
+
+start_time = datetime.datetime.now()
+init_time = str(start_time)
+date = start_time.strftime('%m')
 
 configs = {
     'script_path': os.path.abspath(os.getcwd()),
@@ -17,33 +17,8 @@ configs = {
     'top_dir': ""
 }
 
-start_time = datetime.datetime.now()
-init_time = str(start_time)
-date = start_time.strftime('%m')
-n_features = 5
-n_section = 10
-
 # Hyper Parameters
 eta_time = 120
-eta_lp = 10
-eta_alpha = 0.75
-exploit_freq = eta_lp * eta_alpha
-
-# Data Structure Bucket
-ds_bucket = {  
-    'group' : defaultdict(list),
-    'groupFeature' : defaultdict(list),
-    'groupScore' : defaultdict(list),
-    'branchFreq' : defaultdict(int),
-    'untilCovered' : set(),    
-    'queryInfo' : dict(),
-
-    'weightdata' : list(),
-    'policyInfo' : {"Rand" : set(), "Uniq" : set(), "Long" : set(), "Short" : set()},
-
-    'usedGroups' : list(),
-    'usedSeeds' : dict()
-}
 
 def load_program_config(config_file):
     with open(config_file, 'r') as f:
@@ -51,75 +26,31 @@ def load_program_config(config_file):
     
     return parsed
 
-def run_topseed(pconfig, pgm, total_time, ith_trial):
+def run_base(pconfig, pgm, total_time, ith_trial,):
     global init_time
-    global eta_time
     global a_budget
-    global ds_bucket
-    global n_section
-
+    
     a_budget = eta_time
     scr_dir = configs['script_path']  
-    os.chdir(scr_dir)
+    os.chdir(scr_dir) 
 
     llvm_dir = "/".join([configs["top_dir"], "obj_llvm"])
     if not os.path.exists(llvm_dir):
-        os.makedirs(llvm_dir)   
-
-    # Initialization
-    seed = "" 
-    policy = "" 
-    weight = None
-    exploited = False
-    prob_p = [0.25, 0.25, 0.25, 0.25]
-    policies = ["Rand", "Uniq", "Long", "Short"]
-    
-    prob_w_info = [[-1, -1] for _ in range(n_features)]
-    prob_w_section = [[0.0 for _ in range(n_section)] for _ in range(n_features)]
+        os.makedirs(llvm_dir)    
 
     iterN = 0
     while True:
         iterN += 1
-
+    
         if utilFunctions.Timeout_Checker(total_time, init_time) == 100:
             os.chdir(scr_dir)
-            break
-        
+            break    
+
         # Execution
         execute_klee.run(pconfig, pgm, str(iterN), total_time, init_time, str(a_budget), \
-                        ith_trial, seed)
-
-        # Data Gathering
-        ds_bucket = execute_update_ds.modify(int(n_features), pconfig, pgm, iterN, ith_trial, weight, ds_bucket, seed, policy, exploited)
-        
-        # Sampling weight, policy
-        weight = execute_sample_weight.sample(n_features, n_section, prob_w_info, prob_w_section)
-        policy = np.random.choice(policies, p=prob_p)
-
-        if (iterN - 1) < eta_lp: 
-            seed = exploration.rankAndSelect(n_features, ds_bucket, weight, policy)
-            os.chdir(scr_dir)
-            continue    
-        elif (iterN - 1) == eta_lp:
-            weight, prob_p, prob_w_info, prob_w_section = execute_update_distributions.update(n_features, ds_bucket['weightdata'], ds_bucket["policyInfo"], prob_p, n_section)
-            seed = exploration.rankAndSelect(n_features, ds_bucket, weight, policy)
-            os.chdir(scr_dir)
-            continue  
-            
-        # Seed Selection
-        if (iterN - 1) % exploit_freq != 0: # Exploration
-            seed = exploration.rankAndSelect(n_features, ds_bucket, weight, policy)    
-            exploited = False     
-        else: # Exploitation
-            seed = exploitation.select(ds_bucket, policy)
-            exploited = True   
-        
-        # Distribution Learning
-        if (iterN - 1) % eta_lp == 0:
-            weight, prob_p, prob_w_info, prob_w_section = execute_update_distributions.update(n_features, ds_bucket['weightdata'], ds_bucket["policyInfo"], prob_p, n_section)
+                        ith_trial)
 
         os.chdir(scr_dir)
-
     
     os.system(" ".join(["rm -rf", configs["script_path"] + f"/experiments_exp_{pgm}/#{ith_trial}experiment/obj_llvm"]))
     os.chdir(scr_dir)
@@ -142,7 +73,7 @@ if __name__ == "__main__":
     eta_time = args.eta_time
 
     configs['top_dir'] = os.path.abspath("./experiments_exp_" + pgm + "/#" + str(ith_trial) + "experiment/")
-    iterN = run_topseed(pconfig, pgm, total_budget, ith_trial)
+    iterN = run_base(pconfig, pgm, total_budget, ith_trial)
 
     klee_replay_cmd = " ".join(["python", "kleereplay.py", args.program_config, ith_trial, f"{pgm}_{ith_trial}_result"])
     os.system(klee_replay_cmd) 

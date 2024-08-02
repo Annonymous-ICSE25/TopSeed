@@ -3,8 +3,8 @@ import numpy as np
 import copy
 from collections import defaultdict
 
-def filtering(usedCluster, group, groupFeature, groupScore):
-    for each in usedCluster:
+def filtering(usedGroups, group, groupFeature, groupScore):
+    for each in usedGroups:
         if each in group:
             group.pop(each)
             groupFeature.pop(each)
@@ -18,11 +18,11 @@ def rankAndSelect(n_features, ds_bucket, weight, policy):
     groupScore = ds_bucket['groupScore']
     untilCovered = ds_bucket["untilCovered"]
 
-    usedCluster = ds_bucket['usedCluster']
+    usedGroups = ds_bucket['usedGroups']
     usedSeeds = ds_bucket['usedSeeds']
 
-    if len(usedCluster) != 0:
-        filtering(usedCluster, group, groupFeature, groupScore)
+    if len(usedGroups) != 0:
+        filtering(usedGroups, group, groupFeature, groupScore)
 
     best_score = -1e10
     best_key = ""
@@ -85,7 +85,7 @@ def rankAndSelect(n_features, ds_bucket, weight, policy):
                     bestSeed = seed1
                     bestpc = pc1
 
-    usedCluster.append(best_key)
+    usedGroups.append(best_key)
     usedSeeds[bestSeed] = [bestpc, set()]
     
     untilCovered |= set(best_key)

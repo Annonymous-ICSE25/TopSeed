@@ -1,0 +1,10 @@
+{
+    "pgm_name": "sqlite",
+    "pgm_dir": "./benchmarks/sqlite/obj-llvm/",
+    "exec_dir": "",
+    "gcov_dir": "",
+    "gcov_path": "./benchmarks/sqlite/obj-gcov",
+    "gcov_file": "*/*.gcov *.gcov",
+    "gcda_file": "**/*.gcda *.gcda"
+    }
+    

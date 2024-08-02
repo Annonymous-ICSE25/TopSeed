@@ -13,11 +13,11 @@ configs = {
     'b_dir': os.path.abspath('./klee/build/'),
 }
 
-def update(n_features, i, pconfig, benchmark, used_core, testcases, 
+def update(n_features, i, pconfig, benchmark, testcases, 
                 untilCovered, group, groupFeature, branchFreq,
                 queryInfo, weight, weightdata, usedSeeds, seed, 
-                policyInfo, policy, reused):
-    gcov_location = "/".join([configs['script_path'], pconfig['gcov_path'] + str(used_core), pconfig['gcov_dir']])
+                policyInfo, policy, exploited):
+    gcov_location = "/".join([configs['script_path'], pconfig['gcov_path'], pconfig['gcov_dir']])
     os.chdir(gcov_location)
 
     rm_cmd = " ".join(["rm", "-rf", pconfig['gcov_file'], pconfig['gcda_file'], "cov_result"])
@@ -82,7 +82,7 @@ def update(n_features, i, pconfig, benchmark, used_core, testcases,
         ########## Check KQuery First ##########
 
         ########## Execute KLEE-Replay ##########
-        executable_file = "/".join([configs['script_path'], pconfig['gcov_path'] + str(used_core), pconfig['exec_dir'], benchmark])
+        executable_file = "/".join([configs['script_path'], pconfig['gcov_path'], pconfig['exec_dir'], benchmark])
         run_cmd = [configs['b_dir'] + "/bin/klee-replay", executable_file, tc] 
         
         proc = subprocess.Popen(run_cmd, preexec_fn=os.setsid, stdout=PIPE, stderr=PIPE) 
@@ -144,9 +144,9 @@ def update(n_features, i, pconfig, benchmark, used_core, testcases,
         groupFeature[branches][1] = score
 
     if not firstIter:
-        if not reused:
+        if not exploited:
             weightdata.append([weight, iterCovered])
-            
+        
         usedSeeds[seed][1] |= iterCovered
         policyInfo[policy] |= iterCovered
 
@@ -172,7 +172,7 @@ def normalization(n_features, groupFeature, groupScore):
 
             groupScore[key][i] = -1 + 2 * (features[i] - minFeature[i]) / (maxFeature[i] - minFeature[i])
 
-def modify(n_features, pconfig, benchmark, i, ith_trial, used_core, weight, ds_bucket, seed, policy, reused):
+def modify(n_features, pconfig, benchmark, i, ith_trial, weight, ds_bucket, seed, policy, exploited):
     global configs
     configs['top_dir'] = os.path.abspath("./experiments_exp_" + benchmark + "/#" + str(ith_trial) + "experiment/")
 
@@ -189,14 +189,14 @@ def modify(n_features, pconfig, benchmark, i, ith_trial, used_core, weight, ds_b
     policyInfo = ds_bucket['policyInfo']
 
     experiment_dir = configs["top_dir"] + f"/iteration_{i}"
-    klee_out_dir = "/".join([experiment_dir, benchmark, str(used_core), pconfig["exec_dir"], "klee-out-0"])
+    klee_out_dir = "/".join([experiment_dir, "klee-out-0"])
     testcases = [klee_out_dir + "/" + x for x in os.listdir(klee_out_dir) if "ktest" in x]
 
     ########################### Updating Clsuters ###########################
-    ds_bucket['groupScore'] = update(n_features, i, pconfig, benchmark, used_core, testcases, 
+    ds_bucket['groupScore'] = update(n_features, i, pconfig, benchmark, testcases, 
                                 untilCovered, group, groupFeature, branchFreq,
                                 queryInfo, weight, weightdata, usedSeeds, seed, 
-                                policyInfo, policy, reused)
+                                policyInfo, policy, exploited)
     ########################### Updating Clsuters ###########################
 
     return ds_bucket

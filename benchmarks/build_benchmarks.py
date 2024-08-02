@@ -2,7 +2,6 @@ import os, argparse
 from multiprocessing import Process
 
 cur_path = os.path.abspath(os.getcwd())
-num_cores = 50
 
 bmks = [
     "gawk-5.1.0",
@@ -37,10 +36,10 @@ bmks_dir = {
     'gcal-4.1' : 'src'
 }
 
-def build_gcov(benchmark, dirs, i):
+def build_gcov(benchmark, dirs):
     os.chdir("/".join([cur_path, benchmark]))
 
-    dir_name = f"obj-gcov{i}"
+    dir_name = f"obj-gcov"
     
     os.mkdir(dir_name)
     os.chdir("/".join([cur_path, benchmark, dir_name]))
@@ -80,17 +79,9 @@ def build_each(benchmark):
     cmd2 = "find . -executable -type f | xargs -I \'{}\' extract-bc \'{}\'" 
     os.system(cmd2)    
 
-    procs = []
-    for i in range(1, num_cores + 1):
-        proc = Process(target=build_gcov, args=(benchmark, dirs, i))
-        procs.append(proc)
-        proc.start()
-    
-    for proc in procs:
-        proc.join()
-
+    build_gcov(benchmark, dirs)
     os.chdir(cur_path)
-    # for key, value in bmks_url.items():
+
     file = url.split("/")[-1]
     if os.path.exists(file):
         os.system(f"rm -rf {file}")

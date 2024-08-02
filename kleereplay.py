@@ -13,27 +13,24 @@ from utils import utilFunctions
 
 configs = {
 	'script_path': os.path.abspath(os.getcwd()), 
-    'top_dir': os.path.abspath('../experiments/'),
-    'b_dir': os.path.abspath('../klee/build/'),
+    'top_dir': os.path.abspath('./experiments/'),
+    'b_dir': os.path.abspath('./klee/build/'),
 }
 
-def load_pgm_config(config_file):
+def load_program_config(config_file):
     with open(config_file, 'r') as f:
         parsed = json.load(f)
     
     return parsed
 
-def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name, onlyReplay):
-    using_core = str(int(num_core))
-    replay_core = using_core
-
-    final_err_name = log_name + str(using_core) + ".err.log"
+def run_klee_replay(pconfig, benchamrk, ith_trial, log_name):
+    final_err_name = log_name + ".err.log"
 
     experiment_path = configs["top_dir"] + "/#" + str(ith_trial) + "experiment"
     iteration_dirs = [x for x in os.listdir(experiment_path) if "iteration_" in x]
     iteration_dirs.sort(key=lambda x: int(x.split("iteration_")[-1]))
 
-    gcov_location="/".join([configs['script_path'], pconfig['gcov_path'] + str(replay_core), pconfig['gcov_dir']])
+    gcov_location="/".join([configs['script_path'], pconfig['gcov_path'], pconfig['gcov_dir']])
     os.chdir(gcov_location)
 
     rm_cmd = " ".join(["rm", pconfig['gcov_file'], pconfig['gcda_file'], "cov_result"])
@@ -52,10 +49,10 @@ def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name, onlyRepla
     iterN = 1
     for iteration_dir in iteration_dirs:
         find_th = iteration_dir.split("_")[-1]
-        tc_path = "/".join([experiment_path, iteration_dir, benchmark, using_core, pconfig["exec_dir"], "klee-out-0"])
+        tc_path = "/".join([experiment_path, iteration_dir, "klee-out-0"])
 
-        final_log_name = log_name + str(using_core) + ".coverage"
-        klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name, err_set, tc_path, iterN)
+        final_log_name = log_name + ".coverage"
+        klee_replay(pconfig, benchmark, final_log_name, final_err_name, err_set, tc_path, iterN)
         iterN += 1
 
     for each in err_set:
@@ -66,8 +63,8 @@ def run_klee_replay(pconfig, benchamrk, ith_trial, num_core, log_name, onlyRepla
             ef.write(each2)
             ef.write(b"\n")
     
-def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name, err_set, tc_path, iterN):
-    gcov_location="/".join([configs['script_path'], pconfig['gcov_path'] + replay_core, pconfig['gcov_dir']])
+def klee_replay(pconfig, benchmark, final_log_name, final_err_name, err_set, tc_path, iterN):
+    gcov_location="/".join([configs['script_path'], pconfig['gcov_path'], pconfig['gcov_dir']])
     os.chdir(gcov_location)
 
     if not os.path.exists(tc_path):
@@ -142,18 +139,16 @@ def klee_replay(pconfig, benchmark, replay_core, final_log_name, final_err_name,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("pgm_config")
+    parser.add_argument("program_config")
     parser.add_argument("ith_trial")
-    parser.add_argument("used_core")
     parser.add_argument("log_name")
 
     args = parser.parse_args()
-    pconfig = load_pgm_config(args.pgm_config)
+    pconfig = load_program_config(args.program_config)
     benchmark = pconfig["pgm_name"]
-    used_core = int(args.used_core)
     log_name = args.log_name
     ith_trial = args.ith_trial
 
     configs["top_dir"] = os.path.abspath("./experiments_exp_" + benchmark + "/")
-    run_klee_replay(pconfig, benchmark, ith_trial, used_core, log_name)
+    run_klee_replay(pconfig, benchmark, ith_trial, log_name)
 

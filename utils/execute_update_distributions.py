@@ -4,24 +4,28 @@ from collections import defaultdict
 from sklearn.cluster import KMeans
 from scipy.stats import truncnorm
 
-def sample(n_features, n_section, prob_w_info, prob_w_section):
+def update(n_features, weightdata, policyInfo, prob_p, n_section):
     kmeans = KMeans(n_clusters=2, random_state=0)
 
     branchFreq = defaultdict(int)
-    for each in weightVectorDS:
+
+    for each in weightdata:
+        print("EEEE : ", each)
+        print("EEEE1 : ", each[0])
+        print("EEEE2 : ", each[1])
         for eachCoveredSet in each[1]:
             branchFreq[eachCoveredSet] += 1
 
-    weightData = [[] for _ in range(n_features)]
+    data = [[] for _ in range(n_features)]
     scores = []
 
-    for each in weightVectorDS:
+    for each in weightdata:
         score = 0.0
         for eachCoveredSet in each[1]:
             score += 1 / branchFreq[eachCoveredSet]
         
         for j in range(n_features):
-            weightData[j].append(each[0][j])
+            data[j].append(each[0][j])
         scores.append(score)
 
     dataByFeature = [[] for _ in range(n_features)]
@@ -33,7 +37,7 @@ def sample(n_features, n_section, prob_w_info, prob_w_section):
     prob_w_section = [[0.0 for _ in range(n_section)] for _ in range(n_features)]
 
     for i in range(n_features):
-        WData = weightData[i]
+        WData = data[i]
 
         for j in range(len(WData)):
             dataByFeature[i].append([WData[j], scores[j]])
@@ -112,5 +116,28 @@ def sample(n_features, n_section, prob_w_info, prob_w_section):
 
             sample = truncnorm.rvs(a=a_, b=b_, loc=loc_, scale=scale_)
             new_weight[i] = sample
+        
+        policyCov = list(policyInfo.values())
+        
+        if all(len(v) != 0 for v in policyCov):
+            newpickCov = []
+            newpickCovFreq = defaultdict(int)
+            for j in range(len(policyCov)):
+                policySet = policyCov[j]
 
-    return new_weight, prob_w_info, prob_w_section
+                for each in policySet:
+                    newpickCovFreq[each] += 1
+            
+            for j in range(len(policyCov)):
+                policySet = policyCov[j]
+                score = 0.0
+                for each in policySet:
+                    score += 1 / newpickCovFreq[each]
+
+                newpickCov.append(score)
+                    
+            sumCov = sum(newpickCov)
+            for j in range(len(prob_p)):
+                prob_p[j] = newpickCov[j] / sumCov
+
+    return new_weight, prob_p, prob_w_info, prob_w_section
