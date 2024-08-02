@@ -22,7 +22,8 @@ for each_index in index_input:
     exp_dir = top_dir + f"/#{each_index}experiment"
 
     coverage_files = [exp_dir + "/" + x for x in os.listdir(exp_dir) if ".coverage" in x]
-    
+    err_files = [exp_dir + "/" + x for x in os.listdir(exp_dir) if ".err" in x]
+
     coverages_average = []
     for each_file in coverage_files:
         file = open(each_file, 'r')
@@ -38,11 +39,18 @@ for each_index in index_input:
         coverages_average.append(coverages)
         file.close()
     
+    for each_err_file in err_files:
+        file = open(each_err_File, 'rb')
+        lines = file.readlines()
+
+        errors = []
+        for line in lines:
+            err_msgs
 
     finalCoverages = [max(eachCoverage) for eachCoverage in coverages_average]
     index_coverages[each_index] = [np.mean(finalCoverages), np.std(finalCoverages)]
 
 print()
-print("\t\t\t\t\tCoverage\tStandard Deviation")
+print("\t\t\t\t\tCoverage")
 for index, result in index_coverages.items():
-    print(f"The coverage results of #{index}experiment :\t", result[0], "\t", result[1])
+    print(f"The coverage results of #{index}experiment :\t", result[0])

@@ -1,10 +1,18 @@
 # TopSeed
 Topseed is a new technique that selects the most promising seeds for improving the symbolic execution with learning-based approach.
 
+# Installation
+We would like to introduce Docker image for fast installation. You can just install TopSeed by following these instructions.
+
+```bash
+$ docker build -t topseed/icse2025 .
+$ docker run -it topseed/icse2025
+```
+
 # How to execute our approach
 
 For executing TopSeed, you can run experiment by following command in the '~/topseed' directory.
-```python
+```bash
 $ python topseed.py program_configs/diffutils.json 3600 1 --eta_time=120
 ```
 Each argument of the command indicates:
@@ -14,7 +22,7 @@ Each argument of the command indicates:
 * --eta_time=120 : the small time budget (hyperparameter $\eta_{time}$ in Algorithm 3)
 
 If you want to conduct experiments of BASE (without our seeding approach), you can run the following commands.
-```python
+```bash
 $ python base.py program_configs/diffutils.json 3600 1 --eta_time=120
 ```
 
@@ -26,7 +34,7 @@ Furthermore, if you want to assess the test cases generated during each iteratio
 
 # Check the results of experiments
 To check the branch coverage and bug from the results of experiments, you can easily analyze all results using following command:
-```python
+```bash
 $ python analysis.py diff
 # Set the iteration numbers of data : {index1} {index2} {index3}
                                                 Coverage

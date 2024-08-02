@@ -121,7 +121,7 @@ def run_topseed(pconfig, pgm, total_time, ith_trial):
         os.chdir(scr_dir)
 
     
-    os.system(" ".join(["rm -rf", configs["script_path"] + f"/experiments_exp_{pgm}/#{ith_trial}experiment/obj_llvm"]))
+    os.system(" ".join(["rm -rf", configs["script_path"], f"/experiments_exp_{pgm}/#{ith_trial}experiment/obj_llvm"]))
     os.chdir(scr_dir)
     return iterN
 
