@@ -68,6 +68,7 @@ WORKDIR ${BASE_DIR}/klee
 RUN env -i /bin/bash -c '(source testing-env.sh; env > test.env)'
 
 # build benchmarks
+RUN export FORCE_UNSAFE_CONFIGURE=1
 WORKDIR ${BASE_DIR}/benchmarks
 RUN ls ${BASE_DIR}/benchmarks
 RUN bash ./build_benchmarks.sh
